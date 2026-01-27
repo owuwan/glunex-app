@@ -104,7 +104,7 @@ const WarrantyResult = ({ formData, showToast, userStatus }) => {
               <div className="absolute inset-0 bg-gradient-to-br from-slate-800 via-slate-900 to-black"></div>
               <div className="absolute top-0 left-6 w-[1px] h-full bg-gradient-to-b from-transparent via-amber-500/50 to-transparent"></div>
               
-              <div className="relative z-10 p-4 flex flex-col h-full justify-between text-white text-left font-noto">
+              <div className="relative z-10 p-3 flex flex-col h-full justify-between text-white text-left font-noto">
                 
                 <div className="flex justify-between items-start">
                   <div className="flex items-center gap-1.5">
