@@ -9,10 +9,9 @@ import Creator from '../pages/Creator';
 import Register from '../pages/Register';
 import Login from '../pages/Login';
 import MyPage from '../pages/MyPage';
-import WarrantyViewer from '../pages/WarrantyViewer'; // [추가]
+import WarrantyViewer from '../pages/WarrantyViewer';
 
 const AppRouter = () => {
-  // 모든 페이지에서 공유하는 데이터
   const [formData, setFormData] = useState({
     productName: '',
     customerName: '',
@@ -25,7 +24,7 @@ const AppRouter = () => {
     _serviceType: 'coating'
   });
 
-  const [userStatus, setUserStatus] = useState('free');
+  const [userStatus, setUserStatus] = useState('free'); // 초기 상태
   const showToast = (msg) => alert(msg);
 
   return (
@@ -35,25 +34,16 @@ const AppRouter = () => {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       
-      {/* 보증서 관련 */}
-      <Route 
-        path="/create" 
-        element={<WarrantyIssue formData={formData} setFormData={setFormData} userStatus={userStatus} />} 
-      />
-      <Route 
-        path="/warranty/result" 
-        element={<WarrantyResult formData={formData} showToast={showToast} userStatus={userStatus} />} 
-      />
+      <Route path="/create" element={<WarrantyIssue formData={formData} setFormData={setFormData} userStatus={userStatus} />} />
+      <Route path="/warranty/result" element={<WarrantyResult formData={formData} showToast={showToast} userStatus={userStatus} />} />
       
-      {/* 마케팅 & 매출 & AI홍보 */}
       <Route path="/marketing" element={<Marketing />} />
       <Route path="/sales" element={<Sales />} />
       <Route path="/creator" element={<Creator />} />
       
-      {/* 마이페이지 */}
-      <Route path="/mypage" element={<MyPage />} />
-
-      {/* [추가] 고객용 보증서 뷰어 (로그인 없이 접근 가능) */}
+      {/* [수정] 마이페이지에 등급을 변경할 수 있는 권한(함수)을 넘겨줍니다 */}
+      <Route path="/mypage" element={<MyPage userStatus={userStatus} setUserStatus={setUserStatus} />} />
+      
       <Route path="/warranty/view/:id" element={<WarrantyViewer />} />
     </Routes>
   );
