@@ -1,22 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Crown, MessageSquare, CloudRain, Sun, ArrowUpRight, TrendingUp, Wallet, Bell, Sparkles, Loader2 } from 'lucide-react';
-// 파이어베이스 도구 추가
+import { User, Crown, MessageSquare, ChevronRight, CloudRain, Sun, TrendingUp, Sparkles, Loader2, MapPin, Wallet, Bell } from 'lucide-react';
+// 파이어베이스 도구
 import { auth, db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
 
 const Dashboard = () => {
   const navigate = useNavigate();
   
-  // [데이터 상태 관리]
-  // 기상 데이터 및 타겟 고객 수
+  // [상태 관리]
+  const [userName, setUserName] = useState(''); // 사장님 상호명
+  const [loadingUser, setLoadingUser] = useState(true); // 로딩 상태
+  
+  // 날씨 상태 (초기값: 로딩 중)
   const [weather, setWeather] = useState({ 
     temp: 0, 
     rain: 0, 
-    status: 'clear', // 초기값
+    status: 'clear', // clear, rain
     region: '위치 확인 중...',
-    targetCustomers: 42,
-    loading: true
+    targetCustomers: 42, // 기본값
+    loading: true 
   });
 
   // 매출 데이터 (화면 바인딩용 데이터 객체)
@@ -27,37 +30,44 @@ const Dashboard = () => {
     todayGrowth: 12
   };
 
-  // 1. 유저 정보 가져오기 -> 날씨 조회하기
+  // 1. 유저 정보 및 날씨 데이터 가져오기 (엔진 가동)
   useEffect(() => {
     const fetchData = async () => {
       const user = auth.currentUser;
-      
-      // 로그인이 안 되어 있더라도 화면은 보여주되, 기본값(서울)으로 날씨를 가져옵니다.
-      try {
-        let region = 'Seoul';
-        if (user) {
+      let currentRegion = 'Seoul'; // 기본값
+
+      // (1) 로그인한 유저 정보(상호명, 지역) 가져오기
+      if (user) {
+        try {
           const userDoc = await getDoc(doc(db, "users", user.uid));
           if (userDoc.exists()) {
-            region = userDoc.data().region || 'Seoul';
+            const userData = userDoc.data();
+            setUserName(userData.storeName); // 상호명 설정
+            // 가입 시 저장한 지역 정보가 있다면 사용 (예: 강남구)
+            if (userData.region) currentRegion = userData.region;
           }
+        } catch (error) {
+          console.error("유저 정보 로딩 실패:", error);
         }
-        fetchRealWeather(region); // 날씨 함수 실행
-      } catch (error) {
-        console.error("정보 로딩 실패:", error);
-        setWeather(prev => ({ ...prev, loading: false, region: '날씨 정보 없음' }));
       }
+      setLoadingUser(false);
+
+      // (2) 해당 지역의 실시간 날씨 가져오기
+      fetchRealWeather(currentRegion);
     };
 
     fetchData();
   }, []);
 
-  // 2. 진짜 날씨 가져오는 함수 (OpenWeatherMap)
+  // 2. OpenWeatherMap API 호출 함수
   const fetchRealWeather = async (regionName) => {
     try {
       const API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
+      
+      // API 키가 없을 경우 (안전 장치)
       if (!API_KEY) {
-        console.warn("날씨 API 키가 없습니다.");
-        setWeather(prev => ({ ...prev, loading: false, region: regionName, temp: 20 }));
+        console.warn("날씨 API 키가 설정되지 않았습니다.");
+        setWeather(prev => ({ ...prev, temp: 20, rain: 0, status: 'clear', region: regionName, loading: false }));
         return;
       }
 
@@ -68,23 +78,25 @@ const Dashboard = () => {
       const data = await response.json();
 
       if (data.cod === 200) {
-        const isRain = data.weather[0].main === 'Rain' || data.weather[0].main === 'Drizzle' || data.weather[0].main === 'Thunderstorm';
+        // 비 또는 눈이 오는지 체크
+        const mainWeather = data.weather[0].main;
+        const isRain = mainWeather === 'Rain' || mainWeather === 'Drizzle' || mainWeather === 'Thunderstorm' || mainWeather === 'Snow';
         const rainAmount = data.rain ? data.rain['1h'] : 0; // 1시간 강수량
         
-        setWeather(prev => ({
-          ...prev,
+        setWeather({
           temp: Math.round(data.main.temp),
           rain: rainAmount,
           status: isRain ? 'rainy' : 'clear',
-          region: regionName, // 한글 도시명 그대로 사용하거나 매핑 필요 시 여기서 처리
+          region: regionName,
+          targetCustomers: isRain ? 45 : 12, // 비 오면 타겟 고객 증가 (예시 로직)
           loading: false
-        }));
+        });
       } else {
-        // API 에러 시에도 기본값 유지
+        // 지역을 못 찾았거나 에러인 경우
         setWeather(prev => ({ ...prev, loading: false }));
       }
     } catch (error) {
-      console.error("날씨 로딩 실패:", error);
+      console.error("날씨 API 호출 에러:", error);
       setWeather(prev => ({ ...prev, loading: false }));
     }
   };
@@ -98,7 +110,7 @@ const Dashboard = () => {
          <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[40%] bg-slate-200/50 rounded-full blur-[80px]" />
       </div>
 
-      {/* [헤더 영역] 상호명 및 마이페이지 */}
+      {/* 1. [상단 화이트 박스] 브랜드, 프로필, 현황 카드 */}
       <div className="relative px-6 pt-10 pb-4 z-10 flex justify-between items-center shrink-0">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -108,10 +120,9 @@ const Dashboard = () => {
             </span>
           </div>
           <h2 className="text-2xl font-black text-slate-900 tracking-tight">
-            글루 디테일링
+            {loadingUser ? '로딩중...' : (userName || '글루 디테일링')}
           </h2>
         </div>
-
         <button 
           onClick={() => navigate('/mypage')}
           className="p-2.5 bg-white rounded-full border border-slate-200 shadow-sm active:scale-95 transition-all hover:bg-slate-50"
@@ -191,7 +202,8 @@ const Dashboard = () => {
 
           {/* 날씨 카드 (비소식 알림 연동) */}
           <div className="flex-1 bg-white rounded-2xl p-4 border border-slate-200 shadow-sm relative overflow-hidden flex flex-col items-center justify-between gap-1 group hover:border-blue-200 transition-colors">
-             {/* 배경 아이콘 (날씨 상태에 따라 변경) */}
+             
+             {/* [날씨 상태에 따른 배경 아이콘] */}
              {weather.status === 'rainy' ? (
                 <CloudRain size={80} className="absolute -right-6 -bottom-6 text-blue-50 opacity-50 rotate-12 group-hover:scale-110 transition-transform" />
              ) : (
