@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, Eye, Clock, CreditCard, Save, Loader2, PlusCircle } from 'lucide-react';
+// [중요] 위에서 생성한 파일들을 불러옵니다.
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
 import { db, auth } from '../firebase';
@@ -64,14 +65,18 @@ const WarrantyIssue = ({ formData, setFormData, userStatus }) => {
     setLoading(true);
 
     try {
-      await addDoc(collection(db, "warranties"), {
+      // 1. DB에 저장
+      const docRef = await addDoc(collection(db, "warranties"), {
         ...formData,
         userId: user.uid,
         serviceType: serviceType,
         issuedAt: new Date().toISOString(),
         status: 'active'
       });
-      navigate('/warranty/result');
+
+      // 2. [중요] 저장된 ID를 가지고 결과 페이지로 이동
+      navigate('/warranty/result', { state: { warrantyId: docRef.id } });
+
     } catch (error) {
       console.error("저장 실패:", error);
       alert("보증서 저장 중 오류가 발생했습니다.");
