@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Crown, MessageSquare, ChevronRight, CloudRain, Sun, TrendingUp, Sparkles, Loader2, MapPin, Wallet, Bell, ArrowUpRight } from 'lucide-react';
 import { auth, db } from '../firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore'; // collection, query, where, getDocs 추가
 import { onAuthStateChanged } from 'firebase/auth';
 
 const Dashboard = () => {
@@ -11,22 +11,23 @@ const Dashboard = () => {
   const [userName, setUserName] = useState('파트너');
   const [loadingUser, setLoadingUser] = useState(true);
   
-  // [수정] 초기값을 로딩 상태가 아닌 '기본값'으로 설정하여 0도/무한로딩 방지
+  // 날씨 상태 (초기값: 로딩 중 -> 기본값으로 수정하여 에러 방지)
   const [weather, setWeather] = useState({ 
-    temp: 20, // 기본값 (봄/가을 평균)
+    temp: 20, 
     rain: 0, 
     status: 'clear', 
-    region: 'Seoul', // 기본 지역
+    region: 'Seoul', 
     targetCustomers: 42,
     loading: true 
   });
 
-  const salesData = {
-    today: 1250000,
-    monthTotal: 45200000,
-    todayGrowth: 12,
-    totalGrowth: 8.5
-  };
+  // 매출 데이터 상태 (초기값 0)
+  const [salesData, setSalesData] = useState({
+    today: 0,
+    monthTotal: 0,
+    todayGrowth: 0,
+    totalGrowth: 0
+  });
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -36,6 +37,7 @@ const Dashboard = () => {
 
       if (user) {
         try {
+          // 1. 유저 정보 가져오기
           const userDoc = await getDoc(doc(db, "users", user.uid));
           if (userDoc.exists()) {
             const userData = userDoc.data();
@@ -59,8 +61,12 @@ const Dashboard = () => {
               displayRegion = userData.region;
             }
           }
+
+          // 2. 매출 데이터 실시간 집계
+          await calculateSales(user.uid);
+
         } catch (error) {
-          console.error("유저 정보 로딩 실패:", error);
+          console.error("데이터 로딩 실패:", error);
         }
       }
       
@@ -74,18 +80,70 @@ const Dashboard = () => {
     return () => unsubscribe();
   }, []);
 
+  // 매출 계산 함수
+  const calculateSales = async (userId) => {
+    try {
+      const q = query(collection(db, "warranties"), where("userId", "==", userId));
+      const querySnapshot = await getDocs(q);
+
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth();
+      const currentDate = now.getDate();
+
+      let monthTotal = 0;
+      let todayTotal = 0;
+      let lastMonthTotal = 0;
+      let yesterdayTotal = 0;
+
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        const issueDate = new Date(data.issuedAt);
+        const price = Number(String(data.price).replace(/[^0-9]/g, '')) || 0;
+
+        // 이번 달 매출
+        if (issueDate.getFullYear() === currentYear && issueDate.getMonth() === currentMonth) {
+          monthTotal += price;
+        }
+        // 지난 달 매출
+        if (issueDate.getFullYear() === currentYear && issueDate.getMonth() === currentMonth - 1) {
+          lastMonthTotal += price;
+        }
+        // 오늘 매출
+        if (issueDate.getFullYear() === currentYear && issueDate.getMonth() === currentMonth && issueDate.getDate() === currentDate) {
+          todayTotal += price;
+        }
+        // 어제 매출
+        if (issueDate.getFullYear() === currentYear && issueDate.getMonth() === currentMonth && issueDate.getDate() === currentDate - 1) {
+          yesterdayTotal += price;
+        }
+      });
+
+      // 성장률 계산
+      const totalGrowth = lastMonthTotal === 0 ? 100 : Math.round(((monthTotal - lastMonthTotal) / lastMonthTotal) * 100);
+      const todayGrowth = yesterdayTotal === 0 ? 100 : Math.round(((todayTotal - yesterdayTotal) / yesterdayTotal) * 100);
+
+      setSalesData({
+        monthTotal,
+        today: todayTotal,
+        totalGrowth: isNaN(totalGrowth) ? 0 : totalGrowth,
+        todayGrowth: isNaN(todayGrowth) ? 0 : todayGrowth
+      });
+    } catch (error) {
+      console.error("매출 계산 오류:", error);
+    }
+  };
+
   const fetchRealWeather = async (apiRegion, displayRegion) => {
     try {
       const API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
       
-      // 키가 없으면 기본값 유지하고 로딩 끝냄
       if (!API_KEY) {
         console.warn("API Key 없음");
-        setWeather(prev => ({ ...prev, region: displayRegion, loading: false }));
+        setWeather({ temp: 20, rain: 0, status: 'clear', region: displayRegion, targetCustomers: 42, loading: false });
         return;
       }
 
-      // [핵심] 3초 안에 응답 안 오면 강제 종료 (무한로딩 방지)
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 3000);
 
@@ -118,7 +176,6 @@ const Dashboard = () => {
       }
     } catch (error) {
       console.error("날씨 로딩 실패 (기본값 사용):", error);
-      // 에러 나면 "맑음 / 20도" 기본값 보여줘서 화면 안 깨지게 처리
       setWeather({ 
         temp: 20, 
         rain: 0, 
@@ -166,7 +223,7 @@ const Dashboard = () => {
         {/* 상단 블록 */}
         <div className="flex gap-3 h-[32%] shrink-0">
           
-          {/* 매출 카드 */}
+          {/* 매출 카드 (실데이터 연동) */}
           <button 
             onClick={() => navigate('/sales')}
             className="flex-[1.8] bg-white rounded-2xl p-5 border border-slate-200 shadow-sm relative overflow-hidden group active:scale-[0.98] transition-all flex flex-col justify-between text-left"
@@ -190,8 +247,8 @@ const Dashboard = () => {
 
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-medium text-slate-400">전월대비</span>
-                <div className="bg-red-50 text-red-500 text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center gap-0.5">
-                   <TrendingUp size={10} /> {salesData.totalGrowth}%
+                <div className={`text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center gap-0.5 ${salesData.totalGrowth >= 0 ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'}`}>
+                   <TrendingUp size={10} className={salesData.totalGrowth < 0 ? 'rotate-180' : ''} /> {Math.abs(salesData.totalGrowth)}%
                 </div>
               </div>
             </div>
@@ -212,8 +269,8 @@ const Dashboard = () => {
 
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-medium text-slate-400">전일대비</span>
-                <div className="bg-red-50 text-red-500 text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center gap-0.5">
-                   <TrendingUp size={10} /> {salesData.todayGrowth}%
+                <div className={`text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center gap-0.5 ${salesData.todayGrowth >= 0 ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'}`}>
+                   <TrendingUp size={10} className={salesData.todayGrowth < 0 ? 'rotate-180' : ''} /> {Math.abs(salesData.todayGrowth)}%
                 </div>
               </div>
             </div>
@@ -239,16 +296,11 @@ const Dashboard = () => {
                 <div className="flex items-center gap-2">
                    {weather.loading ? (
                      <Loader2 className="animate-spin text-slate-400" size={24} />
-                   ) : weather.temp !== null ? (
+                   ) : (
                      <>
-                        <div className="text-3xl font-black text-slate-800 leading-none tracking-tight">{weather.temp}°</div>
+                        <div className="text-3xl font-black text-slate-800 leading-none tracking-tight">{weather.temp !== null ? `${weather.temp}°` : '--'}</div>
                         {weather.status === 'rainy' ? <CloudRain size={20} className="text-blue-500" /> : <Sun size={20} className="text-amber-500" />}
                      </>
-                   ) : (
-                     // [수정] 날씨 로드 실패 시 보여줄 대체 화면
-                     <div className="flex flex-col items-center">
-                        <span className="text-xs font-bold text-slate-600">오늘도 안전운전</span>
-                     </div>
                    )}
                 </div>
              </div>
@@ -256,13 +308,9 @@ const Dashboard = () => {
              <div className="z-10 w-full">
                <div className={`border rounded-lg p-2 flex flex-col items-center text-center ${weather.status === 'rainy' ? 'bg-blue-50 border-blue-100' : 'bg-slate-50 border-slate-100'}`}>
                  <div className="flex items-center gap-1 mb-0.5">
-                   {weather.temp !== null ? (
-                      <Bell size={8} className={weather.status === 'rainy' ? "text-blue-600 fill-blue-600" : "text-slate-400"} />
-                   ) : (
-                      <Sparkles size={8} className="text-amber-500 fill-amber-500" />
-                   )}
+                   <Bell size={8} className={weather.status === 'rainy' ? "text-blue-600 fill-blue-600" : "text-slate-400"} />
                    <span className={`text-[9px] font-bold ${weather.status === 'rainy' ? 'text-blue-600' : 'text-slate-500'}`}>
-                     {weather.temp === null ? '좋은 하루!' : (weather.status === 'rainy' ? '비소식 알림' : '기상 양호')}
+                     {weather.status === 'rainy' ? '비소식 알림' : '기상 양호'}
                    </span>
                  </div>
                  <span className="text-[10px] font-black text-slate-700 tracking-tight">
