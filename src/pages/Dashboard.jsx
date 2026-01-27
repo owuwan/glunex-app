@@ -46,12 +46,12 @@ const Dashboard = () => {
               // [중요] "인천 서구" -> API엔 "Incheon", 화면엔 "인천 서구"
               const cityMap = {
                 '서울': 'Seoul', '부산': 'Busan', '대구': 'Daegu', '인천': 'Incheon',
-                '광주': 'Gwangju', '대전': 'Daaejeon', '울산': 'Ulsan', '경기': 'Gyeonggi-do',
-                '강원': 'Gangwon-do', '충북': 'Gangwon-do', '충남': 'Chungcheongnam-do',
-                '전북': 'Jeollabuk-do', '전남': 'Jeollanam-do', '경북': 'Gyeongsangbuk-do',
-                '경남': 'Gyeongsangnam-do', '제주': 'Jeju'
+                '광주': 'Gwangju', '대전': 'Daejeon', '울산': 'Ulsan', '세종': 'Sejong',
+                '경기': 'Gyeonggi-do', '강원': 'Gangwon-do', '충북': 'Chungcheongbuk-do', 
+                '충남': 'Chungcheongnam-do', '전북': 'Jeollabuk-do', '전남': 'Jeollanam-do', 
+                '경북': 'Gyeongsangbuk-do', '경남': 'Gyeongsangnam-do', '제주': 'Jeju'
               };
-              // 한글 주소 앞단어(예: 인천)를 영어로 변환 시도, 없으면 그냥 보냄
+              // 한글 주소 첫 단어(예: 대전)를 영문으로 변환 (매핑 없으면 그대로 사용)
               currentRegion = cityMap[parts[0]] || parts[0]; 
               displayRegion = parts.length >= 2 ? `${parts[0]} ${parts[1]}` : parts[0];
             } else if (userData.region) {
@@ -80,6 +80,7 @@ const Dashboard = () => {
       
       // 키가 없으면 기본값 유지하고 로딩 끝냄
       if (!API_KEY) {
+        console.warn("API Key 없음");
         setWeather(prev => ({ ...prev, region: displayRegion, loading: false }));
         return;
       }
@@ -224,6 +225,7 @@ const Dashboard = () => {
 
           {/* 날씨 카드 */}
           <div className="flex-1 bg-white rounded-2xl p-4 border border-slate-200 shadow-sm relative overflow-hidden flex flex-col items-center justify-between gap-1 group hover:border-blue-200 transition-colors">
+             {/* 배경 아이콘 처리 */}
              {weather.status === 'rainy' ? (
                 <CloudRain size={80} className="absolute -right-6 -bottom-6 text-blue-50 opacity-50 rotate-12 group-hover:scale-110 transition-transform" />
              ) : (
@@ -232,16 +234,21 @@ const Dashboard = () => {
              
              <div className="w-full flex flex-col items-center z-10 mt-1">
                 <div className="text-[10px] font-medium text-slate-400 mb-1">
-                  {weather.loading ? '날씨 확인 중...' : weather.region}
+                  {weather.loading ? '확인 중...' : weather.region}
                 </div>
                 <div className="flex items-center gap-2">
                    {weather.loading ? (
                      <Loader2 className="animate-spin text-slate-400" size={24} />
-                   ) : (
+                   ) : weather.temp !== null ? (
                      <>
-                        <div className="text-3xl font-black text-slate-800 leading-none tracking-tight">{weather.temp !== null ? `${weather.temp}°` : '--'}</div>
+                        <div className="text-3xl font-black text-slate-800 leading-none tracking-tight">{weather.temp}°</div>
                         {weather.status === 'rainy' ? <CloudRain size={20} className="text-blue-500" /> : <Sun size={20} className="text-amber-500" />}
                      </>
+                   ) : (
+                     // [수정] 날씨 로드 실패 시 보여줄 대체 화면
+                     <div className="flex flex-col items-center">
+                        <span className="text-xs font-bold text-slate-600">오늘도 안전운전</span>
+                     </div>
                    )}
                 </div>
              </div>
@@ -249,9 +256,13 @@ const Dashboard = () => {
              <div className="z-10 w-full">
                <div className={`border rounded-lg p-2 flex flex-col items-center text-center ${weather.status === 'rainy' ? 'bg-blue-50 border-blue-100' : 'bg-slate-50 border-slate-100'}`}>
                  <div className="flex items-center gap-1 mb-0.5">
-                   <Bell size={8} className={weather.status === 'rainy' ? "text-blue-600 fill-blue-600" : "text-slate-400"} />
+                   {weather.temp !== null ? (
+                      <Bell size={8} className={weather.status === 'rainy' ? "text-blue-600 fill-blue-600" : "text-slate-400"} />
+                   ) : (
+                      <Sparkles size={8} className="text-amber-500 fill-amber-500" />
+                   )}
                    <span className={`text-[9px] font-bold ${weather.status === 'rainy' ? 'text-blue-600' : 'text-slate-500'}`}>
-                     {weather.status === 'rainy' ? '비소식 알림' : '기상 양호'}
+                     {weather.temp === null ? '좋은 하루!' : (weather.status === 'rainy' ? '비소식 알림' : '기상 양호')}
                    </span>
                  </div>
                  <span className="text-[10px] font-black text-slate-700 tracking-tight">
