@@ -1,11 +1,16 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { ChevronRight, Eye, X, Crown, Wrench, AlertCircle, AlertTriangle, MessageSquare } from 'lucide-react';
 import Button from '../components/common/Button';
 import AccordionItem from '../components/common/AccordionItem';
 
 const WarrantyResult = ({ formData, showToast, userStatus }) => {
   const navigate = useNavigate();
+  const location = useLocation(); 
+  
+  // WarrantyIssue에서 넘겨준 문서 ID 받기
+  const warrantyId = location.state?.warrantyId;
+
   const serviceType = formData._serviceType;
   const isCareType = ['wash', 'detailing'].includes(serviceType);
   
@@ -17,10 +22,8 @@ const WarrantyResult = ({ formData, showToast, userStatus }) => {
     } 
   };
 
-  // 숫자에 콤마 찍어주는 함수
   const formatPrice = (price) => {
-    if (!price) return "0";
-    return price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return Number(String(price).replace(/[^0-9]/g, ''))?.toLocaleString() || '0';
   };
 
   const sendSMS = () => {
@@ -28,11 +31,34 @@ const WarrantyResult = ({ formData, showToast, userStatus }) => {
       showToast('🔒 유료 파트너 전용 기능입니다. 마이페이지에서 승인 요청해주세요.');
       return;
     }
-    window.location.href = `sms:${formData.phone}?body=Link`; 
+
+    // 1. 서비스 이름 한글 변환
+    const serviceName = {
+      'coating': '유리막 코팅',
+      'tinting': '썬팅',
+      'detailing': '디테일링',
+      'wash': '프리미엄 세차',
+      'etc': '기타 시공'
+    }[serviceType] || serviceType;
+
+    // 2. 오늘 날짜
+    const today = new Date();
+    const dateStr = `${today.getFullYear()}.${String(today.getMonth()+1).padStart(2,'0')}.${String(today.getDate()).padStart(2,'0')}`;
+
+    // 3. [핵심] 실제 고객용 링크 생성
+    // warrantyId가 있으면 고유 링크, 없으면 메인 홈페이지(임시)
+    const linkUrl = warrantyId 
+      ? `${window.location.origin}/warranty/view/${warrantyId}`
+      : window.location.origin;
+
+    const message = `[GLUNEX] ${formData.customerName}님, 보증서가 발행되었습니다.\n\n차종: ${formData.carModel}\n시공: ${serviceName}\n발행일: ${dateStr}\n\n전자보증서 확인하기:\n${linkUrl}\n\n* 본 문자는 발신전용입니다.`;
+
+    window.location.href = `sms:${formData.phone}?body=${encodeURIComponent(message)}`; 
+    showToast("문자 메시지 앱을 실행합니다.");
   };
 
   return (
-    <div className="flex flex-col h-screen bg-slate-50 animate-fade-in relative overflow-hidden">
+    <div className="flex flex-col h-screen bg-slate-50 animate-fade-in relative overflow-hidden font-noto">
       <div className="flex-none z-30">
         {userStatus !== 'approved' && (
           <div className="bg-slate-800 text-white px-4 py-3 flex justify-between items-center shadow-md">
@@ -73,8 +99,8 @@ const WarrantyResult = ({ formData, showToast, userStatus }) => {
                     <span className="text-amber-400 font-serif font-bold tracking-widest text-xs uppercase">Glunex Official</span>
                   </div>
                   <div className="text-right">
-                    <p className="text-[7px] text-slate-500 uppercase tracking-widest mb-0.5">Amount</p>
-                    <p className="text-xs font-bold text-amber-200">₩ {formatPrice(formData.price)}</p>
+                    <p className="text-[7px] text-slate-500 uppercase tracking-widest mb-0.5">Warranty Value</p>
+                    <p className="text-xs font-bold text-amber-200">₩ {formatPrice(formData.warrantyPrice)}</p>
                   </div>
                 </div>
 
@@ -94,7 +120,7 @@ const WarrantyResult = ({ formData, showToast, userStatus }) => {
                   <div className="text-right">
                     <p className="text-[8px] text-slate-500 uppercase tracking-wider mb-0.5">{isCareType ? "Next Care" : "Expires"}</p>
                     <p className={`text-xs font-bold tracking-wide ${isCareType ? 'text-blue-400' : 'text-amber-400'}`}>
-                      {isCareType ? "1 Month Later" : formData.warrantyPeriod}
+                      {isCareType ? "1 Month Later" : (formData.warrantyPeriod ? `${formData.warrantyPeriod} Warranty` : "Period")}
                     </p>
                   </div>
                 </div>
@@ -132,7 +158,9 @@ const WarrantyResult = ({ formData, showToast, userStatus }) => {
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-md border-t border-slate-100 z-40 max-w-md mx-auto shadow-[0_-10px_20px_rgba(0,0,0,0.05)]">
         <Button onClick={sendSMS} variant="gold">
           <MessageSquare size={18} className="mr-1" />
-          <span className="font-bold">{userStatus === 'approved' ? `${formData.customerName || '고객'}님께 문자 전송` : '문자 전송 (유료 전용)'}</span>
+          <span className="font-bold">
+            {userStatus === 'approved' ? `${formData.customerName || '고객'}님께 문자 전송` : '문자 전송 (유료 전용)'}
+          </span>
         </Button>
       </div>
     </div>
