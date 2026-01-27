@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, ChevronLeft, User, Crown, Copy, Send, LogOut, FileText, Loader2, RefreshCw, AlertCircle, ToggleLeft } from 'lucide-react';
+import { ChevronRight, ChevronLeft, User, Crown, Copy, Send, LogOut, FileText, Loader2, RefreshCw, AlertCircle, ToggleLeft, X, Lock, Car, Calendar, CreditCard } from 'lucide-react';
 import { auth, db } from '../firebase';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 
-// [수정] setUserStatus를 받아서 등급을 바꿀 수 있게 합니다.
 const MyPage = ({ userStatus, setUserStatus }) => {
   const navigate = useNavigate();
   const [depositorName, setDepositorName] = useState('');
@@ -12,7 +11,10 @@ const MyPage = ({ userStatus, setUserStatus }) => {
   const [historyList, setHistoryList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [userEmail, setUserEmail] = useState('');
-  const [storeName, setStoreName] = useState('파트너'); // 상호명 상태 추가
+  const [storeName, setStoreName] = useState('파트너');
+  
+  // [신규] 상세 보기 팝업을 위한 상태
+  const [selectedWarranty, setSelectedWarranty] = useState(null);
 
   // 페이지네이션
   const [currentPage, setCurrentPage] = useState(1);
@@ -33,14 +35,12 @@ const MyPage = ({ userStatus, setUserStatus }) => {
       setUserEmail(user.email);
 
       try {
-        // 1. 유저 정보(상호명) 가져오기
         const userDocRef = doc(db, "users", user.uid);
         const userDocSnap = await getDoc(userDocRef);
         if (userDocSnap.exists()) {
           setStoreName(userDocSnap.data().storeName || '파트너');
         }
 
-        // 2. 발행 내역 가져오기
         const q = query(collection(db, "warranties"), where("userId", "==", user.uid));
         const querySnapshot = await getDocs(q);
         const data = querySnapshot.docs.map(doc => ({
@@ -64,21 +64,48 @@ const MyPage = ({ userStatus, setUserStatus }) => {
     currentPage * itemsPerPage
   );
 
-  // [신규 기능] 등급 전환 토글 함수 (테스트용)
   const toggleUserStatus = () => {
     const newStatus = userStatus === 'free' ? 'approved' : 'free';
     setUserStatus(newStatus);
-    // 사용자 경험을 위해 토스트 메시지 대신 간단한 알림
     alert(`[테스트 모드] ${newStatus === 'approved' ? '프리미엄' : '무료'} 회원 상태로 변경되었습니다.`);
   };
 
   const handleResendSMS = (item) => {
     if (!item.phone) return alert("고객 전화번호 정보가 없습니다.");
+    
+    // 서비스 타입 한글 변환
+    const serviceName = {
+      'coating': '유리막 코팅',
+      'tinting': '썬팅',
+      'detailing': '디테일링',
+      'wash': '프리미엄 세차',
+      'etc': '기타 시공'
+    }[item.serviceType] || item.serviceType;
+
+    // 날짜 포맷팅
+    const dateObj = new Date(item.issuedAt);
+    const dateStr = `${dateObj.getFullYear()}.${String(dateObj.getMonth()+1).padStart(2,'0')}.${String(dateObj.getDate()).padStart(2,'0')}`;
+
+    // 고객 전용 뷰어 링크
+    const viewLink = `${window.location.origin}/warranty/view/${item.id}`;
+
     const confirmSend = window.confirm(`${item.customerName} 고객님께 보증서 링크를 재전송하시겠습니까?`);
     if (confirmSend) {
-      const message = `[GLUNEX] 보증서 재발송\nhttps://glunex-app.vercel.app/warranty/view/${item.id}`;
+      const message = `[GLUNEX] ${item.customerName}님, 요청하신 보증서를 재발송해 드립니다.\n\n차종: ${item.carModel}\n시공: ${serviceName}\n발행일: ${dateStr}\n\n전자보증서 확인하기:\n${viewLink}`;
       window.location.href = `sms:${item.phone}?body=${encodeURIComponent(message)}`;
     }
+  };
+
+  // 날짜 예쁘게 보여주는 함수 (YYYY년 MM월 DD일)
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일`;
+  };
+
+  // 금액 콤마 함수
+  const formatPrice = (price) => {
+    return Number(String(price).replace(/[^0-9]/g, ''))?.toLocaleString() || '0';
   };
 
   const copyAccount = () => {
@@ -102,8 +129,8 @@ const MyPage = ({ userStatus, setUserStatus }) => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#F8F9FB] font-noto animate-fade-in">
-      {/* 상단 헤더 & 등급 전환 버튼 */}
+    <div className="flex flex-col h-full bg-[#F8F9FB] font-noto animate-fade-in relative">
+      {/* 상단 헤더 */}
       <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between pt-8 bg-white sticky top-0 z-20">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate('/dashboard')} className="text-slate-400 hover:text-slate-900 transition-colors">
@@ -111,7 +138,6 @@ const MyPage = ({ userStatus, setUserStatus }) => {
           </button>
           <h2 className="text-lg font-bold text-slate-900">내 계정 / 관리</h2>
         </div>
-        {/* 개발용 등급 전환 버튼 */}
         <button 
           onClick={toggleUserStatus}
           className="flex items-center gap-1 text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded hover:bg-slate-200 transition-colors"
@@ -123,11 +149,10 @@ const MyPage = ({ userStatus, setUserStatus }) => {
 
       <div className="flex-1 overflow-y-auto p-6 pb-10">
         
-        {/* 프로필 카드 (상호명 적용) */}
+        {/* 프로필 카드 */}
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-6 flex items-center justify-between">
            <div>
               <div className="flex items-center gap-2 mb-1">
-                 {/* 실제 상호명 표시 */}
                  <h3 className="text-xl font-black text-slate-900">{storeName} 사장님</h3>
                  {userStatus === 'approved' ? (
                    <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
@@ -146,7 +171,7 @@ const MyPage = ({ userStatus, setUserStatus }) => {
            </div>
         </div>
 
-        {/* 무료 회원 전용 안내 박스 */}
+        {/* 안내 박스들 (생략 - 기존과 동일) */}
         {userStatus !== 'approved' && (
           <div className="mb-8 relative overflow-hidden rounded-2xl shadow-lg bg-slate-900 text-white p-6">
               <div className="relative z-10 space-y-4">
@@ -172,7 +197,6 @@ const MyPage = ({ userStatus, setUserStatus }) => {
           </div>
         )}
 
-        {/* 입금 계좌 안내 (무료 또는 만료 임박 시) */}
         {(userStatus !== 'approved' || (userStatus === 'approved' && isExpiring)) && (
           <div className={`bg-white p-5 rounded-2xl border shadow-sm space-y-4 mb-8 ${isExpiring ? 'border-red-200 ring-4 ring-red-50' : 'border-slate-200'}`}>
               {isExpiring && userStatus === 'approved' && (
@@ -181,7 +205,6 @@ const MyPage = ({ userStatus, setUserStatus }) => {
                   <span className="text-xs font-bold">프리미엄 종료 {daysLeft}일 전입니다!</span>
                 </div>
               )}
-              
               <div>
                  <p className="text-xs text-slate-500 mb-2 font-bold">입금 계좌 안내</p>
                  <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-100">
@@ -199,26 +222,16 @@ const MyPage = ({ userStatus, setUserStatus }) => {
                   </button>
                </div>
             </div>
-
             <div className="space-y-2">
-              <input 
-                type="text" 
-                placeholder="입금자 성함 (예: 홍길동)"
-                value={depositorName}
-                onChange={(e) => setDepositorName(e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm outline-none focus:border-blue-500 transition-colors" 
-              />
-              <button 
-                onClick={sendApprovalRequest}
-                className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-200 active:scale-95 transition-all"
-              >
+              <input type="text" placeholder="입금자 성함 (예: 홍길동)" value={depositorName} onChange={(e) => setDepositorName(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm outline-none focus:border-blue-500 transition-colors" />
+              <button onClick={sendApprovalRequest} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-200 active:scale-95 transition-all">
                 <Send size={14} /> 입금 확인 요청 문자 보내기
               </button>
             </div>
         </div>
         )}
 
-        {/* 보증서 발행 내역 */}
+        {/* 4. 최근 보증서 발행 내역 (수정됨) */}
         <div className="mb-8">
            <div className="flex items-center gap-2 mb-3 px-1">
              <FileText size={16} className="text-slate-400" />
@@ -234,50 +247,35 @@ const MyPage = ({ userStatus, setUserStatus }) => {
                <>
                  <div className="divide-y divide-slate-100">
                    {currentHistory.map((item) => (
-                     <div key={item.id} className="p-4 flex justify-between items-center hover:bg-slate-50 transition-colors">
+                     <div 
+                        key={item.id} 
+                        onClick={() => setSelectedWarranty(item)} // [중요] 클릭 시 상세 팝업 오픈
+                        className="p-4 flex justify-between items-center hover:bg-slate-50 transition-colors cursor-pointer"
+                     >
                        <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 font-bold text-xs">
-                            {new Date(item.issuedAt).getDate()}
+                             <FileText size={18} />
                           </div>
                           <div>
                             <p className="text-sm font-bold text-slate-900">
                               {item.customerName} <span className="text-slate-400 font-normal text-xs">| {item.carModel}</span>
                             </p>
-                            <p className="text-xs text-slate-500 font-medium">
-                              {item.serviceType === 'coating' ? '유리막 코팅' : 
-                               item.serviceType === 'tinting' ? '썬팅' : 
-                               item.serviceType === 'wash' ? '세차' : item.serviceType}
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                               {/* [수정] 날짜 전체 표기 */}
+                               {formatDate(item.issuedAt)}
                             </p>
                           </div>
                        </div>
-                       <button 
-                          onClick={(e) => { e.stopPropagation(); handleResendSMS(item); }}
-                          className="flex items-center gap-1 bg-slate-100 px-3 py-1.5 rounded-lg text-[10px] font-bold text-slate-600 hover:bg-slate-200 hover:text-blue-600 transition-colors"
-                       >
-                          <RefreshCw size={12} />
-                          재전송
-                       </button>
+                       <ChevronRight size={16} className="text-slate-300" />
                      </div>
                    ))}
                  </div>
                  
                  {totalPages > 1 && (
                    <div className="flex justify-center items-center gap-4 py-4 border-t border-slate-50">
-                     <button 
-                       onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                       disabled={currentPage === 1}
-                       className="p-2 rounded-full hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
-                     >
-                       <ChevronLeft size={18} />
-                     </button>
+                     <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="p-2 rounded-full hover:bg-slate-100 disabled:opacity-30"><ChevronLeft size={18} /></button>
                      <span className="text-xs font-bold text-slate-500">{currentPage} / {totalPages}</span>
-                     <button 
-                       onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                       disabled={currentPage === totalPages}
-                       className="p-2 rounded-full hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
-                     >
-                       <ChevronRight size={18} />
-                     </button>
+                     <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} className="p-2 rounded-full hover:bg-slate-100 disabled:opacity-30"><ChevronRight size={18} /></button>
                    </div>
                  )}
                </>
@@ -295,8 +293,72 @@ const MyPage = ({ userStatus, setUserStatus }) => {
         <button onClick={handleLogout} className="w-full py-8 text-slate-400 text-xs flex items-center justify-center gap-1 hover:text-red-500 transition-colors">
            <LogOut size={12} /> 로그아웃
         </button>
-
       </div>
+
+      {/* [신규] 상세 보기 모달 (팝업) */}
+      {selectedWarranty && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in" onClick={() => setSelectedWarranty(null)}>
+          <div className="bg-white w-full max-w-sm rounded-[2rem] overflow-hidden shadow-2xl relative flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
+             {/* 모달 헤더 */}
+             <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
+               <h3 className="font-bold text-slate-900 text-lg">발행 상세 정보</h3>
+               <button onClick={() => setSelectedWarranty(null)} className="p-2 bg-slate-50 rounded-full text-slate-400 hover:text-slate-900"><X size={20}/></button>
+             </div>
+             
+             <div className="p-6 overflow-y-auto">
+               {/* 1. 보증서 요약 카드 */}
+               <div className="bg-slate-900 rounded-3xl p-6 text-white mb-6 relative overflow-hidden shadow-lg">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <p className="text-amber-400 text-[10px] font-black tracking-widest mb-1">GLUNEX WARRANTY</p>
+                      <h2 className="text-2xl font-bold">{selectedWarranty.customerName}님</h2>
+                    </div>
+                    <Crown size={24} className="text-amber-400" />
+                  </div>
+                  
+                  <div className="space-y-3 text-sm border-t border-white/10 pt-4">
+                     <div className="flex justify-between"><span className="text-slate-400">차량정보</span><span className="font-medium">{selectedWarranty.carModel} ({selectedWarranty.plateNumber})</span></div>
+                     <div className="flex justify-between"><span className="text-slate-400">시공내역</span><span className="font-medium">
+                        {selectedWarranty.serviceType === 'coating' ? '유리막 코팅' : selectedWarranty.serviceType === 'wash' ? '세차' : selectedWarranty.serviceType}
+                     </span></div>
+                     <div className="flex justify-between"><span className="text-slate-400">발행일자</span><span className="font-medium">{formatDate(selectedWarranty.issuedAt)}</span></div>
+                  </div>
+               </div>
+
+               {/* 2. 관리자 전용 정보 (매출/주기) */}
+               <div className="bg-blue-50 rounded-3xl p-5 border border-blue-100 mb-2">
+                  <div className="flex items-center gap-2 mb-4 text-blue-800 font-black text-xs uppercase tracking-wider">
+                     <Lock size={14} /> 관리자 전용 정보 (고객 비공개)
+                  </div>
+                  <div className="space-y-4 text-sm">
+                     <div className="flex justify-between items-center bg-white p-3 rounded-xl border border-blue-100">
+                        <span className="text-slate-500 font-bold text-xs">실 시공 금액 (매출)</span>
+                        <span className="font-black text-blue-600 text-base">{formatPrice(selectedWarranty.price)}원</span>
+                     </div>
+                     <div className="flex justify-between items-center bg-white p-3 rounded-xl border border-blue-100">
+                        <span className="text-slate-500 font-bold text-xs">보증 금액 (고객용)</span>
+                        <span className="font-black text-slate-800 text-base">{formatPrice(selectedWarranty.warrantyPrice)}원</span>
+                     </div>
+                      <div className="flex justify-between items-center px-2">
+                        <span className="text-slate-500 text-xs">마케팅 관리 주기</span>
+                        <span className="font-bold text-slate-900">{selectedWarranty.maintPeriod}개월 마다 알림</span>
+                     </div>
+                  </div>
+               </div>
+             </div>
+
+             {/* 하단 액션 버튼 */}
+             <div className="p-5 border-t border-slate-100 bg-white">
+                <button 
+                  onClick={() => handleResendSMS(selectedWarranty)}
+                  className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all"
+                >
+                  <Send size={18} /> 고객에게 보증서 문자 재전송
+                </button>
+             </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
