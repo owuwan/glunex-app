@@ -99,7 +99,7 @@ const WarrantyResult = ({ formData, showToast, userStatus }) => {
         </div>
 
         <div className="w-full bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200 mb-6">
-          <div className="p-6 bg-slate-900 text-center relative z-10">
+          <div className="p-6 bg-slate-900 text-center pb-8 rounded-b-[2rem] relative z-10">
             <h3 className="text-amber-400 font-serif font-bold text-lg mb-6 tracking-widest">GLUNEX CERTIFICATE</h3>
             
             <div className="relative w-full aspect-[1.58/1] bg-black rounded-xl overflow-hidden shadow-2xl mx-auto border border-slate-700">
@@ -122,14 +122,14 @@ const WarrantyResult = ({ formData, showToast, userStatus }) => {
                 </div>
 
                 {/* 2. 중단: 상품명 & 번호판 */}
-                <div className="pl-4 border-l-2 border-white/10">
-                  <p className="text-[8px] text-amber-500/80 uppercase tracking-widest mb-1">{getCardHeader()}</p>
-                  <h3 className="text-xl font-bold text-white tracking-wide truncate mb-1">{formData.productName || "GLUNEX PREMIUM"}</h3>
+                <div className="pl-5 mt-1">
+                  <p className="text-[8px] text-amber-500/80 uppercase tracking-widest mb-0.5">{getCardHeader()}</p>
+                  <h3 className="text-lg font-bold text-white tracking-wide truncate mb-1">{formData.productName || "GLUNEX PREMIUM"}</h3>
                   <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded text-slate-300 border border-white/5">{formData.plateNumber || "차량번호 미입력"}</span>
                 </div>
 
                 {/* 3. 하단: 차주 & 기간 */}
-                <div className="flex justify-between items-end pl-4">
+                <div className="flex justify-between items-end pl-5">
                   <div>
                     <p className="text-[8px] text-slate-500 uppercase tracking-wider mb-0.5">Owner / Model</p>
                     <p className="text-xs font-bold text-slate-200 tracking-wide uppercase">
@@ -149,7 +149,7 @@ const WarrantyResult = ({ formData, showToast, userStatus }) => {
           </div>
 
           <div className="p-4 bg-white space-y-4">
-            {/* [신규] 시공점 정보 (검정 테두리 박스) */}
+            {/* 시공점 정보 박스 */}
             <div className="border border-slate-900 rounded-xl p-4 flex justify-between items-center bg-slate-50/50">
                <div>
                   <p className="text-[10px] text-slate-500 font-bold uppercase mb-1 flex items-center gap-1">
@@ -195,7 +195,9 @@ const WarrantyResult = ({ formData, showToast, userStatus }) => {
           </div>
         </div>
       </div>
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-md border-t border-slate-100 z-40 max-w-md mx-auto">
+      
+      {/* 하단 고정 버튼 */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-md border-t border-slate-100 z-40 max-w-md mx-auto shadow-[0_-10px_20px_rgba(0,0,0,0.05)]">
         <Button onClick={sendSMS} variant="gold">
           <MessageSquare size={18} className="mr-1" />
           <span className="font-bold">
