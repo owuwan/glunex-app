@@ -1,233 +1,216 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom'; // 실제 라우팅 훅 사용
-import { User, Crown, MessageSquare, CloudRain, Sparkles, ArrowUpRight, TrendingUp, Wallet, Bell } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { User, Crown, MessageSquare, ChevronRight, CloudRain, Sun, TrendingUp, Sparkles, Loader2, MapPin } from 'lucide-react';
+// 파이어베이스 도구
+import { auth, db } from '../firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const [userName, setUserName] = useState('');
   
-  // [데이터 상태 관리]
-  // 기상 데이터 및 타겟 고객 수 (기존 로직 유지)
-  const [weather] = useState({ 
-    temp: 24, 
-    rain: 12.5, 
-    status: 'rainy', 
-    region: '강남구',
-    targetCustomers: 42 // 기존 데이터 연결
+  // 날씨 상태 (초기값은 로딩 중)
+  const [weather, setWeather] = useState({ 
+    temp: 0, 
+    rain: 0, 
+    status: 'clear', // clear, rain, clouds, snow
+    region: '위치 확인 중...',
+    loading: true 
   });
 
-  // 매출 데이터 (화면 바인딩용 데이터 객체)
-  const salesData = {
-    total: 45200000,
-    totalGrowth: 8.5,
-    today: 1250000,
-    todayGrowth: 12
+  // [핵심] 유저 정보 가져오기 -> 날씨 조회하기
+  useEffect(() => {
+    const fetchData = async () => {
+      const user = auth.currentUser;
+      if (!user) return; // 비로그인 상태면 패스
+
+      try {
+        // 1. 파이어베이스에서 사장님 지역(region) 가져오기
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          setUserName(userData.storeName);
+          
+          const region = userData.region || 'Seoul'; // 지역 없으면 서울 기본값
+          fetchRealWeather(region); // 날씨 함수 실행
+        }
+      } catch (error) {
+        console.error("정보 로딩 실패:", error);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // [핵심] 진짜 날씨 가져오는 함수 (OpenWeatherMap)
+  const fetchRealWeather = async (regionName) => {
+    try {
+      const API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
+      if (!API_KEY) {
+        console.warn("날씨 API 키가 없습니다.");
+        // API 키가 없을 때 기본값 처리
+        setWeather({
+          temp: 20,
+          rain: 0,
+          status: 'clear',
+          region: regionName,
+          loading: false
+        });
+        return;
+      }
+
+      // 1. 도시 이름으로 날씨 요청 (한국어 지원)
+      // regionName에서 '구' 단위만 추출하거나 영문 변환이 필요할 수 있으나, 
+      // OpenWeatherMap은 한글 도시명도 일부 지원합니다.
+      const response = await fetch(
+        `https://api.openweathermap.org/data/2.5/weather?q=${regionName}&appid=${API_KEY}&units=metric&lang=kr`
+      );
+      
+      if (!response.ok) throw new Error("날씨 데이터 호출 실패");
+      
+      const data = await response.json();
+
+      // 2. 데이터 가공
+      const isRain = data.weather[0].main === 'Rain' || data.weather[0].main === 'Drizzle' || data.weather[0].main === 'Thunderstorm';
+      const rainAmount = data.rain ? data.rain['1h'] : 0; // 1시간 강수량
+      
+      setWeather({
+        temp: Math.round(data.main.temp), // 반올림 온도
+        rain: rainAmount,
+        status: isRain ? 'rainy' : 'clear',
+        region: regionName,
+        loading: false
+      });
+      
+    } catch (error) {
+      console.error("날씨 로딩 실패:", error);
+      // 에러 시 기본값 표시
+      setWeather(prev => ({ 
+        ...prev, 
+        region: regionName, 
+        status: 'clear',
+        temp: 0,
+        loading: false 
+      }));
+    }
   };
 
   return (
-    <div className="flex flex-col h-full w-full bg-[#F8F9FB] text-slate-800 font-sans overflow-hidden max-w-md mx-auto shadow-2xl relative animate-fade-in">
-      
-      {/* 배경 그래픽 효과 */}
-      <div className="absolute inset-0 z-0 pointer-events-none">
-         <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[40%] bg-blue-100/40 rounded-full blur-[80px]" />
-         <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[40%] bg-slate-200/50 rounded-full blur-[80px]" />
-      </div>
-
-      {/* [헤더 영역] 상호명 및 마이페이지 */}
-      <div className="relative px-6 pt-10 pb-4 z-10 flex justify-between items-center shrink-0">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="w-1.5 h-1.5 bg-[#D4AF37] rounded-full" />
-            <span className="text-[10px] font-bold text-slate-500 tracking-widest uppercase">
-              GLUNEX PARTNER
-            </span>
+    <div className="flex flex-col h-full bg-slate-100 font-noto animate-fade-in overflow-hidden">
+      {/* 1. 상단 현황 섹션 */}
+      <div className="bg-white px-8 pt-8 pb-6 rounded-b-[2.5rem] shadow-sm z-10">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <p className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] mb-1">Glunex Partner</p>
+            <h2 className="text-2xl font-black text-slate-900 leading-tight tracking-tight">
+              {userName || '파트너'} 사장님
+            </h2>
           </div>
-          <h2 className="text-2xl font-black text-slate-900 tracking-tight">
-            글루 디테일링
-          </h2>
+          <button 
+            onClick={() => navigate('/mypage')}
+            className="flex flex-col items-center gap-1 group"
+          >
+            <div className="w-11 h-11 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 border border-slate-100 group-active:scale-95 transition-all shadow-sm">
+              <User size={22} />
+            </div>
+            <span className="text-[9px] font-bold text-slate-400 uppercase">마이페이지</span>
+          </button>
         </div>
 
-        <button 
-          onClick={() => navigate('/mypage')}
-          className="p-2.5 bg-white rounded-full border border-slate-200 shadow-sm active:scale-95 transition-all hover:bg-slate-50"
-        >
-          <User size={18} className="text-slate-600" />
-        </button>
-      </div>
+        {/* 현황 카드 그리드 */}
+        <div className="grid grid-cols-5 gap-3">
+          {/* 날씨 카드 (진짜 데이터 연동) */}
+          <div className="col-span-2 bg-slate-800 rounded-2xl p-4 text-white relative overflow-hidden flex flex-col justify-center min-h-[90px]">
+            {weather.loading ? (
+              <div className="flex items-center gap-2 text-slate-400">
+                <Loader2 size={16} className="animate-spin" />
+                <span className="text-[10px]">로딩중..</span>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-1 mb-1">
+                  <MapPin size={10} className="text-slate-400" />
+                  <p className="text-[9px] font-bold text-slate-400">{weather.region}</p>
+                </div>
+                <div className="flex items-center gap-2 relative z-10">
+                  {weather.status === 'rainy' ? (
+                    <CloudRain size={20} className="text-blue-400" />
+                  ) : (
+                    <Sun size={20} className="text-amber-400" />
+                  )}
+                  <div>
+                    <span className="text-xl font-black italic tracking-tighter">{weather.temp}°</span>
+                    {weather.rain > 0 && <span className="text-[9px] block text-blue-300">{weather.rain}mm</span>}
+                  </div>
+                </div>
+                {/* 배경 장식 */}
+                {weather.status === 'rainy' ? (
+                  <CloudRain size={60} className="absolute right-[-10px] bottom-[-10px] opacity-10" />
+                ) : (
+                  <Sun size={60} className="absolute right-[-10px] bottom-[-10px] opacity-10" />
+                )}
+              </>
+            )}
+          </div>
 
-      {/* [메인 컨텐츠 영역] */}
-      <div className="flex-1 flex flex-col px-5 pb-6 gap-3 z-10 min-h-0">
-        
-        {/* 상단 블록: 매출(Left) + 날씨(Right) */}
-        <div className="flex gap-3 h-[32%] shrink-0">
-          
-          {/* 매출 카드 (Total & Today) -> 클릭 시 /sales 이동 */}
+          {/* 매출 카드 */}
           <button 
             onClick={() => navigate('/sales')}
-            className="flex-[1.8] bg-white rounded-2xl p-5 border border-slate-200 shadow-sm relative overflow-hidden group active:scale-[0.98] transition-all flex flex-col justify-between text-left"
+            className="col-span-3 bg-white rounded-2xl p-4 shadow-sm text-left active:scale-95 transition-all flex flex-col justify-center min-h-[90px]"
           >
-            {/* 1. Total Sales (월 매출) */}
-            <div className="relative z-10 w-full">
-              <div className="flex items-center gap-1.5 mb-0.5">
-                <div className="p-1 rounded bg-slate-100 text-slate-500">
-                  <Wallet size={12} />
-                </div>
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
-                  Total Sales (Month)
-                </span>
-              </div>
-              
-              <div className="flex items-baseline gap-1 mb-0.5">
-                <span className="text-2xl font-black text-slate-900 tracking-tighter leading-none">
-                  {salesData.total.toLocaleString()}
-                </span>
-                <span className="text-sm font-bold text-slate-400">원</span>
-              </div>
-
-              {/* 전월대비 */}
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-medium text-slate-400">전월대비</span>
-                <div className="bg-red-50 text-red-500 text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center gap-0.5">
-                   <TrendingUp size={10} /> {salesData.totalGrowth}%
-                </div>
-              </div>
-            </div>
-
-            {/* 구분선 */}
-            <div className="w-full h-px bg-slate-100 my-1" />
-
-            {/* 2. Today Sales (일 매출) */}
-            <div className="relative z-10 w-full">
-              <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wide flex items-center gap-1 mb-0.5">
-                 Today
-              </span>
-              
-              <div className="flex items-baseline gap-1 mb-0.5">
-                <span className="text-xl font-black text-slate-800 tracking-tighter">
-                  {salesData.today.toLocaleString()}
-                </span>
-                <span className="text-xs font-bold text-slate-400">원</span>
-              </div>
-
-              {/* 전일대비 */}
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-medium text-slate-400">전일대비</span>
-                <div className="bg-red-50 text-red-500 text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center gap-0.5">
-                   <TrendingUp size={10} /> {salesData.todayGrowth}%
-                </div>
-              </div>
-            </div>
-            
-            {/* 호버 효과 아이콘 */}
-            <div className="absolute right-3 top-3 opacity-0 group-hover:opacity-100 transition-opacity text-slate-300">
-               <ArrowUpRight size={16} />
+            <p className="text-[9px] font-black text-blue-500 mb-1 uppercase tracking-tight">Today Sales</p>
+            <div className="flex items-center justify-between">
+              <span className="text-xl font-black text-slate-900 tracking-tighter">1,250,000원</span>
+              <ChevronRight size={18} className="text-slate-300" />
             </div>
           </button>
-
-          {/* 날씨 카드 (비소식 알림 연동) */}
-          <div className="flex-1 bg-white rounded-2xl p-4 border border-slate-200 shadow-sm relative overflow-hidden flex flex-col items-center justify-between gap-1 group hover:border-blue-200 transition-colors">
-             <CloudRain size={80} className="absolute -right-6 -bottom-6 text-blue-50 opacity-50 rotate-12 group-hover:scale-110 transition-transform" />
-             
-             <div className="w-full flex flex-col items-center z-10 mt-1">
-                <div className="text-[10px] font-medium text-slate-400 mb-1">{weather.region}</div>
-                <div className="flex items-center gap-2">
-                   <div className="text-3xl font-black text-slate-800 leading-none tracking-tight">{weather.temp}°</div>
-                   {weather.status === 'rainy' && <CloudRain size={20} className="text-blue-500" />}
-                </div>
-             </div>
-
-             {/* 비소식 관리 대상 알림 (데이터 바인딩) */}
-             <div className="z-10 w-full">
-               <div className="bg-blue-50 border border-blue-100 rounded-lg p-2 flex flex-col items-center text-center">
-                 <div className="flex items-center gap-1 mb-0.5">
-                   <Bell size={8} className="text-blue-600 fill-blue-600" />
-                   <span className="text-[9px] font-bold text-blue-600">비소식 알림</span>
-                 </div>
-                 <span className="text-[10px] font-black text-slate-700 tracking-tight">
-                   관리 대상 <span className="text-blue-600 underline decoration-2">{weather.targetCustomers}명</span>
-                 </span>
-               </div>
-             </div>
-          </div>
         </div>
 
-        {/* 하단 액션 버튼 3개 */}
-        <div className="flex-1 flex flex-col gap-3 min-h-0">
-          
-          {/* AI 마케팅 에이전트 -> /creator 이동 */}
+        {/* AI 홍보글 배너 */}
+        <button 
+          onClick={() => navigate('/creator')}
+          className="w-full mt-4 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg shadow-blue-200/50 relative overflow-hidden text-left active:scale-95 transition-all"
+        >
+          <div className="relative z-10">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="bg-white/20 p-1.5 rounded-lg backdrop-blur-md">
+                <Sparkles size={18} className="text-white" />
+              </div>
+              <span className="text-[10px] font-black text-blue-100 uppercase tracking-widest">AI Marketing</span>
+            </div>
+            <p className="text-xl font-black mb-1">AI 홍보글 작성하기</p>
+            <p className="text-[11px] text-blue-100 opacity-90 font-medium">SNS 포스팅을 10초 만에 완성!</p>
+          </div>
+          <Sparkles size={100} className="absolute right-[-20px] top-[-20px] text-white/10" />
+        </button>
+
+        {/* 주요 실행 버튼 그리드 */}
+        <div className="mt-4 grid grid-cols-2 gap-3">
           <button 
-             onClick={() => navigate('/creator')}
-             className="flex-1 bg-gradient-to-r from-indigo-50 to-white rounded-2xl border border-indigo-100 p-5 flex items-center justify-between relative overflow-hidden group active:scale-[0.98] transition-all shadow-sm hover:shadow-md"
+            onClick={() => navigate('/create')}
+            className="bg-white p-6 rounded-2xl shadow-sm text-center active:scale-95 transition-all flex flex-col items-center gap-3 border border-white"
           >
-             <div className="absolute left-0 top-0 w-1 h-full bg-indigo-500" />
-             <div className="flex flex-col items-start z-10 pl-2">
-                <div className="flex items-center gap-2 mb-1">
-                   <div className="p-1 rounded bg-indigo-100 text-indigo-600">
-                     <Sparkles size={12} className="fill-indigo-600" />
-                   </div>
-                   <span className="text-base font-black text-indigo-900">AI 마케팅 에이전트</span>
-                </div>
-                <span className="text-[14px] text-slate-500 text-left font-medium">
-                   "상위노출 최적화" 홍보글 10초 완성
-                </span>
-             </div>
-             <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center border border-slate-100 text-slate-300 shadow-sm group-hover:text-indigo-500 transition-colors">
-                <ArrowUpRight size={16} />
-             </div>
+            <div className="w-12 h-12 bg-slate-900 rounded-xl flex items-center justify-center text-amber-400 shadow-lg shadow-slate-200">
+              <Crown size={28} />
+            </div>
+            <p className="text-sm font-black text-slate-900">보증서 발행</p>
           </button>
 
-          {/* 보증서 발행 -> /create 이동 */}
           <button 
-             onClick={() => navigate('/create')}
-             className="flex-1 bg-white rounded-2xl border border-slate-200 p-5 flex items-center justify-between group active:scale-[0.98] transition-all shadow-sm hover:shadow-md hover:border-amber-200"
+            onClick={() => navigate('/marketing')}
+            className="bg-white p-6 rounded-2xl shadow-sm text-center active:scale-95 transition-all flex flex-col items-center gap-3 border border-white"
           >
-             <div className="absolute left-0 top-0 w-1 h-full bg-amber-400" />
-             <div className="flex flex-col items-start z-10 pl-2">
-                <div className="flex items-center gap-2 mb-1">
-                   <div className="p-1 rounded bg-amber-50 text-amber-500">
-                     <Crown size={12} className="fill-amber-500" />
-                   </div>
-                   <span className="text-base font-black text-slate-800">보증서 발행</span>
-                </div>
-                <span className="text-[14px] text-slate-500 font-medium">
-                   시공 보증서 및 내역 발급
-                </span>
-             </div>
-             <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center border border-slate-100 text-slate-300 shadow-sm group-hover:text-amber-500 transition-colors">
-                <ArrowUpRight size={16} />
-             </div>
+            <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 border border-blue-100">
+              <MessageSquare size={28} />
+            </div>
+            <p className="text-sm font-black text-slate-900">마케팅 관리</p>
           </button>
-
-          {/* 마케팅 관리 -> /marketing 이동 */}
-          <button 
-             onClick={() => navigate('/marketing')}
-             className="flex-1 bg-white rounded-2xl border border-slate-200 p-5 flex items-center justify-between group active:scale-[0.98] transition-all shadow-sm hover:shadow-md hover:border-blue-200"
-          >
-             <div className="absolute left-0 top-0 w-1 h-full bg-blue-500" />
-             <div className="flex flex-col items-start z-10 pl-2">
-                <div className="flex items-center gap-2 mb-1">
-                   <div className="p-1 rounded bg-blue-50 text-blue-500">
-                     <MessageSquare size={12} className="fill-blue-500" />
-                   </div>
-                   <span className="text-base font-black text-slate-800">마케팅 관리</span>
-                </div>
-                <span className="text-[14px] text-slate-500 font-medium">
-                   문자 발송 및 고객 관리
-                </span>
-             </div>
-             <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center border border-slate-100 text-slate-300 shadow-sm group-hover:text-blue-500 transition-colors">
-                <ArrowUpRight size={16} />
-             </div>
-          </button>
-          
         </div>
 
         {/* 하단 카피라이트 */}
-        <div className="text-center pt-1 shrink-0">
-           <p className="text-[9px] text-slate-400 font-bold uppercase tracking-[0.2em]">
-              Powered by GLUNEX AI
-           </p>
+        <div className="pt-2 text-center mt-auto pb-4">
+          <p className="text-[9px] text-slate-400 font-bold uppercase tracking-[0.3em]">Powered by GLUNEX AI</p>
         </div>
-
       </div>
     </div>
   );
