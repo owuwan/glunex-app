@@ -8,7 +8,8 @@ import Sales from '../pages/Sales';
 import Creator from '../pages/Creator';
 import Register from '../pages/Register';
 import Login from '../pages/Login';
-import MyPage from '../pages/MyPage'; // [중요] 마이페이지 파일 가져오기
+import MyPage from '../pages/MyPage';
+import WarrantyViewer from '../pages/WarrantyViewer'; // [추가]
 
 const AppRouter = () => {
   // 모든 페이지에서 공유하는 데이터
@@ -49,8 +50,11 @@ const AppRouter = () => {
       <Route path="/sales" element={<Sales />} />
       <Route path="/creator" element={<Creator />} />
       
-      {/* [중요] 마이페이지 경로 추가 */}
+      {/* 마이페이지 */}
       <Route path="/mypage" element={<MyPage />} />
+
+      {/* [추가] 고객용 보증서 뷰어 (로그인 없이 접근 가능) */}
+      <Route path="/warranty/view/:id" element={<WarrantyViewer />} />
     </Routes>
   );
 };
