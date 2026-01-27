@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Crown, MessageSquare, ChevronRight, CloudRain, Sun, TrendingUp, Sparkles, Loader2, MapPin, Wallet, Bell, ArrowUpRight } from 'lucide-react';
-// 파이어베이스 도구
 import { auth, db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -9,21 +8,19 @@ import { onAuthStateChanged } from 'firebase/auth';
 const Dashboard = () => {
   const navigate = useNavigate();
   
-  // [상태 관리]
-  const [userName, setUserName] = useState('');
+  const [userName, setUserName] = useState('파트너');
   const [loadingUser, setLoadingUser] = useState(true);
   
-  // 날씨 상태 (초기값: 로딩 중)
+  // [수정] 초기값을 로딩 상태가 아닌 '기본값'으로 설정하여 0도/무한로딩 방지
   const [weather, setWeather] = useState({ 
-    temp: 0, 
+    temp: 20, // 기본값 (봄/가을 평균)
     rain: 0, 
-    status: 'clear', // clear, rain
-    region: '위치 확인 중...',
+    status: 'clear', 
+    region: 'Seoul', // 기본 지역
     targetCustomers: 42,
     loading: true 
   });
 
-  // 매출 데이터 (화면 바인딩용 데이터 객체)
   const salesData = {
     today: 1250000,
     monthTotal: 45200000,
@@ -31,11 +28,10 @@ const Dashboard = () => {
     totalGrowth: 8.5
   };
 
-  // 1. 유저 정보 및 날씨 데이터 가져오기
   useEffect(() => {
-    // 로그인 상태 변화 감지 (새로고침 시에도 안정적)
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      let currentRegion = 'Seoul'; // 기본값
+      let currentRegion = 'Seoul';
+      let displayRegion = '서울';
       let storeName = '글루 디테일링';
 
       if (user) {
@@ -43,14 +39,24 @@ const Dashboard = () => {
           const userDoc = await getDoc(doc(db, "users", user.uid));
           if (userDoc.exists()) {
             const userData = userDoc.data();
-            storeName = userData.storeName;
+            storeName = userData.storeName || storeName;
             
-            // 주소 분석 로직
-            if (userData.region) {
-              currentRegion = userData.region;
-            } else if (userData.address) {
+            if (userData.address) {
               const parts = userData.address.split(' ');
-              currentRegion = parts.length >= 2 ? `${parts[0]} ${parts[1]}` : parts[0];
+              // [중요] "인천 서구" -> API엔 "Incheon", 화면엔 "인천 서구"
+              const cityMap = {
+                '서울': 'Seoul', '부산': 'Busan', '대구': 'Daegu', '인천': 'Incheon',
+                '광주': 'Gwangju', '대전': 'Daaejeon', '울산': 'Ulsan', '경기': 'Gyeonggi-do',
+                '강원': 'Gangwon-do', '충북': 'Gangwon-do', '충남': 'Chungcheongnam-do',
+                '전북': 'Jeollabuk-do', '전남': 'Jeollanam-do', '경북': 'Gyeongsangbuk-do',
+                '경남': 'Gyeongsangnam-do', '제주': 'Jeju'
+              };
+              // 한글 주소 앞단어(예: 인천)를 영어로 변환 시도, 없으면 그냥 보냄
+              currentRegion = cityMap[parts[0]] || parts[0]; 
+              displayRegion = parts.length >= 2 ? `${parts[0]} ${parts[1]}` : parts[0];
+            } else if (userData.region) {
+              currentRegion = userData.region;
+              displayRegion = userData.region;
             }
           }
         } catch (error) {
@@ -60,66 +66,78 @@ const Dashboard = () => {
       
       setUserName(storeName);
       setLoadingUser(false);
-
-      // (2) 해당 지역의 실시간 날씨 가져오기
-      fetchRealWeather(currentRegion);
+      
+      // 날씨 요청 (3초 타임아웃 적용)
+      fetchRealWeather(currentRegion, displayRegion);
     });
 
     return () => unsubscribe();
   }, []);
 
-  // 2. OpenWeatherMap API 호출 함수
-  const fetchRealWeather = async (regionName) => {
+  const fetchRealWeather = async (apiRegion, displayRegion) => {
     try {
       const API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
       
-      // API 키가 없을 경우 (안전 장치)
+      // 키가 없으면 기본값 유지하고 로딩 끝냄
       if (!API_KEY) {
-        console.warn("날씨 API 키가 설정되지 않았습니다.");
-        setWeather({ temp: 20, rain: 0, status: 'clear', region: regionName, targetCustomers: 42, loading: false });
+        setWeather(prev => ({ ...prev, region: displayRegion, loading: false }));
         return;
       }
 
+      // [핵심] 3초 안에 응답 안 오면 강제 종료 (무한로딩 방지)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+
       const response = await fetch(
-        `https://api.openweathermap.org/data/2.5/weather?q=${regionName}&appid=${API_KEY}&units=metric&lang=kr`
+        `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(apiRegion)}&appid=${API_KEY}&units=metric&lang=kr`,
+        { signal: controller.signal }
       );
       
+      clearTimeout(timeoutId);
+
+      if (!response.ok) throw new Error("날씨 데이터 없음");
+
       const data = await response.json();
 
       if (data.cod === 200) {
-        // 비 또는 눈이 오는지 체크
-        const mainWeather = data.weather[0].main;
-        const isRain = mainWeather === 'Rain' || mainWeather === 'Drizzle' || mainWeather === 'Thunderstorm' || mainWeather === 'Snow';
-        const rainAmount = data.rain ? data.rain['1h'] : 0; // 1시간 강수량
+        const main = data.weather[0].main;
+        const isRain = main === 'Rain' || main === 'Drizzle' || main === 'Thunderstorm' || main === 'Snow';
+        const rainAmount = data.rain ? data.rain['1h'] : 0;
         
         setWeather({
           temp: Math.round(data.main.temp),
           rain: rainAmount,
           status: isRain ? 'rainy' : 'clear',
-          region: regionName,
-          targetCustomers: isRain ? 45 : 12, // 비 오면 타겟 고객 증가 (예시 로직)
+          region: displayRegion,
+          targetCustomers: isRain ? 45 : 12,
           loading: false
         });
       } else {
-        // 지역을 못 찾았거나 에러인 경우
-        setWeather(prev => ({ ...prev, loading: false }));
+        throw new Error("지역 못 찾음");
       }
     } catch (error) {
-      console.error("날씨 API 호출 에러:", error);
-      setWeather(prev => ({ ...prev, loading: false }));
+      console.error("날씨 로딩 실패 (기본값 사용):", error);
+      // 에러 나면 "맑음 / 20도" 기본값 보여줘서 화면 안 깨지게 처리
+      setWeather({ 
+        temp: 20, 
+        rain: 0, 
+        status: 'clear', 
+        region: displayRegion, 
+        targetCustomers: 42, 
+        loading: false 
+      });
     }
   };
 
   return (
     <div className="flex flex-col h-full w-full bg-[#F8F9FB] text-slate-800 font-sans overflow-hidden max-w-md mx-auto shadow-2xl relative animate-fade-in">
       
-      {/* 배경 그래픽 효과 */}
       <div className="absolute inset-0 z-0 pointer-events-none">
          <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[40%] bg-blue-100/40 rounded-full blur-[80px]" />
          <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[40%] bg-slate-200/50 rounded-full blur-[80px]" />
       </div>
 
-      {/* [헤더 영역] 상호명 및 마이페이지 */}
+      {/* 헤더 */}
       <div className="relative px-6 pt-10 pb-4 z-10 flex justify-between items-center shrink-0">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -129,7 +147,7 @@ const Dashboard = () => {
             </span>
           </div>
           <h2 className="text-2xl font-black text-slate-900 tracking-tight">
-            {loadingUser ? '로딩중...' : userName}
+            {userName}
           </h2>
         </div>
 
@@ -141,18 +159,17 @@ const Dashboard = () => {
         </button>
       </div>
 
-      {/* [메인 컨텐츠 영역] */}
+      {/* 메인 컨텐츠 */}
       <div className="flex-1 flex flex-col px-5 pb-6 gap-3 z-10 min-h-0">
         
-        {/* 상단 블록: 매출(Left) + 날씨(Right) */}
+        {/* 상단 블록 */}
         <div className="flex gap-3 h-[32%] shrink-0">
           
-          {/* 매출 카드 (Total & Today) -> 클릭 시 /sales 이동 */}
+          {/* 매출 카드 */}
           <button 
             onClick={() => navigate('/sales')}
             className="flex-[1.8] bg-white rounded-2xl p-5 border border-slate-200 shadow-sm relative overflow-hidden group active:scale-[0.98] transition-all flex flex-col justify-between text-left"
           >
-            {/* 1. Total Sales (월 매출) */}
             <div className="relative z-10 w-full">
               <div className="flex items-center gap-1.5 mb-0.5">
                 <div className="p-1 rounded bg-slate-100 text-slate-500">
@@ -170,7 +187,6 @@ const Dashboard = () => {
                 <span className="text-sm font-bold text-slate-400">원</span>
               </div>
 
-              {/* 전월대비 */}
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-medium text-slate-400">전월대비</span>
                 <div className="bg-red-50 text-red-500 text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center gap-0.5">
@@ -179,10 +195,8 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* 구분선 */}
             <div className="w-full h-px bg-slate-100 my-1" />
 
-            {/* 2. Today Sales (일 매출) */}
             <div className="relative z-10 w-full">
               <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wide flex items-center gap-1 mb-0.5">
                  Today
@@ -195,7 +209,6 @@ const Dashboard = () => {
                 <span className="text-xs font-bold text-slate-400">원</span>
               </div>
 
-              {/* 전일대비 */}
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-medium text-slate-400">전일대비</span>
                 <div className="bg-red-50 text-red-500 text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center gap-0.5">
@@ -204,15 +217,13 @@ const Dashboard = () => {
               </div>
             </div>
             
-            {/* 호버 효과 아이콘 */}
             <div className="absolute right-3 top-3 opacity-0 group-hover:opacity-100 transition-opacity text-slate-300">
                <ArrowUpRight size={16} />
             </div>
           </button>
 
-          {/* 날씨 카드 (비소식 알림 연동) */}
+          {/* 날씨 카드 */}
           <div className="flex-1 bg-white rounded-2xl p-4 border border-slate-200 shadow-sm relative overflow-hidden flex flex-col items-center justify-between gap-1 group hover:border-blue-200 transition-colors">
-             {/* 배경 아이콘 (날씨 상태에 따라 변경) */}
              {weather.status === 'rainy' ? (
                 <CloudRain size={80} className="absolute -right-6 -bottom-6 text-blue-50 opacity-50 rotate-12 group-hover:scale-110 transition-transform" />
              ) : (
@@ -221,21 +232,20 @@ const Dashboard = () => {
              
              <div className="w-full flex flex-col items-center z-10 mt-1">
                 <div className="text-[10px] font-medium text-slate-400 mb-1">
-                  {weather.loading ? '위치 확인 중...' : weather.region}
+                  {weather.loading ? '날씨 확인 중...' : weather.region}
                 </div>
                 <div className="flex items-center gap-2">
                    {weather.loading ? (
                      <Loader2 className="animate-spin text-slate-400" size={24} />
                    ) : (
                      <>
-                        <div className="text-3xl font-black text-slate-800 leading-none tracking-tight">{weather.temp}°</div>
+                        <div className="text-3xl font-black text-slate-800 leading-none tracking-tight">{weather.temp !== null ? `${weather.temp}°` : '--'}</div>
                         {weather.status === 'rainy' ? <CloudRain size={20} className="text-blue-500" /> : <Sun size={20} className="text-amber-500" />}
                      </>
                    )}
                 </div>
              </div>
 
-             {/* 비소식 관리 대상 알림 (데이터 바인딩) */}
              <div className="z-10 w-full">
                <div className={`border rounded-lg p-2 flex flex-col items-center text-center ${weather.status === 'rainy' ? 'bg-blue-50 border-blue-100' : 'bg-slate-50 border-slate-100'}`}>
                  <div className="flex items-center gap-1 mb-0.5">
@@ -252,10 +262,9 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* 하단 액션 버튼 3개 */}
+        {/* 하단 액션 버튼 */}
         <div className="flex-1 flex flex-col gap-3 min-h-0">
           
-          {/* AI 마케팅 에이전트 -> /creator 이동 */}
           <button 
              onClick={() => navigate('/creator')}
              className="flex-1 bg-gradient-to-r from-indigo-50 to-white rounded-2xl border border-indigo-100 p-5 flex items-center justify-between relative overflow-hidden group active:scale-[0.98] transition-all shadow-sm hover:shadow-md"
@@ -266,10 +275,8 @@ const Dashboard = () => {
                    <div className="p-1 rounded bg-indigo-100 text-indigo-600">
                      <Sparkles size={12} className="fill-indigo-600" />
                    </div>
-                   {/* [유지] 글자 크기 키움 */}
                    <span className="text-base font-black text-indigo-900">AI 마케팅 에이전트</span>
                 </div>
-                {/* [유지] 글자 크기 키움 */}
                 <span className="text-[14px] text-slate-500 text-left font-medium">
                    "예약 마감 임박!" 홍보글 10초 완성
                 </span>
@@ -279,7 +286,6 @@ const Dashboard = () => {
              </div>
           </button>
 
-          {/* 보증서 발행 -> /create 이동 */}
           <button 
              onClick={() => navigate('/create')}
              className="flex-1 bg-white rounded-2xl border border-slate-200 p-5 flex items-center justify-between group active:scale-[0.98] transition-all shadow-sm hover:shadow-md hover:border-amber-200"
@@ -290,10 +296,8 @@ const Dashboard = () => {
                    <div className="p-1 rounded bg-amber-50 text-amber-500">
                      <Crown size={12} className="fill-amber-500" />
                    </div>
-                   {/* [유지] 글자 크기 키움 */}
                    <span className="text-base font-black text-slate-800">보증서 발행</span>
                 </div>
-                {/* [유지] 글자 크기 키움 */}
                 <span className="text-[14px] text-slate-500 font-medium">
                    시공 보증서 및 내역 발급
                 </span>
@@ -303,7 +307,6 @@ const Dashboard = () => {
              </div>
           </button>
 
-          {/* 마케팅 관리 -> /marketing 이동 */}
           <button 
              onClick={() => navigate('/marketing')}
              className="flex-1 bg-white rounded-2xl border border-slate-200 p-5 flex items-center justify-between group active:scale-[0.98] transition-all shadow-sm hover:shadow-md hover:border-blue-200"
@@ -314,10 +317,8 @@ const Dashboard = () => {
                    <div className="p-1 rounded bg-blue-50 text-blue-500">
                      <MessageSquare size={12} className="fill-blue-500" />
                    </div>
-                   {/* [유지] 글자 크기 키움 */}
                    <span className="text-base font-black text-slate-800">마케팅 관리</span>
                 </div>
-                {/* [유지] 글자 크기 키움 */}
                 <span className="text-[14px] text-slate-500 font-medium">
                    알림톡 발송 및 고객 관리
                 </span>
