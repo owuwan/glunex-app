@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Eye, Clock, CreditCard } from 'lucide-react';
+import { ChevronRight, Eye, Clock, CreditCard, Save, Loader2 } from 'lucide-react';
+// 파일 경로 재확인 (상대 경로)
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
+import { db, auth } from '../firebase';
+import { collection, addDoc } from 'firebase/firestore';
 
 const WarrantyIssue = ({ formData, setFormData, userStatus }) => {
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
   const [serviceType, setServiceType] = useState(formData._serviceType || 'coating');
   const isWarrantyType = ['coating', 'tinting'].includes(serviceType);
 
-  // 서비스별 맞춤 힌트(Placeholder) 설정
   const getPlaceholder = () => {
     switch (serviceType) {
       case 'coating': return "예: A사 세라믹코트";
@@ -17,6 +20,36 @@ const WarrantyIssue = ({ formData, setFormData, userStatus }) => {
       case 'detailing': return "예: 전체 철분제거";
       case 'wash': return "예: 내부/외부 세차";
       default: return "내용 입력";
+    }
+  };
+
+  const handleIssue = async () => {
+    const user = auth.currentUser;
+    if (!user) {
+      alert("로그인이 필요한 서비스입니다.");
+      return navigate('/login');
+    }
+
+    if (!formData.customerName || !formData.phone || !formData.plateNumber) {
+      return alert("고객명, 연락처, 차량번호는 필수입니다.");
+    }
+
+    setLoading(true);
+
+    try {
+      await addDoc(collection(db, "warranties"), {
+        ...formData,
+        userId: user.uid,
+        serviceType: serviceType,
+        issuedAt: new Date().toISOString(),
+        status: 'active'
+      });
+      navigate('/warranty/result');
+    } catch (error) {
+      console.error("저장 실패:", error);
+      alert("보증서 저장 중 오류가 발생했습니다.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -38,7 +71,6 @@ const WarrantyIssue = ({ formData, setFormData, userStatus }) => {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 pb-20">
-        {/* 서비스 선택 그리드 */}
         <div className="grid grid-cols-2 gap-2 bg-slate-100 p-2 rounded-xl mb-6">
           {[
             { id: 'coating', label: '유리막 코팅' },
@@ -60,7 +92,6 @@ const WarrantyIssue = ({ formData, setFormData, userStatus }) => {
         </div>
 
         <div className="space-y-4">
-          {/* 1. 기본 정보 */}
           <div className="space-y-2">
             <Input label={isWarrantyType ? "시공 제품명" : "서비스 명"} placeholder={getPlaceholder()} value={formData.productName} onChange={(e) => setFormData({...formData, productName: e.target.value})} />
             <Input label="고객명" placeholder="성함" value={formData.customerName} onChange={(e) => setFormData({...formData, customerName: e.target.value})} />
@@ -71,7 +102,6 @@ const WarrantyIssue = ({ formData, setFormData, userStatus }) => {
 
           <hr className="my-6 border-slate-100" />
 
-          {/* 2. 금액 설정 (이원화) */}
           <div className="bg-blue-50/30 p-4 rounded-2xl border border-blue-50 space-y-4">
             <div className="flex items-center gap-2 mb-2 text-blue-600">
               <CreditCard size={18} />
@@ -91,7 +121,6 @@ const WarrantyIssue = ({ formData, setFormData, userStatus }) => {
             />
           </div>
 
-          {/* 3. 마케팅 주기 설정 */}
           <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
             <div className="flex items-center gap-2 mb-3 text-slate-600">
               <Clock size={18} />
@@ -121,7 +150,19 @@ const WarrantyIssue = ({ formData, setFormData, userStatus }) => {
       </div>
 
       <div className="p-6 bg-white border-t border-slate-100 sticky bottom-0">
-        <Button onClick={() => navigate('/warranty/result')}>인증서 생성 및 매출 기록</Button>
+        <Button onClick={handleIssue} disabled={loading} className={loading ? "bg-slate-700" : ""}>
+          {loading ? (
+            <>
+              <Loader2 className="animate-spin mr-2" size={18} />
+              저장 중...
+            </>
+          ) : (
+            <>
+              <Save className="mr-2" size={18} />
+              인증서 생성 및 매출 기록
+            </>
+          )}
+        </Button>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import React from 'react';
 
-const Button = ({ children, onClick, variant = 'primary', className = '', disabled = false }) => {
+const Button = ({ children, onClick, variant = 'primary', className = '', disabled = false, type = "button" }) => {
   const baseStyle = "w-full py-4 rounded-xl font-bold transition-all duration-200 flex items-center justify-center gap-2 active:scale-95 text-sm tracking-wide";
   const variants = {
     primary: "bg-slate-900 text-white shadow-lg shadow-slate-900/20 hover:bg-slate-800",
@@ -12,8 +12,10 @@ const Button = ({ children, onClick, variant = 'primary', className = '', disabl
   
   return (
     <button 
+      type={type}
       onClick={disabled ? null : onClick} 
       className={`${baseStyle} ${disabled ? variants.disabled : variants[variant]} ${className}`}
+      disabled={disabled}
     >
       {children}
     </button>

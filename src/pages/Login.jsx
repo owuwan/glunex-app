@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Crown } from 'lucide-react';
-import { auth } from '../firebase'; // 파이어베이스 인증 도구 가져오기
+// [수정] 경로 단순화
+import { auth } from '../firebase'; 
 import { signInWithEmailAndPassword } from 'firebase/auth';
 
 const Input = ({ label, type = "text", placeholder, value, onChange }) => (
@@ -26,10 +27,7 @@ const Login = () => {
     if (!email || !password) return alert("이메일과 비밀번호를 입력해주세요.");
     
     try {
-      // 파이어베이스 서버에 로그인 요청
       await signInWithEmailAndPassword(auth, email, password);
-      
-      // 성공하면 대시보드로 이동
       navigate('/dashboard');
     } catch (error) {
       console.error("로그인 에러:", error);
@@ -57,7 +55,6 @@ const Login = () => {
       </div>
 
       <div className="space-y-4 w-full max-w-sm mx-auto">
-        {/* 이메일 입력 (파이어베이스는 이메일 아이디를 사용합니다) */}
         <Input 
           label="Email ID" 
           placeholder="가입하신 이메일 입력" 
