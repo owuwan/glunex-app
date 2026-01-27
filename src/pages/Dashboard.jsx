@@ -4,6 +4,7 @@ import { User, Crown, MessageSquare, ChevronRight, CloudRain, Sun, TrendingUp, S
 // 파이어베이스 도구
 import { auth, db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth'; // [추가] 로그인 상태 감지 도구
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -22,41 +23,53 @@ const Dashboard = () => {
     loading: true 
   });
 
-  // 매출 데이터 (화면 바인딩용 데이터 객체)
+  // 매출 데이터 (추후 Sales.jsx와 연동 가능, 현재는 UI 바인딩용)
   const salesData = {
-    total: 45200000,
-    totalGrowth: 8.5,
     today: 1250000,
-    todayGrowth: 12
+    monthTotal: 45200000,
+    todayGrowth: 12,
+    totalGrowth: 8.5
   };
 
   // 1. 유저 정보 및 날씨 데이터 가져오기
   useEffect(() => {
-    const fetchData = async () => {
-      const user = auth.currentUser;
+    // 파이어베이스가 "로그인 확인"을 마칠 때까지 기다립니다.
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       let currentRegion = 'Seoul'; // 기본값
+      let storeName = '글루 디테일링';
 
-      // (1) 로그인한 유저 정보 가져오기
       if (user) {
         try {
           const userDoc = await getDoc(doc(db, "users", user.uid));
           if (userDoc.exists()) {
             const userData = userDoc.data();
-            setUserName(userData.storeName);
-            // 가입 시 저장한 지역 정보가 있다면 사용 (예: 강남구)
-            if (userData.region) currentRegion = userData.region;
+            storeName = userData.storeName;
+            
+            // [주소 분석 로직 강화]
+            // 1순위: region (구/군) 정보
+            // 2순위: address (전체 주소)에서 앞 두 단어 추출 (예: "인천 서구")
+            if (userData.region) {
+              currentRegion = userData.region;
+            } else if (userData.address) {
+              const parts = userData.address.split(' ');
+              // "인천 서구 버들로..." -> "인천 서구" 추출
+              currentRegion = parts.length >= 2 ? `${parts[0]} ${parts[1]}` : parts[0];
+            }
           }
         } catch (error) {
           console.error("유저 정보 로딩 실패:", error);
         }
       }
+      
+      // 데이터 세팅
+      setUserName(storeName);
       setLoadingUser(false);
-
-      // (2) 해당 지역의 실시간 날씨 가져오기
+      
+      // 확정된 지역으로 날씨 조회
       fetchRealWeather(currentRegion);
-    };
+    });
 
-    fetchData();
+    return () => unsubscribe(); // 청소 함수
   }, []);
 
   // 2. OpenWeatherMap API 호출 함수
@@ -156,7 +169,7 @@ const Dashboard = () => {
               
               <div className="flex items-baseline gap-1 mb-0.5">
                 <span className="text-2xl font-black text-slate-900 tracking-tighter leading-none">
-                  {salesData.total.toLocaleString()}
+                  {salesData.monthTotal.toLocaleString()}
                 </span>
                 <span className="text-sm font-bold text-slate-400">원</span>
               </div>
