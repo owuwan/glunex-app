@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, User, Crown, Copy, Send, LogOut, FileText, Loader2 } from 'lucide-react';
-// [중요] 파이어베이스 도구 가져오기 (src/firebase.js 파일이 있어야 합니다)
+import { ChevronRight, User, Crown, Copy, Send, LogOut, FileText, Loader2, RefreshCw } from 'lucide-react';
 import { auth, db } from '../firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 
@@ -9,41 +8,29 @@ const MyPage = () => {
   const navigate = useNavigate();
   const [depositorName, setDepositorName] = useState('');
   
-  // [데이터 상태] 실제 데이터를 담을 그릇
   const [historyList, setHistoryList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [userEmail, setUserEmail] = useState('');
 
-  // [핵심] 화면이 켜지면 데이터베이스에서 내역을 가져옵니다.
+  // 데이터 불러오기
   useEffect(() => {
     const fetchData = async () => {
       const user = auth.currentUser;
-      
-      // 로그인이 안 되어 있으면 로그인 페이지로 보냄
       if (!user) {
         navigate('/login');
         return;
       }
-
-      setUserEmail(user.email); // 이메일 표시용
+      setUserEmail(user.email);
 
       try {
-        // 1. 내 아이디(uid)로 저장된 보증서만 찾기
-        const q = query(
-          collection(db, "warranties"),
-          where("userId", "==", user.uid)
-        );
-
-        // 2. 데이터 가져오기
+        const q = query(collection(db, "warranties"), where("userId", "==", user.uid));
         const querySnapshot = await getDocs(q);
         const data = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
-
-        // 3. 최신순으로 정렬 (JS로 처리)
+        // 최신순 정렬
         data.sort((a, b) => new Date(b.issuedAt) - new Date(a.issuedAt));
-
         setHistoryList(data);
       } catch (error) {
         console.error("데이터 불러오기 실패:", error);
@@ -51,12 +38,23 @@ const MyPage = () => {
         setLoading(false);
       }
     };
-
     fetchData();
   }, [navigate]);
 
+  // [핵심 기능] 보증서 문자 재전송 함수
+  const handleResendSMS = (item) => {
+    if (!item.phone) return alert("고객 전화번호 정보가 없습니다.");
+    
+    const confirmSend = window.confirm(`${item.customerName} 고객님께 보증서 링크를 재전송하시겠습니까?`);
+    if (confirmSend) {
+      // 실제 서비스에서는 고유 링크(URL)가 들어가야 합니다. 현재는 데모 링크입니다.
+      const message = `[GLUNEX] ${item.customerName}님, 요청하신 보증서를 재발송해 드립니다.\n\n차종: ${item.carModel}\n시공: ${item.serviceType}\n발행일: ${item.installDate}\n\n전자보증서 확인하기:\nhttps://glunex-app.vercel.app/warranty/result`;
+      
+      window.location.href = `sms:${item.phone}?body=${encodeURIComponent(message)}`;
+    }
+  };
+
   const copyAccount = () => {
-    // 모바일 호환성 복사 로직
     const textArea = document.createElement("textarea");
     textArea.value = "110-0074-44578";
     document.body.appendChild(textArea);
@@ -88,7 +86,7 @@ const MyPage = () => {
 
       <div className="flex-1 overflow-y-auto p-6 pb-10">
         
-        {/* 2. 프로필 카드 (실제 이메일 표시) */}
+        {/* 2. 프로필 카드 */}
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-6 flex items-center justify-between">
            <div>
               <div className="flex items-center gap-2 mb-1">
@@ -126,7 +124,7 @@ const MyPage = () => {
             <div className="absolute top-[-20px] right-[-20px] w-32 h-32 bg-[#D4AF37]/20 rounded-full blur-3xl"></div>
         </div>
 
-        {/* 4. [연동 완료] 최근 발행 내역 리스트 */}
+        {/* 4. 최근 발행 내역 리스트 (재전송 버튼 추가됨) */}
         <div className="mb-8">
            <div className="flex items-center gap-2 mb-3 px-1">
              <FileText size={16} className="text-slate-400" />
@@ -141,26 +139,35 @@ const MyPage = () => {
              ) : historyList.length > 0 ? (
                <div className="divide-y divide-slate-100">
                  {historyList.map((item) => (
-                   <div key={item.id} className="p-4 flex justify-between items-center hover:bg-slate-50 transition-colors cursor-pointer">
+                   <div key={item.id} className="p-4 flex justify-between items-center hover:bg-slate-50 transition-colors">
                      <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 font-bold text-xs">
-                          {/* 날짜 파싱 (YYYY-MM-DD 형식 가정) */}
-                          {new Date(item.issuedAt).getDate()}일
+                          {/* 날짜 표시 */}
+                          {new Date(item.issuedAt).getDate()}
                         </div>
                         <div>
                           <p className="text-sm font-bold text-slate-900">
                             {item.customerName} <span className="text-slate-400 font-normal text-xs">| {item.carModel}</span>
                           </p>
-                          <p className="text-xs text-slate-500 font-medium">
-                            {item.serviceType === 'coating' ? '유리막 코팅' : 
-                             item.serviceType === 'tinting' ? '썬팅' : 
-                             item.serviceType === 'wash' ? '세차' : '디테일링'}
-                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-xs text-slate-500 font-medium">
+                                {item.serviceType === 'coating' ? '유리막' : 
+                                item.serviceType === 'tinting' ? '썬팅' : 
+                                item.serviceType === 'wash' ? '세차' : '디테일링'}
+                            </span>
+                            <span className="text-[10px] text-slate-300">| {item.carNumber || item.plateNumber}</span>
+                          </div>
                         </div>
                      </div>
-                     <span className="text-[10px] font-bold text-slate-400">
-                        {new Date(item.issuedAt).toLocaleDateString()}
-                     </span>
+                     
+                     {/* [NEW] 재전송 버튼 */}
+                     <button 
+                        onClick={(e) => { e.stopPropagation(); handleResendSMS(item); }}
+                        className="flex items-center gap-1 bg-slate-100 px-3 py-1.5 rounded-lg text-[10px] font-bold text-slate-600 hover:bg-slate-200 hover:text-blue-600 transition-colors"
+                     >
+                        <RefreshCw size={12} />
+                        재전송
+                     </button>
                    </div>
                  ))}
                </div>
@@ -212,7 +219,7 @@ const MyPage = () => {
             </div>
         </div>
 
-        {/* 6. 로그아웃 버튼 (기능 연결) */}
+        {/* 6. 로그아웃 버튼 */}
         <button onClick={handleLogout} className="w-full py-8 text-slate-400 text-xs flex items-center justify-center gap-1 hover:text-red-500 transition-colors">
            <LogOut size={12} /> 로그아웃
         </button>
