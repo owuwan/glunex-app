@@ -1,17 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import path from 'path'
 
+// 복잡한 경로 설정 다 빼고 기본으로 갑니다.
 export default defineConfig({
   plugins: [react()],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-    },
-  },
-  // [중요] 빌드 시 경로 문제 해결을 위한 설정
-  base: '/', 
-  build: {
-    outDir: 'dist',
-  }
 })
