@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Eye, Clock, CreditCard, Save, Loader2 } from 'lucide-react';
+import { ChevronRight, Eye, Clock, CreditCard, Save, Loader2, PlusCircle } from 'lucide-react';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
 import { db, auth } from '../firebase';
@@ -10,34 +10,53 @@ const WarrantyIssue = ({ formData, setFormData, userStatus }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [serviceType, setServiceType] = useState(formData._serviceType || 'coating');
-  const isWarrantyType = ['coating', 'tinting'].includes(serviceType);
+  const isWarrantyType = ['coating', 'tinting', 'etc'].includes(serviceType);
 
+  // 1. 서비스명(제품명) 힌트 자동 변경
   const getPlaceholder = () => {
     switch (serviceType) {
       case 'coating': return "예: A사 세라믹코트";
       case 'tinting': return "예: 루마 버텍스 900";
       case 'detailing': return "예: 전체 철분제거";
       case 'wash': return "예: 내부/외부 세차";
+      case 'etc': return "예: 생활보호PPF, 블랙박스"; // 기타 작업 예시
       default: return "내용 입력";
     }
   };
 
+  // 2. [신규] 금액 힌트 자동 변경 로직
+  const getAmountHints = () => {
+    switch (serviceType) {
+      case 'coating': 
+        return { warranty: "예: 1,200,000 (숫자만)", actual: "예: 650,000 (숫자만)" };
+      case 'tinting': 
+        return { warranty: "예: 1,100,000 (숫자만)", actual: "예: 650,000 (숫자만)" };
+      case 'detailing': 
+        return { warranty: "예: 250,000 (숫자만)", actual: "예: 150,000 (숫자만)" };
+      case 'wash': 
+        return { warranty: "예: 100,000 (숫자만)", actual: "예: 55,000 (숫자만)" };
+      case 'etc': 
+        return { warranty: "예: 900,000 (숫자만)", actual: "예: 600,000 (숫자만)" };
+      default: 
+        return { warranty: "금액 입력", actual: "금액 입력" };
+    }
+  };
+
+  const amountHints = getAmountHints();
+
   const handleIssue = async () => {
-    // 1. 로그인 체크
     const user = auth.currentUser;
     if (!user) {
       alert("로그인이 필요한 서비스입니다.");
       return navigate('/login');
     }
 
-    // [신규] 유료 회원 체크 로직
     if (userStatus !== 'approved') {
       const confirmUpgrade = window.confirm("🔒 정식 보증서 발행은 '프리미엄 파트너' 전용 기능입니다.\n\n지금 멤버십을 전환하고 바로 발행하시겠습니까?");
       if (confirmUpgrade) navigate('/mypage');
       return;
     }
 
-    // 2. 유효성 검사
     if (!formData.customerName || !formData.phone || !formData.plateNumber) {
       return alert("고객명, 연락처, 차량번호는 필수입니다.");
     }
@@ -79,24 +98,40 @@ const WarrantyIssue = ({ formData, setFormData, userStatus }) => {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 pb-20">
-        <div className="grid grid-cols-2 gap-2 bg-slate-100 p-2 rounded-xl mb-6">
-          {[
-            { id: 'coating', label: '유리막 코팅' },
-            { id: 'tinting', label: '썬팅' },
-            { id: 'detailing', label: '디테일링' },
-            { id: 'wash', label: '일반 세차' }
-          ].map(item => (
-            <button 
-              key={item.id} 
-              onClick={() => {
-                setServiceType(item.id);
-                setFormData(prev => ({...prev, _serviceType: item.id}));
-              }} 
-              className={`py-3 rounded-lg text-sm font-bold transition-all ${serviceType === item.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'}`}
-            >
-              {item.label}
-            </button>
-          ))}
+        
+        {/* 서비스 선택 영역 */}
+        <div className="mb-6">
+          {/* 2x2 그리드 */}
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            {[
+              { id: 'coating', label: '유리막 코팅' },
+              { id: 'tinting', label: '썬팅' },
+              { id: 'detailing', label: '디테일링' },
+              { id: 'wash', label: '일반 세차' }
+            ].map(item => (
+              <button 
+                key={item.id} 
+                onClick={() => {
+                  setServiceType(item.id);
+                  setFormData(prev => ({...prev, _serviceType: item.id}));
+                }} 
+                className={`py-3.5 rounded-xl text-sm font-bold transition-all ${serviceType === item.id ? 'bg-slate-900 text-white shadow-md' : 'bg-slate-50 text-slate-500 border border-slate-100'}`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          {/* [신규] 기타 작업 (긴 버튼) */}
+          <button 
+            onClick={() => {
+              setServiceType('etc');
+              setFormData(prev => ({...prev, _serviceType: 'etc'}));
+            }} 
+            className={`w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all ${serviceType === 'etc' ? 'bg-slate-900 text-white shadow-md' : 'bg-slate-50 text-slate-500 border border-slate-100'}`}
+          >
+            <PlusCircle size={16} />
+            기타 작업 (랩핑, PPF, 블박 등)
+          </button>
         </div>
 
         <div className="space-y-4">
@@ -110,6 +145,7 @@ const WarrantyIssue = ({ formData, setFormData, userStatus }) => {
 
           <hr className="my-6 border-slate-100" />
 
+          {/* 금액 설정 (힌트 자동 변경 적용) */}
           <div className="bg-blue-50/30 p-4 rounded-2xl border border-blue-50 space-y-4">
             <div className="flex items-center gap-2 mb-2 text-blue-600">
               <CreditCard size={18} />
@@ -117,13 +153,13 @@ const WarrantyIssue = ({ formData, setFormData, userStatus }) => {
             </div>
             <Input 
               label="보증 금액 (보증서 노출용)" 
-              placeholder="예: 900,000 (숫자만)" 
+              placeholder={amountHints.warranty} // 자동 변경됨
               value={formData.warrantyPrice} 
               onChange={(e) => setFormData({...formData, warrantyPrice: e.target.value})} 
             />
             <Input 
               label="실 시공 금액 (매출 통계용)" 
-              placeholder="예: 650,000 (숫자만)" 
+              placeholder={amountHints.actual} // 자동 변경됨
               value={formData.price} 
               onChange={(e) => setFormData({...formData, price: e.target.value})} 
             />
