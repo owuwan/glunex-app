@@ -2,16 +2,16 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, Send, Users, CloudRain, Sun, AlertCircle, Snowflake, Filter, CheckCircle2, MessageSquare, Edit3, Crown, Monitor, ShieldCheck, Sparkles } from 'lucide-react';
 
-const Marketing = () => {
+const Marketing = ({ userStatus }) => {
   const navigate = useNavigate();
 
   // [설정] 사장님의 매장 유형 & 현재 날씨
   const myShopTypes = ["세차", "유리막코팅", "썬팅", "블랙박스"]; 
   const [activeShopMode, setActiveShopMode] = useState(myShopTypes[0]);
   const [currentWeather, setCurrentWeather] = useState('rain'); 
-  const [selectedTemplate, setSelectedTemplate] = useState(0); // 선택한 문구 번호 (0, 1, 2)
+  const [selectedTemplate, setSelectedTemplate] = useState(0); 
 
-  // 전체 고객 데이터 (업종 및 시공일 포함)
+  // 전체 고객 데이터
   const allCustomers = [
     { id: 1, name: '강민수', car: 'GV80', type: '유리막코팅', lastVisit: '2025-08-10', lastSmsDate: '2026-01-20' }, 
     { id: 2, name: '고영희', car: '아반떼', type: '세차', lastVisit: '2025-12-25', lastSmsDate: '2025-12-25' }, 
@@ -21,7 +21,7 @@ const Marketing = () => {
     { id: 6, name: '박태준', car: '싼타페', type: '블랙박스', lastVisit: '2024-01-10', lastSmsDate: '2025-12-10' },
   ];
 
-  // 14일 이내 발송자 체크 로직 (피로도 관리)
+  // 14일 이내 발송자 체크 로직
   const checkIsExcluded = (lastDate) => {
     const last = new Date(lastDate);
     const today = new Date();
@@ -44,9 +44,8 @@ const Marketing = () => {
     return isNotFatigued && isMyJob && diffMonths >= 12;
   });
 
-  // [추천 문구] 상황별 3가지 옵션 (감성형 / 혜택형 / 정보형)
+  // [추천 문구] 상황별 3가지 옵션
   const messageTemplates = {
-    // 1. 세차 (날씨 민감)
     "세차": {
       rain: [
         { id: 0, tag: "☔️ 감성/안부", title: "빗길 안전 운전", content: "[GLUNEX] 비가 많이 오네요. 빗길 시야 확보는 잘 되시나요? 고객님의 안전운전을 기원합니다. 비 그치면 세차하러 오세요!" },
@@ -59,7 +58,6 @@ const Marketing = () => {
         { id: 2, tag: "📅 주말", title: "주말 예약 알림", content: "[GLUNEX] 이번 주말 나들이 계획 있으신가요? 쾌적한 여행을 위해 내부 세차 미리 예약하세요." }
       ]
     },
-    // 2. 유리막코팅 (주기 관리)
     "유리막코팅": {
         main: [
             { id: 0, tag: "🔧 점검", title: "정기 점검 시기", content: "[GLUNEX] 유리막 코팅 시공 6개월이 지났습니다. 발수력 유지 확인을 위해 매장에 방문해 주세요 (무료 점검)." },
@@ -67,7 +65,6 @@ const Marketing = () => {
             { id: 2, tag: "🎁 혜택", title: "재시공 할인", content: "[GLUNEX] 기존 고객님만을 위한 특별 혜택! 사고나 긁힘으로 손상된 부위 부분 시공 30% 할인해 드립니다." }
         ]
     },
-    // 3. 썬팅 (교체 주기)
     "썬팅": {
         main: [
             { id: 0, tag: "🔥 열차단", title: "열차단 성능 점검", content: "[GLUNEX] 썬팅하신 지 꽤 되셨네요. 필름 색이 바래거나 열차단이 안 된다면 무료 측정 받아보세요." },
@@ -75,7 +72,6 @@ const Marketing = () => {
             { id: 2, tag: "🎫 이벤트", title: "지인 소개 이벤트", content: "[GLUNEX] 주변에 신차 뽑으신 분 있나요? 소개해주시면 고객님께 백화점 상품권을 드립니다!" }
         ]
     },
-    // 4. 블랙박스
     "블랙박스": {
         main: [
             { id: 0, tag: "💾 메모리", title: "메모리카드 점검", content: "[GLUNEX] 블랙박스 영상 확인해보셨나요? 중요한 순간을 위해 메모리카드 포맷 및 점검이 필수입니다." },
@@ -85,7 +81,6 @@ const Marketing = () => {
     }
   };
 
-  // 현재 선택된 업종/날씨에 맞는 템플릿 목록 가져오기
   const getTemplates = () => {
     if (activeShopMode === '세차') {
         return messageTemplates['세차'][currentWeather] || messageTemplates['세차']['clear'];
@@ -96,18 +91,24 @@ const Marketing = () => {
   const currentTemplates = getTemplates();
   const selectedContent = currentTemplates[selectedTemplate].content;
 
-  // 문자 발송 (가상 실행)
+  // 문자 발송 핸들러
   const handleSend = () => {
     if(targetCustomers.length === 0) return alert("발송할 대상이 없습니다.");
-    // 실제로는 API 연동 혹은 SMS 스키마 사용
-    const phones = targetCustomers.map(c => c.phone).join(','); // 실제 폰번호 데이터 필요
+
+    // [신규] 유료 회원 체크
+    if (userStatus !== 'approved') {
+      const confirmUpgrade = window.confirm("🔒 대량 문자 발송은 '프리미엄 파트너' 전용 기능입니다.\n\n마케팅으로 매출을 올리고 싶으신가요?\n지금 멤버십을 전환해 보세요!");
+      if (confirmUpgrade) navigate('/mypage'); 
+      return;
+    }
+
+    const phones = targetCustomers.map(c => c.phone).join(','); 
     alert(`[메시지 앱 실행]\n\n수신인: ${targetCustomers.length}명\n내용: ${selectedContent}\n\n*실제 발송 전 수정 가능합니다.`);
     // window.location.href = `sms:${phones}?body=${encodeURIComponent(selectedContent)}`; 
   };
 
   return (
     <div className="flex flex-col h-full bg-slate-50 animate-fade-in font-noto">
-      {/* 1. 상단 헤더 & 업종 선택 */}
       <div className="bg-white border-b border-slate-100 sticky top-0 z-20">
         <div className="px-6 py-4 flex items-center justify-between pt-4">
           <div className="flex items-center gap-4">
@@ -116,7 +117,6 @@ const Marketing = () => {
           </div>
         </div>
         
-        {/* 업종 탭 */}
         <div className="px-6 pb-3 flex gap-2 overflow-x-auto scrollbar-hide">
           {myShopTypes.map(type => (
             <button
@@ -133,8 +133,6 @@ const Marketing = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 pb-40">
-        
-        {/* 2. 타겟팅 요약 (매출 정보 제거됨) */}
         <div className="mb-6 bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm flex justify-between items-center">
             <div>
                 <div className="flex items-center gap-2 mb-1">
@@ -145,7 +143,6 @@ const Marketing = () => {
                     조건에 맞는 고객 <span className="text-blue-600 text-lg font-black">{targetCustomers.length}명</span>
                 </p>
             </div>
-            {/* 세차 모드일 때만 날씨 선택 버튼 노출 */}
             {activeShopMode === '세차' && (
                 <div className="flex gap-1">
                     {['rain', 'clear'].map(w => (
@@ -157,7 +154,6 @@ const Marketing = () => {
             )}
         </div>
 
-        {/* 3. [핵심] 추천 문구 3종 선택 (카드형 UI) */}
         <div className="mb-8">
            <h3 className="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center gap-1.5 ml-1">
              <Sparkles size={14} className="text-amber-500" /> 어떤 메시지를 보낼까요?
@@ -182,7 +178,6 @@ const Marketing = () => {
            </div>
         </div>
 
-        {/* 4. 발송 대상 명단 미리보기 */}
         <div className="pt-2">
            <h3 className="text-xs font-bold text-slate-500 uppercase mb-3 ml-1">발송 명단 ({targetCustomers.length}명)</h3>
            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden divide-y divide-slate-50">
@@ -211,7 +206,6 @@ const Marketing = () => {
         </div>
       </div>
 
-      {/* 하단 고정 버튼 */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t border-slate-100 z-40 max-w-md mx-auto">
         <div className="flex items-start gap-2 mb-4 bg-slate-50 p-3 rounded-xl border border-slate-100">
           <Edit3 size={14} className="text-slate-400 shrink-0 mt-0.5" />

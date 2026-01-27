@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, Eye, Clock, CreditCard, Save, Loader2 } from 'lucide-react';
-// 파일 경로 재확인 (상대 경로)
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
 import { db, auth } from '../firebase';
@@ -24,12 +23,21 @@ const WarrantyIssue = ({ formData, setFormData, userStatus }) => {
   };
 
   const handleIssue = async () => {
+    // 1. 로그인 체크
     const user = auth.currentUser;
     if (!user) {
       alert("로그인이 필요한 서비스입니다.");
       return navigate('/login');
     }
 
+    // [신규] 유료 회원 체크 로직
+    if (userStatus !== 'approved') {
+      const confirmUpgrade = window.confirm("🔒 정식 보증서 발행은 '프리미엄 파트너' 전용 기능입니다.\n\n지금 멤버십을 전환하고 바로 발행하시겠습니까?");
+      if (confirmUpgrade) navigate('/mypage');
+      return;
+    }
+
+    // 2. 유효성 검사
     if (!formData.customerName || !formData.phone || !formData.plateNumber) {
       return alert("고객명, 연락처, 차량번호는 필수입니다.");
     }

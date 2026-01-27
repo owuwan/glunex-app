@@ -1,15 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Sparkles, Layout, Instagram, Video, Copy, Check, Search, RefreshCw, Wand2, ArrowLeft, Image as ImageIcon } from 'lucide-react';
+import { ChevronRight, Sparkles, Layout, Instagram, Video, Copy, Check, Search, RefreshCw, Wand2, ArrowLeft } from 'lucide-react';
 
-const Creator = () => {
+const Creator = ({ userStatus }) => {
   const navigate = useNavigate();
-  
-  // Step Control
   const [step, setStep] = useState('url'); 
   const [loading, setLoading] = useState(false);
-
-  // Data States
   const [blogUrl, setBlogUrl] = useState('');
   const [blogAnalysis, setBlogAnalysis] = useState(null);
   const [selectedKeywords, setSelectedKeywords] = useState([]);
@@ -18,13 +14,9 @@ const Creator = () => {
   const [generatedContent, setGeneratedContent] = useState({ blog: '', insta: '', short: '' });
   const [activeResultTab, setActiveResultTab] = useState('blog');
   const [isCopied, setIsCopied] = useState(false);
-  
-  // 복사할 콘텐츠 영역 참조
   const contentRef = useRef(null);
 
   const categories = ["세차", "디테일링", "유리막코팅", "언더코팅", "실내특수세차", "실내크리닝", "철분제거", "유리발수코팅"];
-
-  // --- Logic Functions ---
 
   const analyzeBlog = () => {
     if (!blogUrl) return alert("블로그 주소를 입력해주세요.");
@@ -43,6 +35,14 @@ const Creator = () => {
 
   const generateTitles = () => {
     if (selectedKeywords.length === 0) return alert("키워드를 하나 이상 선택해주세요.");
+    
+    // [신규] 유료 회원 체크 로직
+    if (userStatus !== 'approved') {
+        const confirmUpgrade = window.confirm("🔒 AI 홍보글 작성은 '프리미엄 파트너' 전용 기능입니다.\n\n블로그 포스팅 고민을 AI로 해결하시겠습니까?\n지금 멤버십을 전환해 보세요!");
+        if (confirmUpgrade) navigate('/mypage');
+        return;
+    }
+
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
@@ -77,9 +77,6 @@ const Creator = () => {
   const generateFinalContent = () => {
     setLoading(true);
     setTimeout(() => {
-      // 블로그용 HTML 콘텐츠 생성 (이미지 포함)
-      // 실제로는 AI가 생성한 이미지나 사장님이 업로드한 이미지를 넣을 수 있습니다.
-      // 현재는 데모용 고화질 이미지를 사용합니다.
       const blogHtml = `
         <h2 style="font-size: 1.5em; font-weight: bold; margin-bottom: 1em;">${selectedTitle}</h2>
         <p>안녕하세요! 글루 디테일링입니다. 오늘은 <strong>'${selectedTitle}'</strong>에 대해 이야기해보려 합니다.</p>
@@ -114,11 +111,9 @@ const Creator = () => {
     }, 2000);
   };
 
-  // 통합 복사 기능 (이미지 포함)
   const handleCopy = async () => {
     if (activeResultTab === 'blog') {
       try {
-        // 블로그용: HTML 형태로 클립보드에 복사 (이미지 태그 포함)
         const type = "text/html";
         const blob = new Blob([generatedContent.blog], { type });
         const data = [new ClipboardItem({ [type]: blob })];
@@ -127,12 +122,9 @@ const Creator = () => {
         setTimeout(() => setIsCopied(false), 2000);
       } catch (err) {
         console.error('이미지 복사 실패 (보안 환경 필요):', err);
-        // 실패 시 텍스트만 복사 시도
-        // navigator.clipboard.writeText(...)
         alert("이미지 복사는 보안 프로토콜(HTTPS) 환경에서만 동작합니다. 텍스트만 복사하시겠습니까?");
       }
     } else {
-      // 인스타/숏폼용: 단순 텍스트 복사
       navigator.clipboard.writeText(generatedContent[activeResultTab]);
       setIsCopied(true);
       setTimeout(() => setIsCopied(false), 2000);
@@ -151,7 +143,6 @@ const Creator = () => {
 
   return (
     <div className="flex flex-col h-full bg-slate-50 animate-fade-in font-noto">
-      {/* 상단 헤더 */}
       <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-4 bg-white sticky top-0 z-20">
         <button onClick={() => {
           if(step === 'url') navigate('/dashboard');
@@ -166,8 +157,6 @@ const Creator = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 pb-32">
-        
-        {/* Step 0: 블로그 분석 */}
         {step === 'url' && (
           <div className="space-y-6">
             <div className="text-center py-8">
@@ -197,7 +186,6 @@ const Creator = () => {
           </div>
         )}
 
-        {/* Step 1: 키워드 선택 */}
         {step === 'keyword' && (
           <div className="space-y-6">
             {blogAnalysis && (
@@ -230,7 +218,6 @@ const Creator = () => {
           </div>
         )}
 
-        {/* Step 2: 제목 선택 */}
         {step === 'title' && (
           <div className="space-y-6">
             <h3 className="text-lg font-bold text-slate-900 mb-4">가장 끌리는 제목을 선택하세요</h3>
@@ -251,7 +238,6 @@ const Creator = () => {
           </div>
         )}
 
-        {/* Step 3: 목차 컨펌 */}
         {step === 'toc' && (
           <div className="space-y-6">
             <div>
@@ -280,7 +266,6 @@ const Creator = () => {
           </div>
         )}
 
-        {/* Step 4: 최종 결과 (블로그/인스타/숏폼) */}
         {step === 'result' && (
           <div className="space-y-6">
             <div className="flex bg-white p-1 rounded-xl border border-slate-100">
@@ -309,7 +294,6 @@ const Creator = () => {
                 </button>
               </div>
               
-              {/* 블로그는 HTML 미리보기, 나머지는 텍스트 */}
               {activeResultTab === 'blog' ? (
                 <div 
                   ref={contentRef}
@@ -331,7 +315,6 @@ const Creator = () => {
 
       </div>
 
-      {/* 키워드 선택 단계의 하단 고정 버튼 */}
       {step === 'keyword' && selectedKeywords.length > 0 && (
         <div className="p-6 bg-white border-t border-slate-100 fixed bottom-0 left-0 right-0 max-w-md mx-auto z-30">
           <button onClick={generateTitles} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all">
