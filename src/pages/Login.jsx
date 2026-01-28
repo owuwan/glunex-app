@@ -22,10 +22,17 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  // 이미 로그인된 상태라면 대시보드로 바로 이동
+  // 이미 로그인된 상태라면 대시보드(또는 관리자)로 바로 이동
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) navigate('/dashboard');
+      if (user) {
+        // [중요] 이미 로그인된 경우에도 관리자 계정인지 체크
+        if (user.email === 'chol5622729@naver.com') {
+          navigate('/chol5622729');
+        } else {
+          navigate('/dashboard');
+        }
+      }
     });
     return () => unsubscribe();
   }, [navigate]);
@@ -34,12 +41,18 @@ const Login = () => {
     if (!email || !password) return alert("이메일과 비밀번호를 입력해주세요.");
     
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
       
-      // [핵심] 로그인 성공 시 현재 시간을 기록 (24시간 체크용)
+      // 로그인 성공 후 처리
       localStorage.setItem('loginTime', new Date().getTime().toString());
       
-      navigate('/dashboard');
+      // [핵심] 관리자 계정이면 관리자 페이지로 납치!
+      if (userCredential.user.email === 'chol5622729@naver.com') {
+        navigate('/chol5622729');
+      } else {
+        navigate('/dashboard');
+      }
+
     } catch (error) {
       console.error("로그인 에러:", error);
       if (error.code === 'auth/invalid-credential') {

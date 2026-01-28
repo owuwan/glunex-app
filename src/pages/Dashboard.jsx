@@ -9,11 +9,10 @@ import { onAuthStateChanged } from 'firebase/auth';
 const Dashboard = () => {
   const navigate = useNavigate();
   
-  // [상태 관리]
   const [userName, setUserName] = useState('파트너');
   const [loadingUser, setLoadingUser] = useState(true);
   
-  // 날씨 상태 (초기값: 로딩 중 -> 기본값으로 수정하여 에러 방지)
+  // 날씨 상태
   const [weather, setWeather] = useState({ 
     temp: 20, 
     rain: 0, 
@@ -23,7 +22,7 @@ const Dashboard = () => {
     loading: true 
   });
 
-  // 매출 데이터 상태 (초기값 0)
+  // [수정] 매출 데이터 상태 (실시간 연동용)
   const [salesData, setSalesData] = useState({
     today: 0,
     monthTotal: 0,
@@ -47,7 +46,6 @@ const Dashboard = () => {
             
             if (userData.address) {
               const parts = userData.address.split(' ');
-              // [중요] "인천 서구" -> API엔 "Incheon", 화면엔 "인천 서구"
               const cityMap = {
                 '서울': 'Seoul', '부산': 'Busan', '대구': 'Daegu', '인천': 'Incheon',
                 '광주': 'Gwangju', '대전': 'Daejeon', '울산': 'Ulsan', '세종': 'Sejong',
@@ -55,7 +53,6 @@ const Dashboard = () => {
                 '충남': 'Chungcheongnam-do', '전북': 'Jeollabuk-do', '전남': 'Jeollanam-do', 
                 '경북': 'Gyeongsangbuk-do', '경남': 'Gyeongsangnam-do', '제주': 'Jeju'
               };
-              // 한글 주소 첫 단어(예: 대전)를 영문으로 변환 (매핑 없으면 그대로 사용)
               currentRegion = cityMap[parts[0]] || parts[0]; 
               displayRegion = parts.length >= 2 ? `${parts[0]} ${parts[1]}` : parts[0];
             } else if (userData.region) {
@@ -64,7 +61,7 @@ const Dashboard = () => {
             }
           }
 
-          // 2. 매출 데이터 실시간 집계
+          // 2. [핵심] 매출 데이터 실시간 집계 실행
           await calculateSales(user.uid);
 
         } catch (error) {
@@ -75,7 +72,7 @@ const Dashboard = () => {
       setUserName(storeName);
       setLoadingUser(false);
       
-      // 날씨 요청 (3초 타임아웃 적용)
+      // 3. 날씨 요청
       fetchRealWeather(currentRegion, displayRegion);
     });
 
@@ -101,27 +98,28 @@ const Dashboard = () => {
       querySnapshot.forEach((doc) => {
         const data = doc.data();
         const issueDate = new Date(data.issuedAt);
+        // 실 시공 금액 (price) 가져오기 (콤마 제거 후 숫자 변환)
         const price = Number(String(data.price).replace(/[^0-9]/g, '')) || 0;
 
-        // 이번 달 매출
+        // 이번 달
         if (issueDate.getFullYear() === currentYear && issueDate.getMonth() === currentMonth) {
           monthTotal += price;
         }
-        // 지난 달 매출
+        // 지난 달
         if (issueDate.getFullYear() === currentYear && issueDate.getMonth() === currentMonth - 1) {
           lastMonthTotal += price;
         }
-        // 오늘 매출
+        // 오늘
         if (issueDate.getFullYear() === currentYear && issueDate.getMonth() === currentMonth && issueDate.getDate() === currentDate) {
           todayTotal += price;
         }
-        // 어제 매출
+        // 어제
         if (issueDate.getFullYear() === currentYear && issueDate.getMonth() === currentMonth && issueDate.getDate() === currentDate - 1) {
           yesterdayTotal += price;
         }
       });
 
-      // 성장률 계산
+      // 성장률 계산 (0으로 나누기 방지)
       const totalGrowth = lastMonthTotal === 0 ? 100 : Math.round(((monthTotal - lastMonthTotal) / lastMonthTotal) * 100);
       const todayGrowth = yesterdayTotal === 0 ? 100 : Math.round(((todayTotal - yesterdayTotal) / yesterdayTotal) * 100);
 
@@ -140,9 +138,7 @@ const Dashboard = () => {
     try {
       const API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
       
-      // API 키가 없을 경우 (안전 장치)
       if (!API_KEY) {
-        console.warn("API Key 없음");
         setWeather({ temp: 20, rain: 0, status: 'clear', region: displayRegion, targetCustomers: 42, loading: false });
         return;
       }
@@ -164,23 +160,21 @@ const Dashboard = () => {
       if (data.cod === 200) {
         const main = data.weather[0].main;
         const isRain = main === 'Rain' || main === 'Drizzle' || main === 'Thunderstorm' || main === 'Snow';
-        const rainAmount = data.rain ? data.rain['1h'] : 0; // 1시간 강수량
+        const rainAmount = data.rain ? data.rain['1h'] : 0;
         
         setWeather({
           temp: Math.round(data.main.temp),
           rain: rainAmount,
           status: isRain ? 'rainy' : 'clear',
           region: displayRegion,
-          targetCustomers: isRain ? 45 : 12, // 비 오면 타겟 고객 증가 (예시 로직)
+          targetCustomers: isRain ? 45 : 12,
           loading: false
         });
       } else {
-        // 지역을 못 찾았거나 에러인 경우
-        setWeather(prev => ({ ...prev, loading: false }));
+        throw new Error("지역 못 찾음");
       }
     } catch (error) {
-      console.error("날씨 로딩 실패 (기본값 사용):", error);
-      // 에러 나면 "맑음 / 20도" 기본값 보여줘서 화면 안 깨지게 처리
+      console.error("날씨 로딩 실패:", error);
       setWeather({ 
         temp: 20, 
         rain: 0, 
@@ -229,7 +223,7 @@ const Dashboard = () => {
         {/* 상단 블록: 매출(Left) + 날씨(Right) */}
         <div className="flex gap-3 h-[32%] shrink-0">
           
-          {/* 매출 카드 (Total & Today) -> 클릭 시 /sales 이동 */}
+          {/* 매출 카드 (실데이터 연동) */}
           <button 
             onClick={() => navigate('/sales')}
             className="flex-[1.8] bg-white rounded-2xl p-5 border border-slate-200 shadow-sm relative overflow-hidden group active:scale-[0.98] transition-all flex flex-col justify-between text-left"
@@ -292,9 +286,9 @@ const Dashboard = () => {
             </div>
           </button>
 
-          {/* 날씨 카드 (비소식 알림 연동) */}
+          {/* 날씨 카드 */}
           <div className="flex-1 bg-white rounded-2xl p-4 border border-slate-200 shadow-sm relative overflow-hidden flex flex-col items-center justify-between gap-1 group hover:border-blue-200 transition-colors">
-             {/* 배경 아이콘 (날씨 상태에 따라 변경) */}
+             {/* 배경 아이콘 */}
              {weather.status === 'rainy' ? (
                 <CloudRain size={80} className="absolute -right-6 -bottom-6 text-blue-50 opacity-50 rotate-12 group-hover:scale-110 transition-transform" />
              ) : (
@@ -317,7 +311,6 @@ const Dashboard = () => {
                 </div>
              </div>
 
-             {/* 비소식 관리 대상 알림 (데이터 바인딩) */}
              <div className="z-10 w-full">
                <div className={`border rounded-lg p-2 flex flex-col items-center text-center ${weather.status === 'rainy' ? 'bg-blue-50 border-blue-100' : 'bg-slate-50 border-slate-100'}`}>
                  <div className="flex items-center gap-1 mb-0.5">
@@ -337,7 +330,6 @@ const Dashboard = () => {
         {/* 하단 액션 버튼 3개 */}
         <div className="flex-1 flex flex-col gap-3 min-h-0">
           
-          {/* AI 마케팅 에이전트 -> /creator 이동 */}
           <button 
              onClick={() => navigate('/creator')}
              className="flex-1 bg-gradient-to-r from-indigo-50 to-white rounded-2xl border border-indigo-100 p-5 flex items-center justify-between relative overflow-hidden group active:scale-[0.98] transition-all shadow-sm hover:shadow-md"
@@ -359,7 +351,6 @@ const Dashboard = () => {
              </div>
           </button>
 
-          {/* 보증서 발행 -> /create 이동 */}
           <button 
              onClick={() => navigate('/create')}
              className="flex-1 bg-white rounded-2xl border border-slate-200 p-5 flex items-center justify-between group active:scale-[0.98] transition-all shadow-sm hover:shadow-md hover:border-amber-200"
@@ -381,7 +372,6 @@ const Dashboard = () => {
              </div>
           </button>
 
-          {/* 마케팅 관리 -> /marketing 이동 */}
           <button 
              onClick={() => navigate('/marketing')}
              className="flex-1 bg-white rounded-2xl border border-slate-200 p-5 flex items-center justify-between group active:scale-[0.98] transition-all shadow-sm hover:shadow-md hover:border-blue-200"
