@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, ChevronLeft, User, Crown, Copy, Send, LogOut, FileText, Loader2, RefreshCw, AlertCircle, ToggleLeft, X, Lock, Car, Calendar, CreditCard } from 'lucide-react';
+import { ChevronRight, ChevronLeft, User, Crown, Copy, Send, LogOut, FileText, Loader2, RefreshCw, AlertCircle, ToggleLeft, X, Lock } from 'lucide-react';
 import { auth, db } from '../firebase';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 
@@ -13,10 +13,7 @@ const MyPage = ({ userStatus, setUserStatus }) => {
   const [userEmail, setUserEmail] = useState('');
   const [storeName, setStoreName] = useState('파트너');
   
-  // 상세 보기 팝업 상태
   const [selectedWarranty, setSelectedWarranty] = useState(null);
-
-  // 페이지네이션
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
@@ -73,7 +70,6 @@ const MyPage = ({ userStatus, setUserStatus }) => {
   const handleResendSMS = (item) => {
     if (!item.phone) return alert("고객 전화번호 정보가 없습니다.");
     
-    // 서비스 타입 한글 변환
     const serviceName = {
       'coating': '유리막 코팅',
       'tinting': '썬팅',
@@ -82,11 +78,9 @@ const MyPage = ({ userStatus, setUserStatus }) => {
       'etc': '기타 시공'
     }[item.serviceType] || item.serviceType;
 
-    // 날짜 포맷팅
     const dateObj = new Date(item.issuedAt);
     const dateStr = `${dateObj.getFullYear()}.${String(dateObj.getMonth()+1).padStart(2,'0')}.${String(dateObj.getDate()).padStart(2,'0')}`;
 
-    // 고객 전용 뷰어 링크
     const viewLink = `${window.location.origin}/warranty/view/${item.id}`;
 
     const confirmSend = window.confirm(`${item.customerName} 고객님께 보증서 링크를 재전송하시겠습니까?`);
@@ -96,14 +90,12 @@ const MyPage = ({ userStatus, setUserStatus }) => {
     }
   };
 
-  // 날짜 예쁘게 보여주는 함수
   const formatDate = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
     return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일`;
   };
 
-  // 금액 콤마 함수
   const formatPrice = (price) => {
     return Number(String(price).replace(/[^0-9]/g, ''))?.toLocaleString() || '0';
   };
@@ -120,7 +112,8 @@ const MyPage = ({ userStatus, setUserStatus }) => {
 
   const sendApprovalRequest = () => {
     if (!depositorName) return alert('입금자명을 입력해주세요.');
-    window.location.href = `sms:01028923334?body=[GLUNEX 승인요청] 입금자명: ${depositorName}`;
+    const message = `[GLUNEX 승인요청]\n입금자명 : ${depositorName}\n상호명 : ${storeName}\n가입이메일 : ${userEmail}`;
+    window.location.href = `sms:01028923334?body=${encodeURIComponent(message)}`;
   };
 
   const handleLogout = () => {
@@ -130,7 +123,6 @@ const MyPage = ({ userStatus, setUserStatus }) => {
 
   return (
     <div className="flex flex-col h-full bg-[#F8F9FB] font-noto animate-fade-in relative">
-      {/* 상단 헤더 */}
       <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between pt-8 bg-white sticky top-0 z-20">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate('/dashboard')} className="text-slate-400 hover:text-slate-900 transition-colors">
@@ -148,8 +140,6 @@ const MyPage = ({ userStatus, setUserStatus }) => {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 pb-10">
-        
-        {/* 프로필 카드 */}
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-6 flex items-center justify-between">
            <div>
               <div className="flex items-center gap-2 mb-1">
@@ -171,7 +161,6 @@ const MyPage = ({ userStatus, setUserStatus }) => {
            </div>
         </div>
 
-        {/* 안내 박스들 */}
         {userStatus !== 'approved' && (
           <div className="mb-8 relative overflow-hidden rounded-2xl shadow-lg bg-slate-900 text-white p-6">
               <div className="relative z-10 space-y-4">
@@ -231,7 +220,6 @@ const MyPage = ({ userStatus, setUserStatus }) => {
         </div>
         )}
 
-        {/* 최근 보증서 발행 내역 */}
         <div className="mb-8">
            <div className="flex items-center gap-2 mb-3 px-1">
              <FileText size={16} className="text-slate-400" />
@@ -294,7 +282,6 @@ const MyPage = ({ userStatus, setUserStatus }) => {
         </button>
       </div>
 
-      {/* 상세 보기 모달 (팝업) */}
       {selectedWarranty && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in" onClick={() => setSelectedWarranty(null)}>
           <div className="bg-white w-full max-w-sm rounded-[2rem] overflow-hidden shadow-2xl relative flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
@@ -305,7 +292,6 @@ const MyPage = ({ userStatus, setUserStatus }) => {
              
              <div className="p-6 overflow-y-auto">
                <div className="bg-slate-900 rounded-3xl p-6 text-white mb-6 relative overflow-hidden shadow-lg">
-                  {/* 배경 이미지 */}
                   {selectedWarranty.carImageUrl && (
                      <>
                        <img src={selectedWarranty.carImageUrl} alt="Car" className="absolute inset-0 w-full h-full object-cover opacity-60" />
