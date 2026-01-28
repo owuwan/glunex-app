@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ChevronRight, Eye, X, Crown, Wrench, AlertCircle, AlertTriangle, MessageSquare, Phone, Store } from 'lucide-react';
+import { ChevronRight, Eye, X, Crown, Wrench, AlertCircle, AlertTriangle, MessageSquare, Phone, Store, Camera } from 'lucide-react';
 import Button from '../components/common/Button';
 import AccordionItem from '../components/common/AccordionItem';
 import { auth, db } from '../firebase';
@@ -29,7 +29,8 @@ const WarrantyResult = ({ formData, showToast, userStatus }) => {
 
   const serviceType = formData._serviceType;
   const isCareType = ['wash', 'detailing'].includes(serviceType);
-  
+  const imageUrl = formData.carImageUrl; // 업로드한 이미지 주소
+
   const getCardHeader = () => { 
     switch (serviceType) { 
       case 'coating': return "Certified Coating"; 
@@ -101,44 +102,66 @@ const WarrantyResult = ({ formData, showToast, userStatus }) => {
             <h3 className="text-amber-400 font-serif font-bold text-lg mb-6 tracking-widest">GLUNEX CERTIFICATE</h3>
             
             <div className="relative w-full aspect-[1.58/1] bg-black rounded-xl overflow-hidden shadow-2xl mx-auto border border-slate-700">
-              <div className="absolute inset-0 bg-gradient-to-br from-slate-800 via-slate-900 to-black"></div>
-              <div className="absolute top-0 left-6 w-[1px] h-full bg-gradient-to-b from-transparent via-amber-500/50 to-transparent"></div>
+              {/* 배경 이미지 처리 */}
+              {imageUrl ? (
+                <>
+                  <img src={imageUrl} alt="Car" className="absolute inset-0 w-full h-full object-cover opacity-80" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-black/30"></div>
+                </>
+              ) : (
+                <>
+                  <div className="absolute inset-0 bg-gradient-to-br from-slate-800 via-slate-900 to-black"></div>
+                  <div className="absolute top-0 left-6 w-[1px] h-full bg-gradient-to-b from-transparent via-amber-500/50 to-transparent"></div>
+                </>
+              )}
               
-              <div className="relative z-10 p-3 flex flex-col h-full justify-between text-white text-left font-noto">
+              <div className="relative z-10 p-5 flex flex-col h-full justify-between text-white text-left font-noto">
                 
+                {/* 1. 상단: 로고 & 금액 */}
                 <div className="flex justify-between items-start">
                   <div className="flex items-center gap-1.5">
                     <Crown size={14} className="text-amber-400" fill="currentColor" />
                     <span className="text-amber-400 font-serif font-bold tracking-widest text-xs uppercase">Glunex Official</span>
                   </div>
                   <div className="text-right">
-                    <p className="text-[7px] text-slate-500 uppercase tracking-widest mb-0.5">Warranty Value</p>
+                    <p className="text-[7px] text-slate-300 uppercase tracking-widest mb-0.5">Warranty Value</p>
                     <p className="text-xs font-bold text-amber-200">₩ {formatPrice(formData.warrantyPrice)}</p>
                   </div>
                 </div>
 
-                <div className="pl-4 border-l-2 border-white/10 flex flex-col justify-center py-2">
-                  <p className="text-[8px] text-amber-500/80 uppercase tracking-widest mb-1">{getCardHeader()}</p>
-                  <h3 className="text-lg font-bold text-white tracking-wide truncate mb-1 leading-tight">{formData.productName || "GLUNEX PREMIUM"}</h3>
+                {/* 2. 중단: 상품명 & 번호판 */}
+                <div className="pl-4 border-l-2 border-amber-500/50 flex flex-col justify-center py-2">
+                  <p className="text-[8px] text-amber-400 uppercase tracking-widest mb-1 shadow-black drop-shadow-md">{getCardHeader()}</p>
+                  <h3 className="text-xl font-bold text-white tracking-wide truncate mb-1 leading-tight drop-shadow-lg">{formData.productName || "GLUNEX PREMIUM"}</h3>
                   <div className="flex">
-                    <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded text-slate-300 border border-white/5">{formData.plateNumber || "차량번호 미입력"}</span>
+                    <span className="text-[10px] bg-black/40 backdrop-blur-md px-2 py-0.5 rounded text-white border border-white/10">
+                      {formData.plateNumber || "차량번호 미입력"}
+                    </span>
                   </div>
                 </div>
 
+                {/* 3. 하단: 차주 & 기간 */}
                 <div className="flex justify-between items-end pl-4">
                   <div>
-                    <p className="text-[8px] text-slate-500 uppercase tracking-wider mb-0.5">Owner / Model</p>
-                    <p className="text-xs font-bold text-slate-200 tracking-wide uppercase">
-                      {formData.customerName || "고객명"} <span className="text-slate-500 mx-1">|</span> {formData.carModel || "차종 미입력"}
+                    <p className="text-[8px] text-slate-300 uppercase tracking-wider mb-0.5">Owner / Model</p>
+                    <p className="text-xs font-bold text-white tracking-wide uppercase drop-shadow-md">
+                      {formData.customerName || "고객명"} <span className="text-slate-400 mx-1">|</span> {formData.carModel || "차종 미입력"}
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[8px] text-slate-500 uppercase tracking-wider mb-0.5">{isCareType ? "Next Care" : "Expires"}</p>
-                    <p className={`text-xs font-bold tracking-wide ${isCareType ? 'text-blue-400' : 'text-amber-400'}`}>
+                    <p className="text-[8px] text-slate-300 uppercase tracking-wider mb-0.5">{isCareType ? "Next Care" : "Expires"}</p>
+                    <p className={`text-xs font-bold tracking-wide ${isCareType ? 'text-blue-300' : 'text-amber-400'} drop-shadow-md`}>
                       {isCareType ? "1 Month Later" : (formData.warrantyPeriod ? `${formData.warrantyPeriod} Warranty` : "Period")}
                     </p>
                   </div>
                 </div>
+
+                {/* 사진 아이콘 표시 (사진 있을 때만) */}
+                {imageUrl && (
+                  <div className="absolute bottom-4 right-4 opacity-50">
+                    <Camera size={16} className="text-white" />
+                  </div>
+                )}
 
               </div>
             </div>
@@ -189,6 +212,7 @@ const WarrantyResult = ({ formData, showToast, userStatus }) => {
           </div>
         </div>
       </div>
+      
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-md border-t border-slate-100 z-40 max-w-md mx-auto shadow-[0_-10px_20px_rgba(0,0,0,0.05)]">
         <Button onClick={sendSMS} variant="gold">
           <MessageSquare size={18} className="mr-1" />
