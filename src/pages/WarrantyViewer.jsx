@@ -15,15 +15,12 @@ const WarrantyViewer = () => {
   useEffect(() => {
     const fetchWarranty = async () => {
       try {
-        // 1. 보증서 정보 가져오기
         const docRef = doc(db, "warranties", id);
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
           const warrantyData = docSnap.data();
           setData(warrantyData);
-
-          // 2. 해당 보증서를 발행한 사장님(User) 정보 가져오기
           if (warrantyData.userId) {
              const userDoc = await getDoc(doc(db, "users", warrantyData.userId));
              if(userDoc.exists()) {
@@ -41,12 +38,11 @@ const WarrantyViewer = () => {
         setLoading(false);
       }
     };
-
     if (id) fetchWarranty();
   }, [id]);
 
-  if (loading) return <div className="h-screen flex items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-slate-400" size={40} /></div>;
-  if (error || !data) return <div className="h-screen flex flex-col items-center justify-center text-slate-500 bg-slate-50"><AlertCircle size={40} className="mb-2"/><p>존재하지 않는 보증서입니다.</p></div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#F8F9FB]"><Loader2 className="animate-spin text-slate-400" size={40} /></div>;
+  if (error || !data) return <div className="min-h-screen flex flex-col items-center justify-center text-slate-500 bg-[#F8F9FB]"><AlertCircle size={40} className="mb-2"/><p>존재하지 않는 보증서입니다.</p></div>;
 
   const isCareType = ['wash', 'detailing'].includes(data.serviceType);
   const getCardHeader = () => { 
@@ -56,15 +52,14 @@ const WarrantyViewer = () => {
       default: return "Premium Care Service"; 
     } 
   };
-
-  const formatPrice = (price) => {
-    if (!price) return "0";
-    return price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  };
+  const formatPrice = (price) => Number(String(price).replace(/[^0-9]/g, ''))?.toLocaleString() || '0';
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#F8F9FB] animate-fade-in font-noto">
-      <div className="p-6 pb-10 flex flex-col items-center">
+    // [핵심 수정] h-screen 제거, min-h-screen 사용 (스크롤 가능하도록)
+    <div className="flex flex-col min-h-screen bg-[#F8F9FB] font-noto">
+      
+      {/* 컨텐츠 래퍼: 중앙 정렬 및 여백 확보 */}
+      <div className="flex-1 p-6 pb-20 flex flex-col items-center">
         
         <div className="mb-8 text-center w-full mt-10">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 rounded-full border border-amber-100 mb-3 shadow-sm">
@@ -72,9 +67,10 @@ const WarrantyViewer = () => {
             <span className="text-amber-600 text-[10px] font-bold tracking-widest uppercase">Official Certification</span>
           </div>
           <h2 className="text-2xl font-black text-slate-900 tracking-tight">정품 시공 보증서</h2>
-          <p className="text-xs text-slate-400 mt-1">본 문서는 GLUNEX 파트너가 발행한 정식 보증서입니다.</p>
+          <p className="text-xs text-slate-400 mt-1">본 문서는 {shopInfo.name}에서 발행한 정식 보증서입니다.</p>
         </div>
 
+        {/* 카드 영역 */}
         <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200 mb-6">
           <div className="p-6 bg-slate-900 text-center relative z-10">
             <h3 className="text-amber-400 font-serif font-bold text-lg mb-6 tracking-widest">GLUNEX CERTIFICATE</h3>
@@ -94,7 +90,6 @@ const WarrantyViewer = () => {
               )}
               
               <div className="relative z-10 p-5 flex flex-col h-full justify-between text-white text-left font-noto">
-                
                 <div className="flex justify-between items-start">
                   <div className="flex items-center gap-1.5">
                     <Crown size={14} className="text-amber-400" fill="currentColor" />
@@ -128,7 +123,6 @@ const WarrantyViewer = () => {
                     </p>
                   </div>
                 </div>
-
               </div>
             </div>
           </div>
@@ -136,7 +130,6 @@ const WarrantyViewer = () => {
           <div className="p-4 bg-white space-y-4">
              <div className="px-2 pb-2 text-center">
               <p className="text-slate-900 font-bold text-sm mb-1">안녕하세요, {data.customerName}님.</p>
-              {/* [수정] 안내 멘트에 상호명 자동 적용 */}
               <p className="text-slate-500 text-xs leading-relaxed">
                 {isCareType 
                   ? `${shopInfo.name}에서 프리미엄 케어를 받으셨습니다. 늘 안전운전하세요.` 
