@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Crown, Wrench, AlertCircle, AlertTriangle, Loader2, Store, Phone } from 'lucide-react';
+// [중요] 위에서 생성한 컴포넌트와 파이어베이스를 가져옵니다.
 import AccordionItem from '../components/common/AccordionItem';
 import { db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
