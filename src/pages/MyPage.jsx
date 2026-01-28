@@ -13,7 +13,7 @@ const MyPage = ({ userStatus, setUserStatus }) => {
   const [userEmail, setUserEmail] = useState('');
   const [storeName, setStoreName] = useState('파트너');
   
-  // [신규] 상세 보기 팝업을 위한 상태
+  // 상세 보기 팝업 상태
   const [selectedWarranty, setSelectedWarranty] = useState(null);
 
   // 페이지네이션
@@ -96,7 +96,7 @@ const MyPage = ({ userStatus, setUserStatus }) => {
     }
   };
 
-  // 날짜 예쁘게 보여주는 함수 (YYYY년 MM월 DD일)
+  // 날짜 예쁘게 보여주는 함수
   const formatDate = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
@@ -171,7 +171,7 @@ const MyPage = ({ userStatus, setUserStatus }) => {
            </div>
         </div>
 
-        {/* 안내 박스들 (생략 - 기존과 동일) */}
+        {/* 안내 박스들 */}
         {userStatus !== 'approved' && (
           <div className="mb-8 relative overflow-hidden rounded-2xl shadow-lg bg-slate-900 text-white p-6">
               <div className="relative z-10 space-y-4">
@@ -231,7 +231,7 @@ const MyPage = ({ userStatus, setUserStatus }) => {
         </div>
         )}
 
-        {/* 4. 최근 보증서 발행 내역 (수정됨) */}
+        {/* 최근 보증서 발행 내역 */}
         <div className="mb-8">
            <div className="flex items-center gap-2 mb-3 px-1">
              <FileText size={16} className="text-slate-400" />
@@ -249,7 +249,7 @@ const MyPage = ({ userStatus, setUserStatus }) => {
                    {currentHistory.map((item) => (
                      <div 
                         key={item.id} 
-                        onClick={() => setSelectedWarranty(item)} // [중요] 클릭 시 상세 팝업 오픈
+                        onClick={() => setSelectedWarranty(item)} 
                         className="p-4 flex justify-between items-center hover:bg-slate-50 transition-colors cursor-pointer"
                      >
                        <div className="flex items-center gap-3">
@@ -261,7 +261,6 @@ const MyPage = ({ userStatus, setUserStatus }) => {
                               {item.customerName} <span className="text-slate-400 font-normal text-xs">| {item.carModel}</span>
                             </p>
                             <p className="text-[11px] text-slate-500 mt-0.5">
-                               {/* [수정] 날짜 전체 표기 */}
                                {formatDate(item.issuedAt)}
                             </p>
                           </div>
@@ -295,37 +294,42 @@ const MyPage = ({ userStatus, setUserStatus }) => {
         </button>
       </div>
 
-      {/* [신규] 상세 보기 모달 (팝업) */}
+      {/* 상세 보기 모달 (팝업) */}
       {selectedWarranty && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in" onClick={() => setSelectedWarranty(null)}>
           <div className="bg-white w-full max-w-sm rounded-[2rem] overflow-hidden shadow-2xl relative flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
-             {/* 모달 헤더 */}
              <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
                <h3 className="font-bold text-slate-900 text-lg">발행 상세 정보</h3>
                <button onClick={() => setSelectedWarranty(null)} className="p-2 bg-slate-50 rounded-full text-slate-400 hover:text-slate-900"><X size={20}/></button>
              </div>
              
              <div className="p-6 overflow-y-auto">
-               {/* 1. 보증서 요약 카드 */}
                <div className="bg-slate-900 rounded-3xl p-6 text-white mb-6 relative overflow-hidden shadow-lg">
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <p className="text-amber-400 text-[10px] font-black tracking-widest mb-1">GLUNEX WARRANTY</p>
-                      <h2 className="text-2xl font-bold">{selectedWarranty.customerName}님</h2>
-                    </div>
-                    <Crown size={24} className="text-amber-400" />
-                  </div>
-                  
-                  <div className="space-y-3 text-sm border-t border-white/10 pt-4">
-                     <div className="flex justify-between"><span className="text-slate-400">차량정보</span><span className="font-medium">{selectedWarranty.carModel} ({selectedWarranty.plateNumber})</span></div>
-                     <div className="flex justify-between"><span className="text-slate-400">시공내역</span><span className="font-medium">
-                        {selectedWarranty.serviceType === 'coating' ? '유리막 코팅' : selectedWarranty.serviceType === 'wash' ? '세차' : selectedWarranty.serviceType}
-                     </span></div>
-                     <div className="flex justify-between"><span className="text-slate-400">발행일자</span><span className="font-medium">{formatDate(selectedWarranty.issuedAt)}</span></div>
+                  {/* 배경 이미지 */}
+                  {selectedWarranty.carImageUrl && (
+                     <>
+                       <img src={selectedWarranty.carImageUrl} alt="Car" className="absolute inset-0 w-full h-full object-cover opacity-60" />
+                       <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/50 to-transparent"></div>
+                     </>
+                  )}
+
+                  <div className="relative z-10">
+                     <div className="flex justify-between items-start mb-4">
+                       <div>
+                         <p className="text-amber-400 text-[10px] font-black tracking-widest mb-1">GLUNEX WARRANTY</p>
+                         <h2 className="text-2xl font-bold">{selectedWarranty.customerName}님</h2>
+                       </div>
+                       <Crown size={24} className="text-amber-400" />
+                     </div>
+                     
+                     <div className="space-y-3 text-sm border-t border-white/10 pt-4">
+                        <div className="flex justify-between"><span className="text-slate-300">차량정보</span><span className="font-medium">{selectedWarranty.carModel} ({selectedWarranty.plateNumber})</span></div>
+                        <div className="flex justify-between"><span className="text-slate-300">시공내역</span><span className="font-medium">{selectedWarranty.productName}</span></div>
+                        <div className="flex justify-between"><span className="text-slate-300">발행일자</span><span className="font-medium">{formatDate(selectedWarranty.issuedAt)}</span></div>
+                     </div>
                   </div>
                </div>
 
-               {/* 2. 관리자 전용 정보 (매출/주기) */}
                <div className="bg-blue-50 rounded-3xl p-5 border border-blue-100 mb-2">
                   <div className="flex items-center gap-2 mb-4 text-blue-800 font-black text-xs uppercase tracking-wider">
                      <Lock size={14} /> 관리자 전용 정보 (고객 비공개)
@@ -347,7 +351,6 @@ const MyPage = ({ userStatus, setUserStatus }) => {
                </div>
              </div>
 
-             {/* 하단 액션 버튼 */}
              <div className="p-5 border-t border-slate-100 bg-white">
                 <button 
                   onClick={() => handleResendSMS(selectedWarranty)}

@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, Eye, Clock, CreditCard, Save, Loader2, PlusCircle, Camera, X } from 'lucide-react';
+// [중요] 위에서 생성한 파일들을 불러옵니다.
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
 import { db, auth, storage } from '../firebase';
 import { collection, addDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 const WarrantyIssue = ({ formData, setFormData, userStatus }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [loadingMsg, setLoadingMsg] = useState(""); 
+  const [progress, setProgress] = useState(0); // 업로드 진행률
   const [serviceType, setServiceType] = useState(formData._serviceType || 'coating');
   const [previewImage, setPreviewImage] = useState(null); 
   const [imageFile, setImageFile] = useState(null); 
@@ -40,7 +41,7 @@ const WarrantyIssue = ({ formData, setFormData, userStatus }) => {
   };
   const amountHints = getAmountHints();
 
-  // [핵심] 이미지 압축 함수 (1MB 이하로 줄임)
+  // 이미지 압축 함수 (1MB 이하로 줄임)
   const compressImage = async (file) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -80,20 +81,15 @@ const WarrantyIssue = ({ formData, setFormData, userStatus }) => {
   const handleImageChange = async (e) => {
     const file = e.target.files[0];
     if (file) {
-      // 압축 진행
       try {
         const compressedFile = await compressImage(file);
         setImageFile(compressedFile);
         
-        // 미리보기 생성
         const reader = new FileReader();
-        reader.onloadend = () => {
-          setPreviewImage(reader.result);
-        };
+        reader.onloadend = () => setPreviewImage(reader.result);
         reader.readAsDataURL(compressedFile);
       } catch (err) {
         console.error("이미지 압축 실패:", err);
-        alert("이미지 처리 중 오류가 발생했습니다.");
       }
     }
   };
@@ -121,21 +117,32 @@ const WarrantyIssue = ({ formData, setFormData, userStatus }) => {
     }
 
     setLoading(true);
-    setLoadingMsg("빠른 저장 중...");
+    setProgress(0);
 
     try {
       let imageUrl = "";
 
-      // 1. 사진 업로드 (압축된 파일이라 빠름)
+      // 1. 사진 업로드
       if (imageFile) {
         if (!storage) throw new Error("스토리지 연결 오류");
         
-        setLoadingMsg("사진 업로드 중...");
         const fileName = `${Date.now()}_${imageFile.name}`;
         const storageRef = ref(storage, `car_images/${user.uid}/${fileName}`);
-        
-        const snapshot = await uploadBytes(storageRef, imageFile);
-        imageUrl = await getDownloadURL(snapshot.ref);
+        const uploadTask = uploadBytesResumable(storageRef, imageFile);
+
+        await new Promise((resolve, reject) => {
+          uploadTask.on('state_changed', 
+            (snapshot) => {
+              const prog = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+              setProgress(Math.round(prog));
+            }, 
+            (error) => reject(error), 
+            async () => {
+              imageUrl = await getDownloadURL(uploadTask.snapshot.ref);
+              resolve();
+            }
+          );
+        });
       }
 
       // 2. 전역 formData 업데이트
@@ -151,16 +158,15 @@ const WarrantyIssue = ({ formData, setFormData, userStatus }) => {
         userId: user.uid,
         serviceType: serviceType,
         issuedAt: new Date().toISOString(),
-        carImageUrl: imageUrl,
+        carImageUrl: imageUrl, // 이미지 주소 저장
         status: 'active'
       });
 
-      // 완료
       navigate('/warranty/result', { state: { warrantyId: docRef.id } });
 
     } catch (error) {
-      console.error("발행 실패:", error);
-      alert(`오류 발생: ${error.message}\n(잠시 후 다시 시도해주세요)`);
+      console.error("저장 실패:", error);
+      alert(`오류 발생: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -184,7 +190,6 @@ const WarrantyIssue = ({ formData, setFormData, userStatus }) => {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 pb-20">
-        
         <div className="mb-6">
           <label className="block text-slate-400 text-[10px] mb-2 font-bold uppercase ml-1">시공 차량 사진 (선택)</label>
           <div className="relative w-full aspect-video bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl overflow-hidden flex flex-col items-center justify-center group hover:border-blue-400 transition-colors">
@@ -200,12 +205,7 @@ const WarrantyIssue = ({ formData, setFormData, userStatus }) => {
               </>
             ) : (
               <>
-                <input 
-                  type="file" 
-                  accept="image/*" 
-                  onChange={handleImageChange}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                />
+                <input type="file" accept="image/*" onChange={handleImageChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
                 <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm mb-2 group-hover:scale-110 transition-transform">
                   <Camera size={24} className="text-blue-500" />
                 </div>
@@ -217,12 +217,7 @@ const WarrantyIssue = ({ formData, setFormData, userStatus }) => {
 
         <div className="mb-6">
           <div className="grid grid-cols-2 gap-2 mb-2">
-            {[
-              { id: 'coating', label: '유리막 코팅' },
-              { id: 'tinting', label: '썬팅' },
-              { id: 'detailing', label: '디테일링' },
-              { id: 'wash', label: '일반 세차' }
-            ].map(item => (
+            {[{ id: 'coating', label: '유리막 코팅' }, { id: 'tinting', label: '썬팅' }, { id: 'detailing', label: '디테일링' }, { id: 'wash', label: '일반 세차' }].map(item => (
               <button 
                 key={item.id} 
                 onClick={() => { setServiceType(item.id); setFormData(prev => ({...prev, _serviceType: item.id})); }} 
@@ -257,7 +252,7 @@ const WarrantyIssue = ({ formData, setFormData, userStatus }) => {
           <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
             <div className="flex items-center gap-2 mb-3 text-slate-600"><Clock size={18} /><span className="text-sm font-bold">마케팅 관리 주기</span></div>
             <div className="relative">
-              <select value={formData.maintPeriod || "6"} onChange={(e) => setFormData({...formData, maintPeriod: e.target.value})} className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-sm font-medium outline-none focus:border-blue-500 appearance-none">
+              <select value={formData.maintPeriod || "6"} onChange={(e) => setFormData({...formData, maintPeriod: e.target.value})} className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-sm font-medium outline-none focus:border-blue-500 appearance-none transition-all">
                 <option value="1">1개월 마다</option>
                 <option value="3">3개월 마다</option>
                 <option value="6">6개월 마다</option>
@@ -271,8 +266,20 @@ const WarrantyIssue = ({ formData, setFormData, userStatus }) => {
       </div>
 
       <div className="p-6 bg-white border-t border-slate-100 sticky bottom-0">
-        <Button onClick={handleIssue} disabled={loading} className={loading ? "bg-slate-700" : ""}>
-          {loading ? <><Loader2 className="animate-spin mr-2" size={18} />{loadingMsg}</> : <><Save className="mr-2" size={18} />인증서 생성 및 매출 기록</>}
+        <Button onClick={handleIssue} disabled={loading} className={loading ? "bg-slate-800" : ""}>
+          {loading ? (
+            <div className="flex flex-col items-center w-full">
+              <div className="flex items-center gap-2 mb-1">
+                 <Loader2 className="animate-spin" size={18} />
+                 <span>업로드 및 저장 중... {progress}%</span>
+              </div>
+              <div className="w-full h-1 bg-slate-600 rounded-full overflow-hidden mt-1">
+                 <div className="h-full bg-blue-400 transition-all duration-300" style={{ width: `${progress}%` }}></div>
+              </div>
+            </div>
+          ) : (
+            <><Save className="mr-2" size={18} />인증서 생성 및 매출 기록</>
+          )}
         </Button>
       </div>
     </div>
