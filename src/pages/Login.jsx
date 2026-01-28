@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Crown } from 'lucide-react';
-// [수정] 경로 단순화
 import { auth } from '../firebase'; 
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
 
 const Input = ({ label, type = "text", placeholder, value, onChange }) => (
   <div className="mb-5">
@@ -23,11 +22,23 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
+  // 이미 로그인된 상태라면 대시보드로 바로 이동
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) navigate('/dashboard');
+    });
+    return () => unsubscribe();
+  }, [navigate]);
+
   const handleLogin = async () => {
     if (!email || !password) return alert("이메일과 비밀번호를 입력해주세요.");
     
     try {
       await signInWithEmailAndPassword(auth, email, password);
+      
+      // [핵심] 로그인 성공 시 현재 시간을 기록 (24시간 체크용)
+      localStorage.setItem('loginTime', new Date().getTime().toString());
+      
       navigate('/dashboard');
     } catch (error) {
       console.error("로그인 에러:", error);
