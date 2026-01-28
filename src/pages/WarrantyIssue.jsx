@@ -10,7 +10,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 const WarrantyIssue = ({ formData, setFormData, userStatus }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [loadingMsg, setLoadingMsg] = useState(""); // 로딩 상태 메시지
+  const [loadingMsg, setLoadingMsg] = useState(""); 
   const [serviceType, setServiceType] = useState(formData._serviceType || 'coating');
   const [previewImage, setPreviewImage] = useState(null); 
   const [imageFile, setImageFile] = useState(null); 
@@ -40,20 +40,61 @@ const WarrantyIssue = ({ formData, setFormData, userStatus }) => {
   };
   const amountHints = getAmountHints();
 
-  const handleImageChange = (e) => {
+  // [핵심] 이미지 압축 함수 (1MB 이하로 줄임)
+  const compressImage = async (file) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target.result;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 1280; // 최대 너비 제한
+          let width = img.width;
+          let height = img.height;
+
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // JPEG 포맷, 품질 0.7(70%)로 압축
+          canvas.toBlob((blob) => {
+            const compressedFile = new File([blob], file.name, {
+              type: 'image/jpeg',
+              lastModified: Date.now(),
+            });
+            resolve(compressedFile);
+          }, 'image/jpeg', 0.7);
+        };
+      };
+    });
+  };
+
+  const handleImageChange = async (e) => {
     const file = e.target.files[0];
     if (file) {
-      // 10MB 용량 제한 체크
-      if (file.size > 10 * 1024 * 1024) {
-        alert("사진 용량이 너무 큽니다. (10MB 이하만 가능)");
-        return;
+      // 압축 진행
+      try {
+        const compressedFile = await compressImage(file);
+        setImageFile(compressedFile);
+        
+        // 미리보기 생성
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setPreviewImage(reader.result);
+        };
+        reader.readAsDataURL(compressedFile);
+      } catch (err) {
+        console.error("이미지 압축 실패:", err);
+        alert("이미지 처리 중 오류가 발생했습니다.");
       }
-      setImageFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPreviewImage(reader.result);
-      };
-      reader.readAsDataURL(file);
     }
   };
 
@@ -80,16 +121,16 @@ const WarrantyIssue = ({ formData, setFormData, userStatus }) => {
     }
 
     setLoading(true);
-    setLoadingMsg("데이터 처리 중...");
+    setLoadingMsg("빠른 저장 중...");
 
     try {
       let imageUrl = "";
 
-      // 1. 사진 업로드
+      // 1. 사진 업로드 (압축된 파일이라 빠름)
       if (imageFile) {
         if (!storage) throw new Error("스토리지 연결 오류");
         
-        setLoadingMsg("사진 업로드 중... (시간이 걸릴 수 있습니다)");
+        setLoadingMsg("사진 업로드 중...");
         const fileName = `${Date.now()}_${imageFile.name}`;
         const storageRef = ref(storage, `car_images/${user.uid}/${fileName}`);
         
@@ -97,15 +138,14 @@ const WarrantyIssue = ({ formData, setFormData, userStatus }) => {
         imageUrl = await getDownloadURL(snapshot.ref);
       }
 
-      // 2. [수정] 전역 formData에 이미지 URL 저장 (화면 표시용)
+      // 2. 전역 formData 업데이트
       setFormData(prev => ({
         ...prev,
         serviceType,
-        carImageUrl: imageUrl // 여기에 저장해야 결과 페이지에서 보입니다!
+        carImageUrl: imageUrl
       }));
 
       // 3. DB 저장
-      setLoadingMsg("보증서 저장 중...");
       const docRef = await addDoc(collection(db, "warranties"), {
         ...formData,
         userId: user.uid,
@@ -144,6 +184,7 @@ const WarrantyIssue = ({ formData, setFormData, userStatus }) => {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 pb-20">
+        
         <div className="mb-6">
           <label className="block text-slate-400 text-[10px] mb-2 font-bold uppercase ml-1">시공 차량 사진 (선택)</label>
           <div className="relative w-full aspect-video bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl overflow-hidden flex flex-col items-center justify-center group hover:border-blue-400 transition-colors">
