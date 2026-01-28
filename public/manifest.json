@@ -1,14 +1,14 @@
 {
-  "short_name": "GLUNEX",
-  "name": "GLUNEX 파트너 센터",
+  "short_name": "자동차 마케팅 앱",
+  "name": "자동차 마케팅 앱",
   "icons": [
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/2311/2311494.png",
+      "src": "/icon-192.png",
       "type": "image/png",
       "sizes": "192x192"
     },
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/2311/2311494.png",
+      "src": "/icon-512.png",
       "type": "image/png",
       "sizes": "512x512"
     }
