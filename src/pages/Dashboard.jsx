@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Crown, MessageSquare, ChevronRight, CloudRain, Sun, TrendingUp, Sparkles, Loader2, MapPin, Wallet, Bell, ArrowUpRight } from 'lucide-react';
+// 파이어베이스 도구
 import { auth, db } from '../firebase';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore'; // collection, query, where, getDocs 추가
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 
 const Dashboard = () => {
   const navigate = useNavigate();
   
+  // [상태 관리]
   const [userName, setUserName] = useState('파트너');
   const [loadingUser, setLoadingUser] = useState(true);
   
@@ -138,6 +140,7 @@ const Dashboard = () => {
     try {
       const API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
       
+      // API 키가 없을 경우 (안전 장치)
       if (!API_KEY) {
         console.warn("API Key 없음");
         setWeather({ temp: 20, rain: 0, status: 'clear', region: displayRegion, targetCustomers: 42, loading: false });
@@ -161,21 +164,23 @@ const Dashboard = () => {
       if (data.cod === 200) {
         const main = data.weather[0].main;
         const isRain = main === 'Rain' || main === 'Drizzle' || main === 'Thunderstorm' || main === 'Snow';
-        const rainAmount = data.rain ? data.rain['1h'] : 0;
+        const rainAmount = data.rain ? data.rain['1h'] : 0; // 1시간 강수량
         
         setWeather({
           temp: Math.round(data.main.temp),
           rain: rainAmount,
           status: isRain ? 'rainy' : 'clear',
           region: displayRegion,
-          targetCustomers: isRain ? 45 : 12,
+          targetCustomers: isRain ? 45 : 12, // 비 오면 타겟 고객 증가 (예시 로직)
           loading: false
         });
       } else {
-        throw new Error("지역 못 찾음");
+        // 지역을 못 찾았거나 에러인 경우
+        setWeather(prev => ({ ...prev, loading: false }));
       }
     } catch (error) {
       console.error("날씨 로딩 실패 (기본값 사용):", error);
+      // 에러 나면 "맑음 / 20도" 기본값 보여줘서 화면 안 깨지게 처리
       setWeather({ 
         temp: 20, 
         rain: 0, 
@@ -190,12 +195,13 @@ const Dashboard = () => {
   return (
     <div className="flex flex-col h-full w-full bg-[#F8F9FB] text-slate-800 font-sans overflow-hidden max-w-md mx-auto shadow-2xl relative animate-fade-in">
       
+      {/* 배경 그래픽 효과 */}
       <div className="absolute inset-0 z-0 pointer-events-none">
          <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[40%] bg-blue-100/40 rounded-full blur-[80px]" />
          <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[40%] bg-slate-200/50 rounded-full blur-[80px]" />
       </div>
 
-      {/* 헤더 */}
+      {/* [헤더 영역] 상호명 및 마이페이지 */}
       <div className="relative px-6 pt-10 pb-4 z-10 flex justify-between items-center shrink-0">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -205,7 +211,7 @@ const Dashboard = () => {
             </span>
           </div>
           <h2 className="text-2xl font-black text-slate-900 tracking-tight">
-            {userName}
+            {loadingUser ? '...' : userName}
           </h2>
         </div>
 
@@ -217,17 +223,18 @@ const Dashboard = () => {
         </button>
       </div>
 
-      {/* 메인 컨텐츠 */}
+      {/* [메인 컨텐츠 영역] */}
       <div className="flex-1 flex flex-col px-5 pb-6 gap-3 z-10 min-h-0">
         
-        {/* 상단 블록 */}
+        {/* 상단 블록: 매출(Left) + 날씨(Right) */}
         <div className="flex gap-3 h-[32%] shrink-0">
           
-          {/* 매출 카드 (실데이터 연동) */}
+          {/* 매출 카드 (Total & Today) -> 클릭 시 /sales 이동 */}
           <button 
             onClick={() => navigate('/sales')}
             className="flex-[1.8] bg-white rounded-2xl p-5 border border-slate-200 shadow-sm relative overflow-hidden group active:scale-[0.98] transition-all flex flex-col justify-between text-left"
           >
+            {/* 1. Total Sales (월 매출) */}
             <div className="relative z-10 w-full">
               <div className="flex items-center gap-1.5 mb-0.5">
                 <div className="p-1 rounded bg-slate-100 text-slate-500">
@@ -245,6 +252,7 @@ const Dashboard = () => {
                 <span className="text-sm font-bold text-slate-400">원</span>
               </div>
 
+              {/* 전월대비 */}
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-medium text-slate-400">전월대비</span>
                 <div className={`text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center gap-0.5 ${salesData.totalGrowth >= 0 ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'}`}>
@@ -253,8 +261,10 @@ const Dashboard = () => {
               </div>
             </div>
 
+            {/* 구분선 */}
             <div className="w-full h-px bg-slate-100 my-1" />
 
+            {/* 2. Today Sales (일 매출) */}
             <div className="relative z-10 w-full">
               <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wide flex items-center gap-1 mb-0.5">
                  Today
@@ -267,6 +277,7 @@ const Dashboard = () => {
                 <span className="text-xs font-bold text-slate-400">원</span>
               </div>
 
+              {/* 전일대비 */}
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-medium text-slate-400">전일대비</span>
                 <div className={`text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center gap-0.5 ${salesData.todayGrowth >= 0 ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'}`}>
@@ -275,14 +286,15 @@ const Dashboard = () => {
               </div>
             </div>
             
+            {/* 호버 효과 아이콘 */}
             <div className="absolute right-3 top-3 opacity-0 group-hover:opacity-100 transition-opacity text-slate-300">
                <ArrowUpRight size={16} />
             </div>
           </button>
 
-          {/* 날씨 카드 */}
+          {/* 날씨 카드 (비소식 알림 연동) */}
           <div className="flex-1 bg-white rounded-2xl p-4 border border-slate-200 shadow-sm relative overflow-hidden flex flex-col items-center justify-between gap-1 group hover:border-blue-200 transition-colors">
-             {/* 배경 아이콘 처리 */}
+             {/* 배경 아이콘 (날씨 상태에 따라 변경) */}
              {weather.status === 'rainy' ? (
                 <CloudRain size={80} className="absolute -right-6 -bottom-6 text-blue-50 opacity-50 rotate-12 group-hover:scale-110 transition-transform" />
              ) : (
@@ -291,7 +303,7 @@ const Dashboard = () => {
              
              <div className="w-full flex flex-col items-center z-10 mt-1">
                 <div className="text-[10px] font-medium text-slate-400 mb-1">
-                  {weather.loading ? '확인 중...' : weather.region}
+                  {weather.loading ? '...' : weather.region}
                 </div>
                 <div className="flex items-center gap-2">
                    {weather.loading ? (
@@ -305,25 +317,27 @@ const Dashboard = () => {
                 </div>
              </div>
 
+             {/* 비소식 관리 대상 알림 (데이터 바인딩) */}
              <div className="z-10 w-full">
                <div className={`border rounded-lg p-2 flex flex-col items-center text-center ${weather.status === 'rainy' ? 'bg-blue-50 border-blue-100' : 'bg-slate-50 border-slate-100'}`}>
                  <div className="flex items-center gap-1 mb-0.5">
                    <Bell size={8} className={weather.status === 'rainy' ? "text-blue-600 fill-blue-600" : "text-slate-400"} />
                    <span className={`text-[9px] font-bold ${weather.status === 'rainy' ? 'text-blue-600' : 'text-slate-500'}`}>
-                     {weather.status === 'rainy' ? '비소식 알림' : '기상 양호'}
+                     {weather.status === 'rainy' ? '비소식' : '기상양호'}
                    </span>
                  </div>
                  <span className="text-[10px] font-black text-slate-700 tracking-tight">
-                   관리 대상 <span className={`underline decoration-2 ${weather.status === 'rainy' ? 'text-blue-600' : 'text-slate-600'}`}>{weather.targetCustomers}명</span>
+                   타겟 <span className={`underline decoration-2 ${weather.status === 'rainy' ? 'text-blue-600' : 'text-slate-600'}`}>{weather.targetCustomers}명</span>
                  </span>
                </div>
              </div>
           </div>
         </div>
 
-        {/* 하단 액션 버튼 */}
+        {/* 하단 액션 버튼 3개 */}
         <div className="flex-1 flex flex-col gap-3 min-h-0">
           
+          {/* AI 마케팅 에이전트 -> /creator 이동 */}
           <button 
              onClick={() => navigate('/creator')}
              className="flex-1 bg-gradient-to-r from-indigo-50 to-white rounded-2xl border border-indigo-100 p-5 flex items-center justify-between relative overflow-hidden group active:scale-[0.98] transition-all shadow-sm hover:shadow-md"
@@ -345,6 +359,7 @@ const Dashboard = () => {
              </div>
           </button>
 
+          {/* 보증서 발행 -> /create 이동 */}
           <button 
              onClick={() => navigate('/create')}
              className="flex-1 bg-white rounded-2xl border border-slate-200 p-5 flex items-center justify-between group active:scale-[0.98] transition-all shadow-sm hover:shadow-md hover:border-amber-200"
@@ -366,6 +381,7 @@ const Dashboard = () => {
              </div>
           </button>
 
+          {/* 마케팅 관리 -> /marketing 이동 */}
           <button 
              onClick={() => navigate('/marketing')}
              className="flex-1 bg-white rounded-2xl border border-slate-200 p-5 flex items-center justify-between group active:scale-[0.98] transition-all shadow-sm hover:shadow-md hover:border-blue-200"
