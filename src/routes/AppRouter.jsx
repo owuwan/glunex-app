@@ -10,9 +10,8 @@ import Register from '../pages/Register';
 import Login from '../pages/Login';
 import MyPage from '../pages/MyPage';
 import WarrantyViewer from '../pages/WarrantyViewer';
-import Admin from '../pages/Admin'; // [추가] 어드민 페이지
+import Admin from '../pages/Admin';
 
-// 파이어베이스 도구
 import { auth, db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -33,7 +32,6 @@ const AppRouter = () => {
   const [userStatus, setUserStatus] = useState('free');
   const showToast = (msg) => alert(msg);
 
-  // [핵심] 로그인 시 DB에서 내 등급(userStatus) 확인하기
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -41,7 +39,6 @@ const AppRouter = () => {
           const userDoc = await getDoc(doc(db, "users", user.uid));
           if (userDoc.exists()) {
             const userData = userDoc.data();
-            // DB에 저장된 status가 있으면 그걸 쓰고, 없으면 free
             if (userData.userStatus) {
               setUserStatus(userData.userStatus);
             }
@@ -63,24 +60,15 @@ const AppRouter = () => {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       
-      <Route 
-        path="/create" 
-        element={<WarrantyIssue formData={formData} setFormData={setFormData} userStatus={userStatus} />} 
-      />
-      <Route 
-        path="/warranty/result" 
-        element={<WarrantyResult formData={formData} showToast={showToast} userStatus={userStatus} />} 
-      />
+      <Route path="/create" element={<WarrantyIssue formData={formData} setFormData={setFormData} userStatus={userStatus} />} />
+      <Route path="/warranty/result" element={<WarrantyResult formData={formData} showToast={showToast} userStatus={userStatus} />} />
       
       <Route path="/marketing" element={<Marketing userStatus={userStatus} />} />
       <Route path="/sales" element={<Sales />} />
       <Route path="/creator" element={<Creator userStatus={userStatus} />} />
       
-      <Route path="/mypage" element={<MyPage userStatus={userStatus} setUserStatus={setUserStatus} />} />
-      
+      <Route path="/mypage" element={<MyPage userStatus={userStatus} />} />
       <Route path="/warranty/view/:id" element={<WarrantyViewer />} />
-
-      {/* [추가] 관리자 페이지 경로 (나중에 비밀번호 걸 수도 있음) */}
       <Route path="/admin" element={<Admin />} />
     </Routes>
   );
