@@ -2,9 +2,22 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    
+    <!-- [중요] 모바일 화면 확대 방지 및 앱 스타일 설정 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#ffffff" />
+    
+    <!-- [추가] 모바일 앱처럼 보이게 하는 설정 (iOS 등 호환성) -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    
+    <!-- [중요] PWA 매니페스트 연결 -->
+    <link rel="manifest" href="/manifest.json" />
+    
     <title>GLUNEX 보증서 플랫폼</title>
     
+    <!-- 카카오 주소 API -->
     <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
   </head>
   <body>
