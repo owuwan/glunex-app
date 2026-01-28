@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Crown, Wrench, AlertCircle, AlertTriangle, Loader2, Store, Phone } from 'lucide-react';
-// [중요] 위에서 생성한 컴포넌트와 파이어베이스를 가져옵니다.
 import AccordionItem from '../components/common/AccordionItem';
 import { db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
@@ -42,8 +41,8 @@ const WarrantyViewer = () => {
     if (id) fetchWarranty();
   }, [id]);
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#F8F9FB]"><Loader2 className="animate-spin text-slate-400" size={40} /></div>;
-  if (error || !data) return <div className="min-h-screen flex flex-col items-center justify-center text-slate-500 bg-[#F8F9FB]"><AlertCircle size={40} className="mb-2"/><p>존재하지 않는 보증서입니다.</p></div>;
+  if (loading) return <div className="h-full flex items-center justify-center bg-[#F8F9FB]"><Loader2 className="animate-spin text-slate-400" size={40} /></div>;
+  if (error || !data) return <div className="h-full flex flex-col items-center justify-center text-slate-500 bg-[#F8F9FB]"><AlertCircle size={40} className="mb-2"/><p>존재하지 않는 보증서입니다.</p></div>;
 
   const isCareType = ['wash', 'detailing'].includes(data.serviceType);
   const getCardHeader = () => { 
@@ -56,11 +55,9 @@ const WarrantyViewer = () => {
   const formatPrice = (price) => Number(String(price).replace(/[^0-9]/g, ''))?.toLocaleString() || '0';
 
   return (
-    // [핵심 수정] h-screen 제거, min-h-screen 사용 (스크롤 가능하도록)
-    <div className="flex flex-col min-h-screen bg-[#F8F9FB] font-noto">
-      
-      {/* 컨텐츠 래퍼: 중앙 정렬 및 여백 확보 */}
-      <div className="flex-1 p-6 pb-20 flex flex-col items-center">
+    // [핵심 수정] h-full로 부모 높이 상속 + overflow-y-auto로 자체 스크롤 생성
+    <div className="h-full w-full bg-[#F8F9FB] font-noto overflow-y-auto">
+      <div className="p-6 pb-20 flex flex-col items-center min-h-full">
         
         <div className="mb-8 text-center w-full mt-10">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 rounded-full border border-amber-100 mb-3 shadow-sm">
@@ -71,13 +68,11 @@ const WarrantyViewer = () => {
           <p className="text-xs text-slate-400 mt-1">본 문서는 {shopInfo.name}에서 발행한 정식 보증서입니다.</p>
         </div>
 
-        {/* 카드 영역 */}
-        <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200 mb-6">
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200 mb-6 flex-shrink-0">
           <div className="p-6 bg-slate-900 text-center relative z-10">
             <h3 className="text-amber-400 font-serif font-bold text-lg mb-6 tracking-widest">GLUNEX CERTIFICATE</h3>
             
             <div className="relative w-full aspect-[1.58/1] bg-black rounded-xl overflow-hidden shadow-2xl mx-auto border border-slate-700">
-              {/* 배경 이미지 연동 */}
               {data.carImageUrl ? (
                 <>
                   <img src={data.carImageUrl} alt="Car" className="absolute inset-0 w-full h-full object-cover opacity-80" />
