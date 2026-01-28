@@ -64,7 +64,7 @@ const WarrantyResult = ({ formData, showToast, userStatus }) => {
       ? `${window.location.origin}/warranty/view/${warrantyId}`
       : window.location.origin;
 
-    const message = `[GLUNEX] ${formData.customerName}님, 보증서가 발행되었습니다.\n\n차종: ${formData.carModel}\n시공: ${serviceName}\n발행일: ${dateStr}\n\n전자보증서 확인하기:\n${linkUrl}\n\n* 본 문자는 발신전용입니다.`;
+    const message = `[${shopInfo.name}] ${formData.customerName}님, 보증서가 발행되었습니다.\n\n차종: ${formData.carModel}\n시공: ${serviceName}\n발행일: ${dateStr}\n\n전자보증서 확인하기:\n${linkUrl}\n\n궁금하신 사항은 언제든 연락주세요.`;
 
     window.location.href = `sms:${formData.phone}?body=${encodeURIComponent(message)}`; 
     showToast("문자 메시지 앱을 실행합니다.");
