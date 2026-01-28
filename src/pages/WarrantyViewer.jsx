@@ -15,12 +15,15 @@ const WarrantyViewer = () => {
   useEffect(() => {
     const fetchWarranty = async () => {
       try {
+        // 1. 보증서 정보 가져오기
         const docRef = doc(db, "warranties", id);
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
           const warrantyData = docSnap.data();
           setData(warrantyData);
+
+          // 2. 해당 보증서를 발행한 사장님(User) 정보 가져오기
           if (warrantyData.userId) {
              const userDoc = await getDoc(doc(db, "users", warrantyData.userId));
              if(userDoc.exists()) {
@@ -38,6 +41,7 @@ const WarrantyViewer = () => {
         setLoading(false);
       }
     };
+
     if (id) fetchWarranty();
   }, [id]);
 
@@ -52,11 +56,16 @@ const WarrantyViewer = () => {
       default: return "Premium Care Service"; 
     } 
   };
-  const formatPrice = (price) => Number(String(price).replace(/[^0-9]/g, ''))?.toLocaleString() || '0';
+
+  const formatPrice = (price) => {
+    if (!price) return "0";
+    return price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  };
 
   return (
     <div className="flex flex-col min-h-screen bg-[#F8F9FB] animate-fade-in font-noto">
       <div className="p-6 pb-10 flex flex-col items-center">
+        
         <div className="mb-8 text-center w-full mt-10">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 rounded-full border border-amber-100 mb-3 shadow-sm">
             <Crown size={12} className="text-amber-500 fill-amber-500" />
@@ -71,7 +80,7 @@ const WarrantyViewer = () => {
             <h3 className="text-amber-400 font-serif font-bold text-lg mb-6 tracking-widest">GLUNEX CERTIFICATE</h3>
             
             <div className="relative w-full aspect-[1.58/1] bg-black rounded-xl overflow-hidden shadow-2xl mx-auto border border-slate-700">
-              {/* [수정] 배경 이미지 연동 */}
+              {/* 배경 이미지 연동 */}
               {data.carImageUrl ? (
                 <>
                   <img src={data.carImageUrl} alt="Car" className="absolute inset-0 w-full h-full object-cover opacity-80" />
@@ -85,6 +94,7 @@ const WarrantyViewer = () => {
               )}
               
               <div className="relative z-10 p-5 flex flex-col h-full justify-between text-white text-left font-noto">
+                
                 <div className="flex justify-between items-start">
                   <div className="flex items-center gap-1.5">
                     <Crown size={14} className="text-amber-400" fill="currentColor" />
@@ -118,24 +128,39 @@ const WarrantyViewer = () => {
                     </p>
                   </div>
                 </div>
+
               </div>
             </div>
           </div>
 
           <div className="p-4 bg-white space-y-4">
+             <div className="px-2 pb-2 text-center">
+              <p className="text-slate-900 font-bold text-sm mb-1">안녕하세요, {data.customerName}님.</p>
+              <p className="text-slate-500 text-xs leading-relaxed">
+                {isCareType 
+                  ? "GLUNEX 프리미엄 케어를 받으셨습니다. 늘 안전운전하세요." 
+                  : "GLUNEX 정품 시공이 완료되었습니다. 본 보증서는 보험 처리가 가능합니다."}
+              </p>
+            </div>
+
+            {/* 시공점 정보 */}
             <div className="border border-slate-900 rounded-xl p-4 flex justify-between items-center bg-slate-50/50">
                <div>
-                  <p className="text-[10px] text-slate-500 font-bold uppercase mb-1 flex items-center gap-1"><Store size={10} /> Constructed by</p>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase mb-1 flex items-center gap-1">
+                    <Store size={10} /> Constructed by
+                  </p>
                   <p className="font-black text-slate-900 text-sm">{shopInfo.name}</p>
                </div>
                <div className="text-right">
                   <a href={`tel:${shopInfo.phone}`} className="inline-flex flex-col items-end group">
-                    <p className="text-[10px] text-blue-600 font-bold uppercase mb-1 flex items-center gap-1 group-hover:underline">Click to Call <Phone size={10} className="fill-blue-600" /></p>
+                    <p className="text-[10px] text-blue-600 font-bold uppercase mb-1 flex items-center gap-1 group-hover:underline">
+                       Click to Call <Phone size={10} className="fill-blue-600" />
+                    </p>
                     <p className="font-bold text-slate-900 text-sm group-hover:text-blue-600 transition-colors">{shopInfo.phone}</p>
                   </a>
                </div>
             </div>
-            {/* ... 아코디언 코드 생략 (기존과 동일) ... */}
+
             <div className="pt-2 space-y-2">
               <AccordionItem icon={Wrench} title="사후 관리 가이드 (Maintenance)">
                 <div className="space-y-3 text-xs text-slate-500 leading-relaxed">
@@ -154,7 +179,10 @@ const WarrantyViewer = () => {
                 </>
               )}
             </div>
-            <div className="mt-4 pb-4 text-center"><p className="text-slate-400 text-[10px]">© GLUNEX Corp. All rights reserved.</p></div>
+            
+            <div className="mt-6 pb-4 text-center border-t border-slate-100 pt-4">
+              <p className="text-slate-400 text-[10px]">© GLUNEX Corp. All rights reserved.</p>
+            </div>
           </div>
         </div>
       </div>
