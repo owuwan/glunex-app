@@ -67,9 +67,13 @@ const AppRouter = () => {
       <Route path="/sales" element={<Sales />} />
       <Route path="/creator" element={<Creator userStatus={userStatus} />} />
       
+      {/* 마이페이지 (setUserStatus 제거 - 버튼 삭제로 불필요) */}
       <Route path="/mypage" element={<MyPage userStatus={userStatus} />} />
+      
       <Route path="/warranty/view/:id" element={<WarrantyViewer />} />
-      <Route path="/admin" element={<Admin />} />
+
+      {/* [수정] 관리자 페이지 비밀 경로 변경 */}
+      <Route path="/chol5622729" element={<Admin />} />
     </Routes>
   );
 };

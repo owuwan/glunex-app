@@ -177,7 +177,7 @@ const MyPage = ({ userStatus, setUserStatus }) => {
                    </span>
                  ) : (
                    <span className="bg-slate-100 text-slate-500 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                     무료 체험 중
+                     {isExpired ? '기간 만료됨' : '무료 체험 중'}
                    </span>
                  )}
               </div>
@@ -195,8 +195,8 @@ const MyPage = ({ userStatus, setUserStatus }) => {
         {(userStatus !== 'approved' || isExpiring || isExpired) && (
           <div className={`mb-8 bg-white p-5 rounded-2xl border shadow-sm space-y-4 ${isExpiring || isExpired ? 'border-red-200 ring-4 ring-red-50' : 'border-slate-200'}`}>
               
-              {/* 무료 회원일 때만 보이는 블랙 멤버십 카드 */}
-              {userStatus !== 'approved' && !isExpired && (
+              {/* 무료/만료 시 블랙카드 노출 */}
+              {(userStatus !== 'approved' || isExpired) && (
                 <div className="relative overflow-hidden rounded-xl shadow-md bg-slate-900 text-white p-5 mb-4">
                   <div className="relative z-10 space-y-3">
                       <div className="flex justify-between items-start">
@@ -212,15 +212,17 @@ const MyPage = ({ userStatus, setUserStatus }) => {
                 </div>
               )}
 
+              {/* 만료 임박/완료 경고 메시지 */}
               {(isExpiring || isExpired) && (
                 <div className="flex items-center gap-2 text-red-500 mb-2 pb-2 border-b border-red-100">
                   <AlertCircle size={16} />
                   <span className="text-xs font-bold">
-                    {isExpired ? "프리미엄 멤버십이 만료되었습니다." : `프리미엄 종료 ${expiryInfo.daysLeft}일 전입니다!`}
+                    {isExpired ? "프리미엄 멤버십이 만료되었습니다. 연장해주세요." : `프리미엄 종료 ${expiryInfo.daysLeft}일 전입니다!`}
                   </span>
                 </div>
               )}
               
+              {/* 입금 계좌 */}
               <div>
                  <p className="text-xs text-slate-500 mb-2 font-bold">입금 계좌 안내</p>
                  <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-100">
@@ -288,7 +290,7 @@ const MyPage = ({ userStatus, setUserStatus }) => {
         <button onClick={handleLogout} className="w-full py-8 text-slate-400 text-xs flex items-center justify-center gap-1 hover:text-red-500 transition-colors"><LogOut size={12} /> 로그아웃</button>
       </div>
 
-      {/* 5. 상세 보기 팝업 (사진 포함) */}
+      {/* 5. 상세 보기 팝업 */}
       {selectedWarranty && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in" onClick={() => setSelectedWarranty(null)}>
           <div className="bg-white w-full max-w-sm rounded-[2rem] overflow-hidden shadow-2xl relative flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
@@ -299,7 +301,6 @@ const MyPage = ({ userStatus, setUserStatus }) => {
              
              <div className="p-6 overflow-y-auto">
                <div className="bg-slate-900 rounded-3xl p-6 text-white mb-6 relative overflow-hidden shadow-lg">
-                  {/* [유지] 배경 이미지 연동 */}
                   {selectedWarranty.carImageUrl && (
                      <>
                        <img src={selectedWarranty.carImageUrl} alt="Car" className="absolute inset-0 w-full h-full object-cover opacity-60" />
