@@ -115,7 +115,7 @@ const WarrantyResult = ({ formData, showToast, userStatus }) => {
                 </>
               )}
               
-              <div className="relative z-10 p-5 flex flex-col h-full justify-between text-white text-left font-noto">
+              <div className="relative z-10 p-3 flex flex-col h-full justify-between text-white text-left font-noto">
                 
                 {/* 1. 상단: 로고 & 금액 */}
                 <div className="flex justify-between items-start">
