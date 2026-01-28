@@ -11,7 +11,6 @@ const WarrantyResult = ({ formData, showToast, userStatus }) => {
   const location = useLocation(); 
   const warrantyId = location.state?.warrantyId;
   
-  // 시공점 정보 상태
   const [shopInfo, setShopInfo] = useState({ name: '글루 디테일링', phone: '010-0000-0000' });
 
   useEffect(() => {
@@ -30,7 +29,7 @@ const WarrantyResult = ({ formData, showToast, userStatus }) => {
 
   const serviceType = formData._serviceType;
   const isCareType = ['wash', 'detailing'].includes(serviceType);
-  const imageUrl = formData.carImageUrl;
+  const imageUrl = formData.carImageUrl; // 업로드한 이미지 주소
 
   const getCardHeader = () => { 
     switch (serviceType) { 
@@ -65,7 +64,7 @@ const WarrantyResult = ({ formData, showToast, userStatus }) => {
       ? `${window.location.origin}/warranty/view/${warrantyId}`
       : window.location.origin;
 
-    const message = `[${shopInfo.name}] ${formData.customerName}님, 보증서가 발행되었습니다.\n\n차종: ${formData.carModel}\n시공: ${serviceName}\n발행일: ${dateStr}\n\n전자보증서 확인하기:\n${linkUrl}\n\n* 본 문자는 발신전용입니다.`;
+    const message = `[GLUNEX] ${formData.customerName}님, 보증서가 발행되었습니다.\n\n차종: ${formData.carModel}\n시공: ${serviceName}\n발행일: ${dateStr}\n\n전자보증서 확인하기:\n${linkUrl}\n\n* 본 문자는 발신전용입니다.`;
 
     window.location.href = `sms:${formData.phone}?body=${encodeURIComponent(message)}`; 
     showToast("문자 메시지 앱을 실행합니다.");
@@ -103,10 +102,20 @@ const WarrantyResult = ({ formData, showToast, userStatus }) => {
             <h3 className="text-amber-400 font-serif font-bold text-lg mb-6 tracking-widest">GLUNEX CERTIFICATE</h3>
             
             <div className="relative w-full aspect-[1.58/1] bg-black rounded-xl overflow-hidden shadow-2xl mx-auto border border-slate-700">
-              <div className="absolute inset-0 bg-gradient-to-br from-slate-800 via-slate-900 to-black"></div>
-              <div className="absolute top-0 left-6 w-[1px] h-full bg-gradient-to-b from-transparent via-amber-500/50 to-transparent"></div>
+              {/* 배경 이미지 처리 */}
+              {imageUrl ? (
+                <>
+                  <img src={imageUrl} alt="Car" className="absolute inset-0 w-full h-full object-cover opacity-80" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-black/30"></div>
+                </>
+              ) : (
+                <>
+                  <div className="absolute inset-0 bg-gradient-to-br from-slate-800 via-slate-900 to-black"></div>
+                  <div className="absolute top-0 left-6 w-[1px] h-full bg-gradient-to-b from-transparent via-amber-500/50 to-transparent"></div>
+                </>
+              )}
               
-              <div className="relative z-10 p-5 flex flex-col h-full justify-between text-white text-left font-noto">
+              <div className="relative z-10 p-3 flex flex-col h-full justify-between text-white text-left font-noto">
                 
                 {/* 1. 상단: 로고 & 금액 */}
                 <div className="flex justify-between items-start">
@@ -115,7 +124,7 @@ const WarrantyResult = ({ formData, showToast, userStatus }) => {
                     <span className="text-amber-400 font-serif font-bold tracking-widest text-xs uppercase">Glunex Official</span>
                   </div>
                   <div className="text-right">
-                    <p className="text-[7px] text-slate-500 uppercase tracking-widest mb-0.5">Warranty Value</p>
+                    <p className="text-[7px] text-slate-300 uppercase tracking-widest mb-0.5">Warranty Value</p>
                     <p className="text-xs font-bold text-amber-200">₩ {formatPrice(formData.warrantyPrice)}</p>
                   </div>
                 </div>
@@ -147,18 +156,18 @@ const WarrantyResult = ({ formData, showToast, userStatus }) => {
                   </div>
                 </div>
 
-                {/* 사진 아이콘 */}
+                {/* 사진 아이콘 표시 (사진 있을 때만) */}
                 {imageUrl && (
                   <div className="absolute bottom-4 right-4 opacity-50">
                     <Camera size={16} className="text-white" />
                   </div>
                 )}
+
               </div>
             </div>
           </div>
 
           <div className="p-4 bg-white space-y-4">
-            {/* 시공점 정보 박스 */}
             <div className="border border-slate-900 rounded-xl p-4 flex justify-between items-center bg-slate-50/50">
                <div>
                   <p className="text-[10px] text-slate-500 font-bold uppercase mb-1 flex items-center gap-1">
@@ -174,7 +183,6 @@ const WarrantyResult = ({ formData, showToast, userStatus }) => {
                </div>
             </div>
 
-            {/* 가이드 아코디언 */}
             <div className="pt-2 space-y-2">
                 <AccordionItem icon={Wrench} title="사후 관리 가이드 (Maintenance)">
                   <div className="space-y-3 text-xs text-slate-500 leading-relaxed">
@@ -204,6 +212,7 @@ const WarrantyResult = ({ formData, showToast, userStatus }) => {
           </div>
         </div>
       </div>
+      
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-md border-t border-slate-100 z-40 max-w-md mx-auto shadow-[0_-10px_20px_rgba(0,0,0,0.05)]">
         <Button onClick={sendSMS} variant="gold">
           <MessageSquare size={18} className="mr-1" />
