@@ -8,22 +8,34 @@ import { onAuthStateChanged } from 'firebase/auth';
 const Marketing = ({ userStatus }) => {
   const navigate = useNavigate();
 
-  // [상태 관리]
   const [loading, setLoading] = useState(true);
-  const [customers, setCustomers] = useState([]); // DB에서 가져온 전체 고객
+  const [customers, setCustomers] = useState([]); 
   
-  // 날씨 & 필터
   const [currentWeather, setCurrentWeather] = useState({ status: 'clear', desc: '맑음' });
   const [activeShopMode, setActiveShopMode] = useState('세차'); 
   const [selectedTemplate, setSelectedTemplate] = useState(0);
 
-  // 메뉴 매핑 (한글 탭 -> DB 영문 타입)
   const modeToType = {
     '세차': ['wash', 'detailing'],
     '유리막코팅': ['coating'],
     '썬팅': ['tinting'],
     '블랙박스': ['etc'] 
   };
+
+  // [테스트용] 가짜 고객 7명 생성 (세차한지 3주 지난 상태)
+  const dummyCustomers = Array(7).fill(null).map((_, i) => {
+    const date = new Date();
+    date.setDate(date.getDate() - 30); // 30일 전 방문 (3주 지남 조건 충족)
+    return {
+      id: `test_${i}`,
+      customerName: `테스트고객${i+1}`,
+      carModel: `테스트차량${i+1}`,
+      phone: `0100000000${i+1}`, // 가짜 번호
+      serviceType: 'wash',
+      issuedAt: date.toISOString(),
+      maintPeriod: '0'
+    };
+  });
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -33,7 +45,6 @@ const Marketing = ({ userStatus }) => {
       }
 
       try {
-        // 1. 지역 정보 및 날씨 가져오기
         let region = 'Seoul';
         const userDoc = await getDoc(doc(db, "users", user.uid));
         if (userDoc.exists()) {
@@ -43,7 +54,7 @@ const Marketing = ({ userStatus }) => {
         }
         fetchRealWeather(region);
 
-        // 2. 보증서(고객) 데이터 가져오기
+        // 실제 DB 데이터 가져오기
         const q = query(collection(db, "warranties"), where("userId", "==", user.uid));
         const querySnapshot = await getDocs(q);
         const fetchedCustomers = querySnapshot.docs.map(doc => ({
@@ -51,7 +62,8 @@ const Marketing = ({ userStatus }) => {
           ...doc.data()
         }));
         
-        setCustomers(fetchedCustomers);
+        // [중요] 실제 데이터 + 테스트용 가짜 데이터 7명 합치기
+        setCustomers([...fetchedCustomers, ...dummyCustomers]);
 
       } catch (error) {
         console.error("데이터 로딩 실패:", error);
@@ -63,7 +75,6 @@ const Marketing = ({ userStatus }) => {
     return () => unsubscribe();
   }, [navigate]);
 
-  // 날씨 API 호출
   const fetchRealWeather = async (region) => {
     try {
       const API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
@@ -86,25 +97,21 @@ const Marketing = ({ userStatus }) => {
     }
   };
 
-  // [핵심] 타겟 고객 필터링 로직
   const getTargetCustomers = () => {
     const targetTypes = modeToType[activeShopMode] || [];
     
     return customers.filter(c => {
-      // 1. 해당 업종인지 확인
       if (!targetTypes.includes(c.serviceType)) return false;
 
       const issuedDate = new Date(c.issuedAt);
       const today = new Date();
 
-      // 2. [로직 분기]
       if (activeShopMode === '세차') {
-        // [수정] 세차는 3주(21일) 지난 고객만 타겟팅 (너무 최근 고객 제외)
+        // 3주(21일) 지난 고객만 타겟팅
         const diffTime = Math.abs(today - issuedDate);
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
         return diffDays >= 21; 
       } else {
-        // 유리막/썬팅은 '관리 주기'가 지났는지 확인
         const diffMonths = (today.getFullYear() - issuedDate.getFullYear()) * 12 + (today.getMonth() - issuedDate.getMonth());
         const period = parseInt(c.maintPeriod || '6');
         return diffMonths >= period;
@@ -114,7 +121,6 @@ const Marketing = ({ userStatus }) => {
 
   const targetList = getTargetCustomers();
 
-  // 추천 문구 템플릿
   const messageTemplates = {
     "세차": {
       rain: [
@@ -156,13 +162,17 @@ const Marketing = ({ userStatus }) => {
       if(go) navigate('/mypage');
       return;
     }
+    
+    // [중요] 다중 발송 처리 (번호1,번호2,번호3...)
     const phones = targetList.map(c => c.phone).join(',');
+    
+    // 아이폰/안드로이드 호환성을 위한 구분자 처리 (보통 콤마나 세미콜론)
+    // 최신 스마트폰은 콤마(,)로 구분된 번호를 자동으로 인식하여 그룹 문자로 잡아줍니다.
     window.location.href = `sms:${phones}?body=${encodeURIComponent(selectedContent)}`; 
   };
 
   return (
     <div className="flex flex-col h-full bg-slate-50 animate-fade-in font-noto">
-      {/* 1. 상단 헤더 & 업종 선택 */}
       <div className="bg-white border-b border-slate-100 sticky top-0 z-20">
         <div className="px-6 py-4 flex items-center justify-between pt-4">
           <div className="flex items-center gap-4">
@@ -193,14 +203,14 @@ const Marketing = ({ userStatus }) => {
            </div>
         ) : (
           <>
-            {/* 2. 타겟팅 요약 (UI 변경됨) */}
             <div className="mb-6 bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm">
                 <div className="flex justify-between items-center mb-3 pb-3 border-b border-slate-50">
                     <div className="flex items-center gap-2">
                         <Users size={16} className="text-slate-400" />
                         <span className="text-xs font-bold text-slate-500 uppercase">발송타겟 회원수</span>
                     </div>
-                    <span className="text-slate-900 text-lg font-black">({customers.length})</span>
+                    {/* 전체 고객 수 (실제 + 더미) */}
+                    <span className="text-slate-900 text-lg font-black">({customers.length}명)</span>
                 </div>
                 
                 <div className="flex justify-between items-center">
@@ -221,7 +231,6 @@ const Marketing = ({ userStatus }) => {
                 </div>
             </div>
 
-            {/* 3. 추천 문구 선택 */}
             <div className="mb-8">
                <h3 className="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center gap-1.5 ml-1">
                  <Sparkles size={14} className="text-amber-500" /> 추천 메시지 선택
@@ -246,13 +255,11 @@ const Marketing = ({ userStatus }) => {
                </div>
             </div>
 
-            {/* 4. 발송 명단 리스트 */}
             <div className="pt-2">
                <h3 className="text-xs font-bold text-slate-500 uppercase mb-3 ml-1">발송 명단 ({targetList.length}명)</h3>
                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden divide-y divide-slate-50">
                  {targetList.length > 0 ? (
                    targetList.map((customer) => {
-                     // 3주 경과일 계산 (세차인 경우)
                      const issuedDate = new Date(customer.issuedAt);
                      const today = new Date();
                      const diffDays = Math.ceil(Math.abs(today - issuedDate) / (1000 * 60 * 60 * 24));
@@ -268,7 +275,6 @@ const Marketing = ({ userStatus }) => {
                             <p className="text-[10px] text-blue-600 font-bold uppercase tracking-wider">{customer.serviceType}</p>
                           </div>
                         </div>
-                        {/* 관리 주기 정보 표시 */}
                         <span className="text-[10px] text-slate-400 font-bold bg-slate-50 px-2 py-1 rounded-lg">
                           {activeShopMode === '세차' ? `${diffDays}일 전 방문` : `${customer.maintPeriod}개월 주기`}
                         </span>
@@ -281,7 +287,6 @@ const Marketing = ({ userStatus }) => {
                      <p className="text-xs text-slate-400">
                        {activeShopMode === '세차' ? '3주 이상 미방문 고객이 없습니다.' : '관리 주기가 도래한 고객이 없습니다.'}
                      </p>
-                     <p className="text-[10px] text-slate-300 mt-1">오늘 보증서를 발행하면 나중에 표시됩니다.</p>
                    </div>
                  )}
                </div>
@@ -290,7 +295,6 @@ const Marketing = ({ userStatus }) => {
         )}
       </div>
 
-      {/* 하단 고정 버튼 */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t border-slate-100 z-40 max-w-md mx-auto">
         <button 
             onClick={handleSend}
