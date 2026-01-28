@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, ChevronLeft, User, Crown, Copy, Send, LogOut, FileText, Loader2, RefreshCw, AlertCircle, ToggleLeft, X, Lock, Calendar, CreditCard } from 'lucide-react';
+import { ChevronRight, ChevronLeft, User, Crown, Copy, Send, LogOut, FileText, Loader2, RefreshCw, AlertCircle, ToggleLeft, X, Lock, Calendar, CreditCard, MessageCircle } from 'lucide-react';
 import { auth, db } from '../firebase';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, addDoc } from 'firebase/firestore';
 
 const MyPage = ({ userStatus, setUserStatus }) => {
   const navigate = useNavigate();
@@ -18,6 +18,10 @@ const MyPage = ({ userStatus, setUserStatus }) => {
   
   // 상세 팝업 상태
   const [selectedWarranty, setSelectedWarranty] = useState(null);
+
+  // 문의하기 팝업 상태
+  const [showInquiryModal, setShowInquiryModal] = useState(false);
+  const [inquiryText, setInquiryText] = useState("");
 
   // 페이지네이션 상태
   const [currentPage, setCurrentPage] = useState(1);
@@ -107,6 +111,28 @@ const MyPage = ({ userStatus, setUserStatus }) => {
     if (confirmSend) {
       const message = `[GLUNEX] ${item.customerName}님, 요청하신 보증서를 재발송해 드립니다.\n\n차종: ${item.carModel}\n시공: ${serviceName}\n발행일: ${dateStr}\n\n전자보증서 확인하기:\n${viewLink}`;
       window.location.href = `sms:${item.phone}?body=${encodeURIComponent(message)}`;
+    }
+  };
+
+  // [기능] 문의하기 제출
+  const handleInquirySubmit = async () => {
+    if(!inquiryText.trim()) return alert("문의 내용을 입력해주세요.");
+    const user = auth.currentUser;
+    try {
+      await addDoc(collection(db, "inquiries"), {
+        userId: user.uid,
+        storeName: storeName,
+        email: userEmail,
+        content: inquiryText,
+        createdAt: new Date().toISOString(),
+        status: 'pending' // 대기중
+      });
+      alert("문의가 접수되었습니다. 관리자가 확인 후 연락드립니다.");
+      setInquiryText("");
+      setShowInquiryModal(false);
+    } catch (e) {
+      console.error(e);
+      alert("전송 실패");
     }
   };
 
@@ -286,11 +312,35 @@ const MyPage = ({ userStatus, setUserStatus }) => {
              )}
            </div>
         </div>
+        
+        {/* [신규] 문의하기 버튼 */}
+        <button onClick={() => setShowInquiryModal(true)} className="w-full mb-4 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm hover:bg-slate-50">
+           <MessageCircle size={18} /> 관리자에게 1:1 문의하기
+        </button>
 
         <button onClick={handleLogout} className="w-full py-8 text-slate-400 text-xs flex items-center justify-center gap-1 hover:text-red-500 transition-colors"><LogOut size={12} /> 로그아웃</button>
       </div>
 
-      {/* 5. 상세 보기 팝업 */}
+      {/* 문의하기 모달 */}
+      {showInquiryModal && (
+         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in" onClick={() => setShowInquiryModal(false)}>
+            <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl relative" onClick={e => e.stopPropagation()}>
+               <h3 className="font-bold text-lg mb-4 text-slate-900">1:1 문의하기</h3>
+               <textarea 
+                 className="w-full h-32 p-4 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none resize-none mb-4 focus:border-blue-500"
+                 placeholder="문의하실 내용을 입력해주세요."
+                 value={inquiryText}
+                 onChange={(e) => setInquiryText(e.target.value)}
+               ></textarea>
+               <div className="flex gap-2">
+                 <button onClick={() => setShowInquiryModal(false)} className="flex-1 py-3 bg-slate-100 text-slate-500 rounded-xl font-bold text-sm">취소</button>
+                 <button onClick={handleInquirySubmit} className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm">보내기</button>
+               </div>
+            </div>
+         </div>
+      )}
+
+      {/* 상세 보기 팝업 */}
       {selectedWarranty && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in" onClick={() => setSelectedWarranty(null)}>
           <div className="bg-white w-full max-w-sm rounded-[2rem] overflow-hidden shadow-2xl relative flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
