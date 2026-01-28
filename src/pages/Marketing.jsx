@@ -22,7 +22,7 @@ const Marketing = ({ userStatus }) => {
     '세차': ['wash', 'detailing'],
     '유리막코팅': ['coating'],
     '썬팅': ['tinting'],
-    '블랙박스': ['etc'] // 편의상 기타를 블랙박스로 분류
+    '블랙박스': ['etc'] 
   };
 
   useEffect(() => {
@@ -94,17 +94,18 @@ const Marketing = ({ userStatus }) => {
       // 1. 해당 업종인지 확인
       if (!targetTypes.includes(c.serviceType)) return false;
 
+      const issuedDate = new Date(c.issuedAt);
+      const today = new Date();
+
       // 2. [로직 분기]
       if (activeShopMode === '세차') {
-        // 세차는 날씨 마케팅이므로 '모든 세차 고객'이 대상 (단, 2주내 발송자 제외 로직은 추후 추가)
-        return true; 
+        // [수정] 세차는 3주(21일) 지난 고객만 타겟팅 (너무 최근 고객 제외)
+        const diffTime = Math.abs(today - issuedDate);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+        return diffDays >= 21; 
       } else {
         // 유리막/썬팅은 '관리 주기'가 지났는지 확인
-        const issuedDate = new Date(c.issuedAt);
-        const today = new Date();
         const diffMonths = (today.getFullYear() - issuedDate.getFullYear()) * 12 + (today.getMonth() - issuedDate.getMonth());
-        
-        // 보증서 발행 시 설정한 주기(기본 6개월)가 지났는지?
         const period = parseInt(c.maintPeriod || '6');
         return diffMonths >= period;
       }
@@ -192,24 +193,32 @@ const Marketing = ({ userStatus }) => {
            </div>
         ) : (
           <>
-            {/* 2. 타겟팅 요약 */}
-            <div className="mb-6 bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm flex justify-between items-center">
-                <div>
-                    <div className="flex items-center gap-2 mb-1">
-                        <Users size={16} className="text-blue-600" />
-                        <span className="text-xs font-bold text-slate-500 uppercase">발송 타겟</span>
+            {/* 2. 타겟팅 요약 (UI 변경됨) */}
+            <div className="mb-6 bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm">
+                <div className="flex justify-between items-center mb-3 pb-3 border-b border-slate-50">
+                    <div className="flex items-center gap-2">
+                        <Users size={16} className="text-slate-400" />
+                        <span className="text-xs font-bold text-slate-500 uppercase">발송타겟 회원수</span>
                     </div>
-                    <p className="text-sm font-bold text-slate-900">
-                        {activeShopMode === '세차' ? '현재 날씨 맞춤 고객' : '관리 주기 도래 고객'}
-                        <span className="text-blue-600 text-lg font-black ml-2">{targetList.length}명</span>
-                    </p>
+                    <span className="text-slate-900 text-lg font-black">({customers.length})</span>
                 </div>
-                {activeShopMode === '세차' && (
-                   <div className="flex flex-col items-center">
-                      <span className="text-[10px] text-slate-400 mb-1">{currentWeather.desc}</span>
-                      {currentWeather.status === 'rain' ? <CloudRain className="text-blue-500" /> : <Sun className="text-amber-500" />}
-                   </div>
-                )}
+                
+                <div className="flex justify-between items-center">
+                    <div>
+                        <p className="text-[10px] font-bold text-blue-600 uppercase mb-0.5">
+                            {activeShopMode === '세차' ? '3주 이상 미방문 고객' : '관리 주기 도래 고객'}
+                        </p>
+                        <p className="text-sm font-bold text-slate-900">
+                            타겟 회원 <span className="text-blue-600 text-lg font-black ml-1">{targetList.length}명</span>
+                        </p>
+                    </div>
+                    {activeShopMode === '세차' && (
+                       <div className="flex flex-col items-center bg-blue-50 p-2 rounded-xl">
+                          <span className="text-[10px] text-blue-400 mb-1 font-bold">{currentWeather.desc}</span>
+                          {currentWeather.status === 'rain' || currentWeather.status === 'snow' ? <CloudRain className="text-blue-500" size={20} /> : <Sun className="text-amber-500" size={20} />}
+                       </div>
+                    )}
+                </div>
             </div>
 
             {/* 3. 추천 문구 선택 */}
@@ -242,30 +251,35 @@ const Marketing = ({ userStatus }) => {
                <h3 className="text-xs font-bold text-slate-500 uppercase mb-3 ml-1">발송 명단 ({targetList.length}명)</h3>
                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden divide-y divide-slate-50">
                  {targetList.length > 0 ? (
-                   targetList.map((customer) => (
-                    <div key={customer.id} className="p-4 flex justify-between items-center">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500 text-[11px] font-bold">
-                            {customer.customerName?.[0]}
+                   targetList.map((customer) => {
+                     // 3주 경과일 계산 (세차인 경우)
+                     const issuedDate = new Date(customer.issuedAt);
+                     const today = new Date();
+                     const diffDays = Math.ceil(Math.abs(today - issuedDate) / (1000 * 60 * 60 * 24));
+
+                     return (
+                      <div key={customer.id} className="p-4 flex justify-between items-center">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500 text-[11px] font-bold">
+                              {customer.customerName?.[0]}
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-slate-900">{customer.customerName} <span className="text-[10px] text-slate-400 font-normal">{customer.carModel}</span></p>
+                            <p className="text-[10px] text-blue-600 font-bold uppercase tracking-wider">{customer.serviceType}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm font-bold text-slate-900">{customer.customerName} <span className="text-[10px] text-slate-400 font-normal">{customer.carModel}</span></p>
-                          <p className="text-[10px] text-blue-600 font-bold uppercase tracking-wider">{customer.serviceType}</p>
-                        </div>
+                        {/* 관리 주기 정보 표시 */}
+                        <span className="text-[10px] text-slate-400 font-bold bg-slate-50 px-2 py-1 rounded-lg">
+                          {activeShopMode === '세차' ? `${diffDays}일 전 방문` : `${customer.maintPeriod}개월 주기`}
+                        </span>
                       </div>
-                      {/* 관리 주기 정보 표시 */}
-                      {activeShopMode !== '세차' && (
-                         <span className="text-[10px] text-red-500 font-bold bg-red-50 px-2 py-1 rounded-lg">
-                           {customer.maintPeriod}개월 경과
-                         </span>
-                      )}
-                    </div>
-                  ))
+                    );
+                  })
                  ) : (
                    <div className="p-10 text-center">
                      <AlertCircle size={24} className="mx-auto text-slate-300 mb-2" />
                      <p className="text-xs text-slate-400">
-                       {activeShopMode === '세차' ? '등록된 세차 고객이 없습니다.' : '관리 주기가 도래한 고객이 없습니다.'}
+                       {activeShopMode === '세차' ? '3주 이상 미방문 고객이 없습니다.' : '관리 주기가 도래한 고객이 없습니다.'}
                      </p>
                      <p className="text-[10px] text-slate-300 mt-1">오늘 보증서를 발행하면 나중에 표시됩니다.</p>
                    </div>
