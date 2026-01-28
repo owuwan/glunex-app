@@ -136,14 +136,14 @@ const WarrantyViewer = () => {
           <div className="p-4 bg-white space-y-4">
              <div className="px-2 pb-2 text-center">
               <p className="text-slate-900 font-bold text-sm mb-1">안녕하세요, {data.customerName}님.</p>
+              {/* [수정] 안내 멘트에 상호명 자동 적용 */}
               <p className="text-slate-500 text-xs leading-relaxed">
                 {isCareType 
-                  ? "GLUNEX 프리미엄 케어를 받으셨습니다. 늘 안전운전하세요." 
-                  : "GLUNEX 정품 시공이 완료되었습니다. 본 보증서는 보험 처리가 가능합니다."}
+                  ? `${shopInfo.name}에서 프리미엄 케어를 받으셨습니다. 늘 안전운전하세요.` 
+                  : `${shopInfo.name} 정품 시공이 완료되었습니다. 본 보증서는 보험 처리가 가능합니다.`}
               </p>
             </div>
 
-            {/* 시공점 정보 */}
             <div className="border border-slate-900 rounded-xl p-4 flex justify-between items-center bg-slate-50/50">
                <div>
                   <p className="text-[10px] text-slate-500 font-bold uppercase mb-1 flex items-center gap-1">
