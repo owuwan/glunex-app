@@ -190,8 +190,7 @@ const WarrantyIssue = ({ formData, setFormData, userStatus }) => {
             }} 
             className={`w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all ${serviceType === 'etc' ? 'bg-slate-900 text-white shadow-md' : 'bg-slate-50 text-slate-500 border border-slate-100'}`}
           >
-            <PlusCircle size={16} />
-            기타 작업 (랩핑, PPF, 블박 등)
+            <PlusCircle size={16} /> 기타 작업 (랩핑, PPF, 블박 등)
           </button>
         </div>
 
