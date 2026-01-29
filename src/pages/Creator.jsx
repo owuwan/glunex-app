@@ -5,12 +5,13 @@ import {
   CheckCircle2, Zap, Layout, Instagram, Video, 
   Copy, Check, ArrowLeft, ArrowRight, RefreshCw,
   Loader2, AlertCircle, Thermometer, Wand2,
-  Info, Smartphone, Monitor, ChevronRight
+  Info, Smartphone, Monitor, ChevronRight,
+  Target, PenTool, Hash, Send
 } from 'lucide-react';
 
 /**
  * [글루넥스 AI 마스터 프롬프트]
- * 제미니 엔진이 대한민국 최고의 자동차 마케팅 전문가로서 응답하도록 설정합니다.
+ * 대한민국 최고의 자동차 디테일링 전문가 페르소나를 주입합니다.
  */
 const SYSTEM_PROMPT = `
 당신은 대한민국 최고의 자동차 디테일링 전문 마케터이자 '글루넥스(GLUNEX)'의 수석 카피라이터입니다.
@@ -37,13 +38,13 @@ const SYSTEM_PROMPT = `
 const Creator = ({ userStatus }) => {
   const navigate = useNavigate();
   
-  // --- 상태 관리 (모든 UI 기능 유지) ---
+  // --- 상태 관리 (홍철님 요청 기능을 위한 모든 상태 유지) ---
   const [step, setStep] = useState('keyword'); // keyword -> title -> result
   const [loading, setLoading] = useState(false);
   const [selectedTopics, setSelectedTopics] = useState([]);
   const [isWeatherEnabled, setIsWeatherEnabled] = useState(true);
   
-  // 실시간 날씨 상태 (기본값 및 로딩 상태)
+  // 실시간 날씨 데이터 상태
   const [weather, setWeather] = useState({ 
     status: 'clear', 
     desc: '맑음', 
@@ -57,7 +58,7 @@ const Creator = ({ userStatus }) => {
   const [toastMsg, setToastMsg] = useState("");
   const contentRef = useRef(null);
 
-  // --- 실시간 날씨 연동 (대시보드 로직과 100% 동기화) ---
+  // --- 실시간 날씨 연동 (대시보드 로직 완벽 동기화) ---
   useEffect(() => {
     const fetchWeather = async () => {
       try {
@@ -68,7 +69,7 @@ const Creator = ({ userStatus }) => {
         }
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
 
         const response = await fetch(
           `https://api.openweathermap.org/data/2.5/weather?q=Seoul&appid=${API_KEY}&units=metric&lang=kr`,
@@ -92,7 +93,7 @@ const Creator = ({ userStatus }) => {
             loading: false
           });
         } else {
-          throw new Error("Weather API Response Error");
+          throw new Error("Weather Load Error");
         }
       } catch (error) {
         setWeather({ status: 'clear', desc: '맑음', temp: 20, loading: false });
@@ -107,7 +108,7 @@ const Creator = ({ userStatus }) => {
     setTimeout(() => setToastMsg(""), 3000);
   };
 
-  // 12개 시공 카테고리 (홍철님 확정 목록)
+  // 12개 시공 카테고리 (홍철님 확정 레이아웃)
   const categories = [
     { id: 'wash', name: '세차' },
     { id: 'detailing', name: '디테일링' },
@@ -129,21 +130,20 @@ const Creator = ({ userStatus }) => {
     );
   };
 
-  // [핵심] AI 응답에서 JSON 데이터만 안전하게 추출하는 로직
-  const extractJson = (text) => {
+  // [강력한 데이터 추출] AI 응답에서 순수 JSON만 뽑아내는 함수
+  const parseJsonSafe = (text) => {
     try {
-      const jsonStart = text.indexOf('{');
-      const jsonEnd = text.lastIndexOf('}') + 1;
-      if (jsonStart === -1 || jsonEnd === -1) throw new Error("JSON 형식을 찾을 수 없음");
-      const cleanJson = text.slice(jsonStart, jsonEnd);
-      return JSON.parse(cleanJson);
+      const start = text.indexOf('{');
+      const end = text.lastIndexOf('}') + 1;
+      if (start === -1 || end === -1) return null;
+      return JSON.parse(text.substring(start, end));
     } catch (e) {
-      console.error("JSON 파싱 에러:", e);
+      console.error("JSON 파싱 오류:", e);
       return null;
     }
   };
 
-  // --- AI 콘텐츠 생성 핸들러 (Gemini 1.5 Flash 최적화) ---
+  // --- AI 콘텐츠 생성 핸들러 (Gemini 1.5 Flash 엔진) ---
   const handleGenerate = async () => {
     if (selectedTopics.length === 0) return alert("주제를 하나 이상 선택해주세요.");
     
@@ -158,19 +158,14 @@ const Creator = ({ userStatus }) => {
     
     if (!apiKey) {
       setLoading(false);
-      alert("API 설정 오류: Vercel 대시보드에서 VITE_FIREBASE_API_KEY를 확인해주세요.");
+      alert("API KEY 설정이 필요합니다. Vercel 환경 변수를 확인해주세요.");
       return;
     }
 
     const selectedNames = categories.filter(c => selectedTopics.includes(c.id)).map(c => c.name).join(', ');
-    const weatherInfo = isWeatherEnabled ? `상황: 날씨는 ${weather.desc}이고 기온은 ${weather.temp}도입니다.` : "상황: 날씨와 상관없이 일반적인 홍보가 필요합니다.";
+    const weatherInfo = isWeatherEnabled ? `현재 날씨: ${weather.desc}, 온도: ${weather.temp}도` : "날씨 무관";
     
-    const userPrompt = `
-      매장명: 글루 디테일링 (GLUNEX)
-      시공 항목: ${selectedNames}
-      ${weatherInfo}
-      요청: 위 조건을 분석하여 블로그 제목 5개와 채널별 원고를 작성해줘.
-    `;
+    const userPrompt = `매장명: GLUNEX(글루 디테일링), 시공 품목: ${selectedNames}, ${weatherInfo}. 제목 5개와 채널별 홍보 원고 작성 요청.`;
 
     try {
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
@@ -181,35 +176,33 @@ const Creator = ({ userStatus }) => {
           systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
           generationConfig: { 
             responseMimeType: "application/json",
-            temperature: 0.8 
+            temperature: 0.8
           }
         })
       });
 
       if (!response.ok) {
-        const errInfo = await response.json();
-        throw new Error(errInfo.error?.message || "AI 엔진 응답 실패");
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || "AI 엔진 응답 실패");
       }
 
       const resData = await response.json();
       const rawText = resData.candidates[0].content.parts[0].text;
-      const content = extractJson(rawText);
+      const content = parseJsonSafe(rawText);
       
-      if (!content) {
-        throw new Error("AI 응답 형식이 올바르지 않습니다.");
-      }
+      if (!content) throw new Error("데이터 파싱 실패");
       
       setGeneratedData(content);
       setStep('title');
     } catch (error) {
       console.error("AI 생성 실패:", error);
-      alert(`AI 생성 중 오류가 발생했습니다: ${error.message}\n\n잠시 후 다시 시도해 주세요.`);
+      alert(`❌ 오류 발생: ${error.message}\n\n구글 콘솔에서 API 권한(제한사항)을 다시 확인해 주세요.`);
     } finally {
       setLoading(false);
     }
   };
 
-  // --- 복사 핸들러 (HTML/텍스트 자동 구분) ---
+  // --- 클립보드 복사 로직 (HTML/텍스트 구분) ---
   const handleCopy = async () => {
     if (!generatedData) return;
     const text = activeTab === 'blog' ? generatedData.blog_html : (activeTab === 'insta' ? generatedData.insta_text : generatedData.short_form);
@@ -226,7 +219,7 @@ const Creator = ({ userStatus }) => {
       showLocalToast("클립보드에 복사되었습니다!");
       setTimeout(() => setIsCopied(false), 2000);
     } catch (err) {
-      alert("복사 실패: 브라우저의 클립보드 권한을 확인해주세요.");
+      alert("복사 실패");
     }
   };
 
@@ -239,108 +232,113 @@ const Creator = ({ userStatus }) => {
     }
   };
 
-  // --- 로딩 화면 (애니메이션 강화) ---
+  // --- 로딩 인트로 화면 ---
   if (loading) {
     return (
       <div className="flex flex-col h-full bg-white items-center justify-center animate-fade-in font-noto p-8 text-center">
-        <div className="relative mb-10">
-          <div className="w-24 h-24 border-[6px] border-slate-100 border-t-blue-600 rounded-full animate-spin mx-auto shadow-inner"></div>
-          <Sparkles className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-blue-600 animate-pulse" size={28} />
+        <div className="relative mb-12">
+          <div className="w-24 h-24 border-[6px] border-slate-50 border-t-blue-600 rounded-full animate-spin mx-auto shadow-sm"></div>
+          <Sparkles className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-blue-600 animate-pulse" size={30} />
         </div>
-        <h2 className="text-2xl font-black text-slate-900 mb-3 tracking-tight italic uppercase leading-none">Glunex <span className="text-blue-600">Ai</span> Agent</h2>
-        <div className="space-y-1 mt-4">
-          <p className="text-sm text-slate-500 font-medium leading-relaxed">"현재 날씨와 선택하신 키워드를 분석하여<br/>최고의 마케팅 원고를 작성하고 있습니다."</p>
-          <p className="text-[11px] text-slate-400 mt-2 tracking-widest">PROCESING DATA...</p>
+        <h2 className="text-2xl font-black text-slate-900 mb-4 tracking-tighter italic uppercase leading-none">Glunex <span className="text-blue-600">Ai</span> Agent</h2>
+        <div className="space-y-2 mt-4">
+          <p className="text-base text-slate-600 font-bold leading-relaxed">"사장님의 전문 지식과 실시간 날씨를 조합하여<br/>최고의 마케팅 원고를 작성 중입니다."</p>
+          <p className="text-xs text-slate-400 font-medium tracking-widest uppercase">Analyzing keywords & Weather data...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col bg-[#F8F9FB] font-noto overflow-hidden relative text-left">
+    <div className="h-full flex flex-col bg-[#F9FAFB] font-noto overflow-hidden relative text-left">
       
-      {/* 플로팅 토스트 알림 */}
+      {/* 플로팅 알림창 */}
       {toastMsg && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[9999] animate-bounce">
-          <div className="bg-slate-900 text-white px-8 py-4 rounded-3xl text-sm font-bold shadow-2xl flex items-center gap-3 border border-slate-700 backdrop-blur-md">
+          <div className="bg-slate-900 text-white px-8 py-4 rounded-[2rem] text-sm font-black shadow-2xl flex items-center gap-3 border border-slate-700 backdrop-blur-lg">
             <CheckCircle2 size={18} className="text-green-400" /> {toastMsg}
           </div>
         </div>
       )}
 
-      {/* 상단 헤더 섹션 */}
+      {/* 고정 헤더 섹션 */}
       <header className="px-6 py-6 bg-white border-b border-slate-100 flex items-center justify-between sticky top-0 z-30 shadow-sm">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           <button 
             onClick={() => {
               if (step === 'keyword') navigate('/dashboard');
               else setStep('keyword');
             }} 
-            className="p-2 hover:bg-slate-100 rounded-xl transition-all group active:scale-90"
+            className="p-2.5 hover:bg-slate-50 rounded-2xl transition-all group active:scale-90 border border-transparent hover:border-slate-100"
           >
             <ArrowLeft size={22} className="text-slate-400 group-hover:text-slate-900" />
           </button>
-          <div>
+          <div className="text-left">
             <h1 className="text-xl font-black text-slate-900 tracking-tighter italic uppercase leading-none">Glunex <span className="text-blue-600">Ai</span></h1>
-            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1">Marketing Agent</p>
+            <p className="text-[9px] text-slate-400 font-black uppercase tracking-[0.2em] mt-1.5">Premium Marketing Agent</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 bg-slate-100 px-4 py-2 rounded-full min-w-[100px] justify-center border border-slate-200 shadow-inner">
+        <div className="flex items-center gap-2.5 bg-slate-50 px-4 py-2.5 rounded-3xl min-w-[110px] justify-center border border-slate-100 shadow-inner">
           {getWeatherIcon(weather.status)}
-          <span className="text-[11px] font-black text-slate-700 uppercase">
+          <span className="text-[11px] font-black text-slate-700 uppercase tracking-tight">
             {weather.loading ? 'LOADING' : `${weather.desc} ${weather.temp}°C`}
           </span>
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-6 space-y-8 pb-40">
+      <main className="flex-1 overflow-y-auto p-6 space-y-10 pb-44">
         
-        {/* [1단계] 키워드 및 날씨 연동 선택 화면 */}
+        {/* [단계 1] 키워드 선택 화면 */}
         {step === 'keyword' && (
           <>
             <section className="animate-fade-in text-left">
-              <div className={`p-7 rounded-[2.5rem] border-2 transition-all duration-700 shadow-xl ${isWeatherEnabled ? 'bg-blue-600 border-blue-400 shadow-blue-200/50 text-white' : 'bg-white border-slate-200 text-slate-900'}`}>
-                <div className="flex items-center justify-between mb-5">
-                  <div className="flex items-center gap-2">
-                    <Zap size={20} className={isWeatherEnabled ? 'text-blue-200' : 'text-blue-600'} />
-                    <h2 className="text-base font-black uppercase tracking-tight">실시간 날씨연동</h2>
+              <div className={`p-8 rounded-[3rem] border-2 transition-all duration-700 shadow-2xl ${isWeatherEnabled ? 'bg-blue-600 border-blue-400 shadow-blue-200/40 text-white' : 'bg-white border-slate-200 text-slate-900'}`}>
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-xl ${isWeatherEnabled ? 'bg-white/20' : 'bg-blue-50'}`}>
+                       <Zap size={22} className={isWeatherEnabled ? 'text-white' : 'text-blue-600'} />
+                    </div>
+                    <h2 className="text-lg font-black uppercase tracking-tight">실시간 날씨연동</h2>
                   </div>
                   <button onClick={() => setIsWeatherEnabled(!isWeatherEnabled)}
-                    className={`w-14 h-7 rounded-full relative transition-all duration-300 shadow-inner ${isWeatherEnabled ? 'bg-white/30' : 'bg-slate-200'}`}
+                    className={`w-14 h-7 rounded-full relative transition-all duration-500 shadow-inner ${isWeatherEnabled ? 'bg-white/30' : 'bg-slate-100'}`}
                   >
-                    <div className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all duration-500 shadow-lg ${isWeatherEnabled ? 'right-1' : 'left-1'}`}></div>
+                    <div className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all duration-500 shadow-xl ${isWeatherEnabled ? 'right-1' : 'left-1'}`}></div>
                   </button>
                 </div>
-                <p className="text-xs leading-relaxed opacity-90 font-medium text-left">
+                <p className="text-sm leading-relaxed opacity-95 font-bold text-left tracking-tight">
                   {isWeatherEnabled 
-                    ? `현재 '${weather.desc}' 날씨에 고객이 가장 불안해하거나 필요로 하는 포인트를 분석하여 "클릭을 부르는 제목"을 생성합니다.` 
-                    : "날씨 상황을 배제하고 시공 항목의 장점을 부각하는 일반적인 마케팅 원고를 생성합니다."}
+                    ? `현재 '${weather.desc}' 날씨에 고객이 가장 방문하고 싶게 만드는 "클릭 유도형 제목"을 AI가 분석하여 제안합니다.` 
+                    : "날씨 상황과 관계없이 선택하신 시공 품목의 장점을 극대화하는 표준 원고를 생성합니다."}
                 </p>
               </div>
             </section>
 
-            <section className="space-y-5 animate-fade-in text-left pb-10">
+            <section className="space-y-6 animate-fade-in text-left pb-10">
               <div className="flex items-center justify-between px-2">
-                 <h2 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
-                    <Wand2 size={18} className="text-blue-600" /> 어떤 주제로 글을 쓸까요?
+                 <h2 className="text-xl font-black text-slate-900 tracking-tighter flex items-center gap-2">
+                    <Target size={22} className="text-blue-600" /> 시공 품목을 선택하세요
                  </h2>
-                 <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-lg border border-blue-100 uppercase">Multi-select</span>
+                 <div className="flex items-center gap-1.5 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+                    <span className="text-[10px] font-black text-blue-600 uppercase tracking-tighter">Multiple Selection</span>
+                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-3 gap-3">
                 {categories.map((cat) => (
                   <button 
                     key={cat.id} 
                     onClick={() => toggleTopic(cat.id)}
-                    className={`relative py-6 px-2 rounded-2xl border-2 transition-all duration-300 ${
+                    className={`relative py-7 px-2 rounded-[1.8rem] border-2 transition-all duration-500 text-center ${
                       selectedTopics.includes(cat.id)
-                        ? 'bg-slate-900 border-slate-900 text-white shadow-2xl scale-[1.05] z-10 font-black'
-                        : 'bg-white border-white text-slate-500 hover:border-blue-200 shadow-sm text-[13px] font-bold'
+                        ? 'bg-slate-900 border-slate-900 text-white shadow-2xl scale-[1.06] z-10 font-black'
+                        : 'bg-white border-white text-slate-500 hover:border-blue-100 shadow-sm text-[14px] font-bold'
                     }`}
                   >
                     {cat.name}
                     {selectedTopics.includes(cat.id) && (
-                      <div className="absolute top-2 right-2 text-blue-400 animate-fade-in">
-                        <CheckCircle2 size={14} fill="currentColor" className="text-white shadow-sm" />
+                      <div className="absolute top-2.5 right-2.5 text-blue-400 animate-fade-in">
+                        <CheckCircle2 size={16} fill="currentColor" className="text-white shadow-sm" />
                       </div>
                     )}
                   </button>
@@ -350,15 +348,15 @@ const Creator = ({ userStatus }) => {
           </>
         )}
 
-        {/* [2단계] 생성된 제목 리스트 선택 화면 */}
+        {/* [단계 2] AI 제목 제안 화면 */}
         {step === 'title' && generatedData && (
           <section className="space-y-8 animate-fade-in text-left">
             <div className="px-1">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="bg-blue-600 text-white text-[10px] font-black px-2 py-0.5 rounded uppercase shadow-sm">AI Recommended</span>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="bg-blue-600 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase shadow-lg tracking-widest">Ai Optimized</div>
               </div>
-              <h2 className="text-2xl font-black text-slate-900 tracking-tight leading-tight">가장 끌리는 제목을<br/>하나만 선택해 주세요</h2>
-              <p className="text-sm text-slate-400 mt-2 font-medium">데이터 분석을 통한 고효율 블로그 제목들입니다.</p>
+              <h2 className="text-[1.7rem] font-black text-slate-900 tracking-tighter leading-[1.2]">가장 강력한 제목을<br/>선택해 주세요</h2>
+              <p className="text-sm text-slate-400 mt-3 font-bold">빅데이터 분석을 통해 가장 클릭 확률이 높은 제목들입니다.</p>
             </div>
             <div className="space-y-4">
               {generatedData.titles.map((title, idx) => (
@@ -368,33 +366,33 @@ const Creator = ({ userStatus }) => {
                     setGeneratedData(prev => ({ ...prev, currentTitle: title }));
                     setStep('result');
                   }}
-                  className="w-full text-left p-7 rounded-[2.2rem] bg-white border border-slate-100 hover:border-blue-500 hover:shadow-xl transition-all shadow-sm group active:scale-95"
+                  className="w-full text-left p-8 rounded-[2.5rem] bg-white border border-slate-50 hover:border-blue-500 hover:shadow-2xl transition-all shadow-md group active:scale-95 border-l-[8px] border-l-blue-600/10 hover:border-l-blue-600"
                 >
                   <p className="text-base font-black text-slate-800 leading-snug group-hover:text-blue-600 tracking-tight">{title}</p>
                 </button>
               ))}
             </div>
-            <button onClick={() => setStep('keyword')} className="w-full py-5 text-slate-400 text-xs font-black flex items-center justify-center gap-2 hover:text-slate-900 transition-colors uppercase tracking-widest mt-4">
-              <RefreshCw size={14} /> 다른 주제로 다시 생성하기
+            <button onClick={() => setStep('keyword')} className="w-full py-6 text-slate-400 text-xs font-black flex items-center justify-center gap-3 hover:text-slate-900 transition-colors uppercase tracking-[0.3em] mt-6">
+              <RefreshCw size={14} /> Re-Generate Topics
             </button>
           </section>
         )}
 
-        {/* [3단계] 최종 채널별 원고 결과 화면 */}
+        {/* [단계 3] 최종 콘텐츠 원고 화면 */}
         {step === 'result' && generatedData && (
-          <section className="space-y-6 animate-fade-in pb-10">
-            {/* 채널 선택 탭 메뉴 */}
-            <div className="flex bg-slate-200/50 p-1.5 rounded-[1.5rem] border border-slate-100 shadow-inner">
+          <section className="space-y-7 animate-fade-in pb-16">
+            {/* 고기능 탭 바 */}
+            <div className="flex bg-slate-200/40 p-1.5 rounded-[2rem] border border-slate-100 shadow-inner">
               {[
-                { id: 'blog', name: '블로그', icon: <Layout size={15}/> },
-                { id: 'insta', name: '인스타', icon: <Instagram size={15}/> },
-                { id: 'short', name: '숏폼', icon: <Video size={15}/> }
+                { id: 'blog', name: '블로그', icon: <Layout size={16}/> },
+                { id: 'insta', name: '인스타그램', icon: <Instagram size={16}/> },
+                { id: 'short', name: '숏폼 대본', icon: <Video size={16}/> }
               ].map(tab => (
                 <button 
                   key={tab.id} 
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex-1 py-3.5 rounded-2xl text-[13px] font-black flex items-center justify-center gap-2.5 transition-all ${
-                    activeTab === tab.id ? 'bg-slate-900 text-white shadow-xl scale-[1.02]' : 'text-slate-500 hover:text-slate-700'
+                  className={`flex-1 py-4 rounded-[1.5rem] text-[13px] font-black flex items-center justify-center gap-3 transition-all duration-300 ${
+                    activeTab === tab.id ? 'bg-slate-900 text-white shadow-2xl scale-[1.03]' : 'text-slate-500 hover:text-slate-700'
                   }`}
                 >
                   {tab.icon} {tab.name}
@@ -402,78 +400,97 @@ const Creator = ({ userStatus }) => {
               ))}
             </div>
 
-            {/* 원고 카드 본문 */}
-            <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-2xl min-h-[550px] relative overflow-hidden group">
-              <div className="absolute top-8 right-8 z-10">
+            {/* 메인 콘텐츠 카드 */}
+            <div className="bg-white p-9 rounded-[3.5rem] border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.05)] min-h-[600px] relative overflow-hidden group border-t-[10px] border-t-blue-600">
+              <div className="absolute top-10 right-10 z-10">
                 <button 
                   onClick={handleCopy} 
-                  className={`p-4 rounded-2xl border transition-all shadow-lg active:scale-90 ${isCopied ? 'bg-green-50 border-green-200 text-green-600' : 'bg-slate-900 border-slate-800 text-white hover:bg-slate-800'}`}
+                  className={`p-4.5 rounded-[1.5rem] border-2 transition-all shadow-xl active:scale-90 ${isCopied ? 'bg-green-50 border-green-200 text-green-600' : 'bg-slate-900 border-slate-800 text-white hover:bg-slate-800'}`}
                 >
-                  {isCopied ? <Check size={22} /> : <Copy size={22} />}
+                  {isCopied ? <Check size={24} /> : <Copy size={24} />}
                 </button>
               </div>
 
-              <div className="pt-12 text-left" ref={contentRef}>
+              <div className="pt-14 text-left" ref={contentRef}>
                 {activeTab === 'blog' ? (
-                  <article className="prose prose-slate max-w-none">
-                    <div className="mb-10 pb-6 border-b border-slate-50">
-                        <span className="text-blue-600 font-black text-xs uppercase tracking-widest block mb-2">Recommended Blog Title</span>
-                        <h2 className="text-2xl font-black text-slate-900 leading-tight tracking-tighter italic border-l-[6px] border-blue-600 pl-5">
+                  <article className="prose prose-slate max-w-none font-noto">
+                    <div className="mb-12 pb-8 border-b border-slate-50">
+                        <div className="flex items-center gap-2 mb-3">
+                           <PenTool size={14} className="text-blue-600" />
+                           <span className="text-blue-600 font-black text-[10px] uppercase tracking-widest">Recommended Headline</span>
+                        </div>
+                        <h2 className="text-2xl font-black text-slate-900 leading-tight tracking-tighter italic border-l-[8px] border-blue-600 pl-6">
                           {generatedData.currentTitle}
                         </h2>
                     </div>
-                    <div className="text-[15px] leading-[1.8] text-slate-700 font-medium space-y-6 font-noto" dangerouslySetInnerHTML={{ __html: generatedData.blog_html }} />
+                    <div className="text-[15.5px] leading-[1.9] text-slate-700 font-medium space-y-8" dangerouslySetInnerHTML={{ __html: generatedData.blog_html }} />
                   </article>
                 ) : (
-                  <div className="pt-8">
-                    <div className="flex items-center gap-2 mb-6">
-                       <span className="bg-blue-600 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-tighter shadow-sm">
-                          {activeTab === 'insta' ? 'Instagram Content' : 'Short-form Script'}
-                       </span>
+                  <div className="pt-10">
+                    <div className="flex items-center gap-3 mb-8">
+                       <div className="w-10 h-10 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-lg">
+                          {activeTab === 'insta' ? <Hash size={20}/> : <Video size={20}/>}
+                       </div>
+                       <div className="text-left">
+                          <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest leading-none">Social Content</p>
+                          <h3 className="text-base font-black text-slate-900 mt-1 uppercase tracking-tight">
+                             {activeTab === 'insta' ? 'Instagram Format' : 'Short-form Script'}
+                          </h3>
+                       </div>
                     </div>
-                    <pre className="whitespace-pre-wrap font-noto text-sm text-slate-700 leading-relaxed font-bold bg-slate-50 p-6 rounded-3xl border border-slate-100">
-                      {activeTab === 'insta' ? generatedData.insta_text : generatedData.short_form}
-                    </pre>
+                    <div className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100 shadow-inner">
+                      <pre className="whitespace-pre-wrap font-noto text-[14.5px] text-slate-800 leading-relaxed font-bold italic">
+                        {activeTab === 'insta' ? generatedData.insta_text : generatedData.short_form}
+                      </pre>
+                    </div>
                   </div>
                 )}
               </div>
               
-              <div className="mt-12 pt-8 border-t border-slate-50 text-center">
-                 <p className="text-[10px] text-slate-300 font-bold uppercase tracking-[0.3em]">Glunex AI Marketing Engine v2.0</p>
+              <div className="mt-16 pt-10 border-t border-slate-50 text-center opacity-40">
+                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.5em]">Glunex Intelligence • Marketing v2.1</p>
               </div>
             </div>
             
-            <button onClick={() => setStep('keyword')} className="w-full py-5 bg-white border border-slate-200 text-slate-500 rounded-[1.8rem] font-black text-xs hover:bg-slate-50 transition-all shadow-sm active:scale-[0.98]">
-              다시 처음부터 시작하기
+            <button onClick={() => setStep('keyword')} className="w-full py-6 bg-white border border-slate-200 text-slate-500 rounded-[2rem] font-black text-[13px] hover:bg-slate-50 transition-all shadow-md active:scale-[0.98] flex items-center justify-center gap-3">
+              <RefreshCw size={16} /> 처음부터 다시 작성하기
             </button>
           </section>
         )}
       </main>
 
-      {/* 하단 고정 인터랙티브 버튼 바 */}
-      <footer className="fixed bottom-0 left-0 right-0 p-6 bg-white/80 backdrop-blur-2xl border-t border-slate-100 max-w-md mx-auto z-40 shadow-[0_-10px_30px_rgba(0,0,0,0.03)]">
+      {/* 하단 고정 인터랙티브 푸터 */}
+      <footer className="fixed bottom-0 left-0 right-0 p-8 bg-white/80 backdrop-blur-3xl border-t border-slate-100 max-w-md mx-auto z-40 shadow-[0_-15px_40px_rgba(0,0,0,0.04)]">
         {step === 'keyword' ? (
           <button 
             onClick={handleGenerate} 
             disabled={selectedTopics.length === 0}
-            className={`w-full py-5 rounded-[2.2rem] font-black text-[15px] flex items-center justify-center gap-3 transition-all active:scale-95 shadow-2xl ${
+            className={`w-full py-6 rounded-[2.5rem] font-black text-[16px] flex items-center justify-center gap-4 transition-all active:scale-95 shadow-2xl ${
               selectedTopics.length > 0 
-                ? 'bg-slate-900 text-white shadow-slate-900/30' 
+                ? 'bg-slate-900 text-white shadow-slate-900/40' 
                 : 'bg-slate-100 text-slate-300 cursor-not-allowed'
             }`}
           >
-            <Sparkles size={20} className="text-amber-400" />
+            <Sparkles size={22} className="text-amber-400 animate-pulse" />
             제목 생성하기
-            <ArrowRight size={18} />
+            <ArrowRight size={20} className="ml-1" />
           </button>
         ) : (
-          <button 
-            onClick={handleCopy}
-            className="w-full py-5 bg-slate-900 text-white rounded-[2.2rem] font-black text-[15px] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all shadow-slate-900/20"
-          >
-            {isCopied ? <CheckCircle2 size={20} className="text-green-400"/> : <Copy size={20}/>}
-            {isCopied ? '복사 완료!' : '전체 내용 복사하기'}
-          </button>
+          <div className="flex gap-3">
+             <button 
+                onClick={handleCopy}
+                className="flex-[2] py-6 bg-slate-900 text-white rounded-[2.5rem] font-black text-[16px] shadow-2xl flex items-center justify-center gap-4 active:scale-95 transition-all shadow-slate-900/30"
+              >
+                {isCopied ? <CheckCircle2 size={22} className="text-green-400"/> : <Copy size={22}/>}
+                {isCopied ? '복사 완료!' : '전체 내용 복사하기'}
+              </button>
+              <button 
+                onClick={() => setStep('keyword')}
+                className="flex-1 py-6 bg-white border-2 border-slate-900 text-slate-900 rounded-[2.5rem] font-black text-[16px] active:scale-95 transition-all shadow-sm"
+              >
+                다시쓰기
+              </button>
+          </div>
         )}
       </footer>
     </div>
