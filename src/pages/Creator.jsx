@@ -2,9 +2,8 @@ import React, { useState } from 'react';
 import { 
   Sparkles, CloudRain, Sun, Snowflake, Cloud, 
   CheckCircle2, Zap, Layout, Instagram, Video, 
-  Copy, Check, ArrowLeft, ArrowRight
+  Copy, Check, ArrowLeft, ArrowRight, RefreshCw
 } from 'lucide-react';
-import { useApp } from '../context/AppContext';
 
 /**
  * [글루넥스 AI 마스터 프롬프트]
@@ -21,9 +20,7 @@ const SYSTEM_PROMPT = `
 }
 `;
 
-const Creator = () => {
-  const { showToast, userStatus } = useApp();
-  
+const Creator = ({ userStatus }) => {
   // 상태 관리
   const [step, setStep] = useState('keyword'); // keyword -> title -> result
   const [loading, setLoading] = useState(false);
@@ -34,6 +31,14 @@ const Creator = () => {
   const [generatedData, setGeneratedData] = useState(null);
   const [activeTab, setActiveTab] = useState('blog');
   const [isCopied, setIsCopied] = useState(false);
+  
+  // 로컬 토스트 메시지 상태 (AppContext 의존성 제거)
+  const [toastMsg, setToastMsg] = useState("");
+
+  const showLocalToast = (msg) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(""), 3000);
+  };
 
   // 12개 시공 카테고리
   const categories = [
@@ -60,8 +65,9 @@ const Creator = () => {
   const handleGenerate = async () => {
     if (selectedTopics.length === 0) return alert("주제를 하나 이상 선택해주세요.");
     
+    // userStatus가 'approved'가 아니면 차단 (AppRouter에서 넘겨받음)
     if (userStatus !== 'approved') {
-      const go = window.confirm("🔒 프리미엄 파트너 전용 기능입니다.\n멤버십 페이지로 이동하시겠습니까?");
+      const go = window.confirm("🔒 AI 홍보글 작성은 '프리미엄 파트너' 전용 기능입니다.\n멤버십 페이지로 이동하시겠습니까?");
       if(go) window.location.hash = '/mypage';
       return;
     }
@@ -75,7 +81,7 @@ const Creator = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: `시공: ${selectedNames}, 날씨: ${isWeatherEnabled ? weather.desc : '맑음'}` }] }],
+          contents: [{ parts: [{ text: `시공: ${selectedNames}, 날씨: ${isWeatherEnabled ? weather.desc : '정보없음'}` }] }],
           systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
           generationConfig: { responseMimeType: "application/json" }
         })
@@ -105,7 +111,7 @@ const Creator = () => {
         await navigator.clipboard.writeText(text);
       }
       setIsCopied(true);
-      showToast("클립보드에 복사되었습니다!");
+      showLocalToast("클립보드에 복사되었습니다!");
       setTimeout(() => setIsCopied(false), 2000);
     } catch (err) {
       alert("복사 실패");
@@ -123,7 +129,7 @@ const Creator = () => {
 
   if (loading) {
     return (
-      <div className="flex flex-col h-full bg-white items-center justify-center animate-fade-in font-noto text-center p-6">
+      <div className="flex flex-col h-full bg-white items-center justify-center animate-fade-in font-noto p-6">
         <div className="relative mb-6">
           <div className="w-16 h-16 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin"></div>
           <Sparkles className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-blue-600 animate-pulse" size={20} />
@@ -135,6 +141,16 @@ const Creator = () => {
 
   return (
     <div className="h-full flex flex-col bg-slate-50 font-noto overflow-hidden relative text-left">
+      
+      {/* 로컬 토스트 알림 UI */}
+      {toastMsg && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[9999] animate-bounce">
+          <div className="bg-slate-900 text-white px-6 py-3 rounded-2xl text-xs font-bold shadow-2xl flex items-center gap-2">
+            <Check size={14} className="text-green-400" /> {toastMsg}
+          </div>
+        </div>
+      )}
+
       <header className="px-6 py-5 bg-white border-b border-slate-100 flex items-center justify-between sticky top-0 z-30">
         <div className="flex items-center gap-3">
           {step !== 'keyword' && (
@@ -185,7 +201,7 @@ const Creator = () => {
                   >
                     {cat.name}
                     {selectedTopics.includes(cat.id) && (
-                      <div className="absolute top-1.5 right-1.5 text-blue-400">
+                      <div className="absolute top-1.5 right-1.5 text-blue-400 animate-fade-in">
                         <CheckCircle2 size={12} fill="currentColor" className="text-white" />
                       </div>
                     )}
@@ -211,6 +227,9 @@ const Creator = () => {
                 </button>
               ))}
             </div>
+            <button onClick={() => setStep('keyword')} className="w-full py-4 text-slate-400 text-xs font-bold flex items-center justify-center gap-1">
+              <RefreshCw size={14} className="mr-1" /> 다른 주제 선택하기
+            </button>
           </section>
         )}
 
@@ -259,7 +278,7 @@ const Creator = () => {
         {step === 'keyword' ? (
           <button onClick={handleGenerate} disabled={selectedTopics.length === 0}
             className={`w-full py-5 rounded-[1.8rem] font-black text-sm flex items-center justify-center gap-3 transition-all active:scale-95 shadow-2xl ${
-              selectedTopics.length > 0 ? 'bg-slate-900 text-white shadow-xl' : 'bg-slate-100 text-slate-300 cursor-not-allowed'
+              selectedTopics.length > 0 ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/10' : 'bg-slate-100 text-slate-300 cursor-not-allowed'
             }`}
           >
             <Sparkles size={18} /> 제목 추천받기 <ArrowRight size={16} />
