@@ -27,29 +27,26 @@ const Creator = ({ userStatus }) => {
   const [selectedTopics, setSelectedTopics] = useState([]);
   const [isWeatherEnabled, setIsWeatherEnabled] = useState(true);
   
-  // 실시간 날씨 상태
-  const [weather, setWeather] = useState({ status: 'clear', desc: '맑음', temp: 20 });
+  // 실시간 날씨 상태 (기본값 null로 설정하여 로딩 감지)
+  const [weather, setWeather] = useState({ status: 'clear', desc: '불러오는 중...', temp: '--' });
   
   const [generatedData, setGeneratedData] = useState(null);
   const [activeTab, setActiveTab] = useState('blog');
   const [isCopied, setIsCopied] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
 
-  // 1. 실시간 날씨 연동 (메인 대시보드와 동일한 로직)
+  // 1. 실시간 날씨 연동 (영어 지역명 'Seoul' 사용으로 속도 최적화)
   useEffect(() => {
     const fetchWeather = async () => {
       try {
-        // 위치 권한 허용 시 실제 좌표로, 아니면 서울 기준으로 가져옵니다.
-        const lat = 37.5665;
-        const lon = 126.9780;
-        const API_KEY = "643197669d0c64c7e47a9696328639f2"; // 오픈웨더맵 키 (앱 공통 사용)
-        
+        const API_KEY = "643197669d0c64c7e47a9696328639f2"; 
+        // 한글 지역명 대신 영어 'Seoul' 사용
         const response = await fetch(
-          `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric&lang=kr`
+          `https://api.openweathermap.org/data/2.5/weather?q=Seoul&appid=${API_KEY}&units=metric&lang=kr`
         );
         const data = await response.json();
         
-        if (data.weather) {
+        if (data.weather && data.main) {
           const main = data.weather[0].main.toLowerCase();
           let status = 'clear';
           if (main.includes('rain')) status = 'rain';
@@ -63,7 +60,8 @@ const Creator = ({ userStatus }) => {
           });
         }
       } catch (error) {
-        console.error("날씨 로드 실패", error);
+        console.error("날씨 데이터 호출 실패", error);
+        setWeather({ status: 'clear', desc: '맑음', temp: 20 }); // 에러 시 폴백
       }
     };
 
@@ -100,7 +98,7 @@ const Creator = ({ userStatus }) => {
     if (selectedTopics.length === 0) return alert("주제를 하나 이상 선택해주세요.");
     
     if (userStatus !== 'approved') {
-      const go = window.confirm("🔒 AI 홍보글 작성은 '프리미엄 파트너' 전용 기능입니다.\n멤버십 페이지로 이동하시겠습니까?");
+      const go = window.confirm("🔒 프리미엄 파트너 전용 기능입니다.\n멤버십 페이지로 이동하시겠습니까?");
       if(go) window.location.hash = '/mypage';
       return;
     }
@@ -114,7 +112,7 @@ const Creator = ({ userStatus }) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: `시공: ${selectedNames}, 날씨: ${isWeatherEnabled ? weather.desc : '정보없음'}` }] }],
+          contents: [{ parts: [{ text: `시공 항목: ${selectedNames}, 현재 날씨: ${isWeatherEnabled ? weather.desc : '정보없음'}` }] }],
           systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
           generationConfig: { responseMimeType: "application/json" }
         })
@@ -125,6 +123,7 @@ const Creator = ({ userStatus }) => {
       setGeneratedData(content);
       setStep('title');
     } catch (error) {
+      console.error(error);
       alert("생성 중 오류가 발생했습니다.");
     } finally {
       setLoading(false);
@@ -132,6 +131,7 @@ const Creator = ({ userStatus }) => {
   };
 
   const handleCopy = async () => {
+    if (!generatedData) return;
     const text = activeTab === 'blog' ? generatedData.blog_html : generatedData[activeTab === 'insta' ? 'insta_text' : 'short_form'];
     try {
       if (activeTab === 'blog') {
@@ -162,11 +162,11 @@ const Creator = ({ userStatus }) => {
   if (loading) {
     return (
       <div className="flex flex-col h-full bg-white items-center justify-center animate-fade-in font-noto p-6">
-        <div className="relative mb-6">
-          <div className="w-16 h-16 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin"></div>
+        <div className="relative mb-6 text-center">
+          <div className="w-16 h-16 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin mx-auto"></div>
           <Sparkles className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-blue-600 animate-pulse" size={20} />
         </div>
-        <p className="text-sm font-bold text-slate-900 tracking-tight">AI 에이전트가 원고 작성 중...</p>
+        <p className="text-sm font-bold text-slate-900 tracking-tight">AI 에이전트가 맞춤 원고를 작성 중입니다...</p>
       </div>
     );
   }
@@ -183,7 +183,7 @@ const Creator = ({ userStatus }) => {
       )}
 
       <header className="px-6 py-5 bg-white border-b border-slate-100 flex items-center justify-between sticky top-0 z-30">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 text-left">
           {step !== 'keyword' && (
             <button onClick={() => setStep('keyword')} className="p-1 hover:bg-slate-100 rounded-lg">
               <ArrowLeft size={20} className="text-slate-400" />
@@ -191,9 +191,9 @@ const Creator = ({ userStatus }) => {
           )}
           <h1 className="text-xl font-black text-slate-900 tracking-tighter italic uppercase">Glunex <span className="text-blue-600">Ai</span></h1>
         </div>
-        <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full">
+        <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full min-w-[80px] justify-center">
           {getWeatherIcon(weather.status)}
-          <span className="text-[10px] font-black text-slate-700 uppercase">{weather.desc} {weather.temp}°C</span>
+          <span className="text-[10px] font-black text-slate-700 uppercase">{weather.desc} {weather.temp}{weather.temp !== '--' ? '°C' : ''}</span>
         </div>
       </header>
 
@@ -202,7 +202,7 @@ const Creator = ({ userStatus }) => {
           <>
             <section className="animate-fade-in text-left">
               <div className={`p-6 rounded-[2.5rem] border-2 transition-all duration-500 ${isWeatherEnabled ? 'bg-blue-600 border-blue-400 shadow-xl shadow-blue-100 text-white' : 'bg-white border-slate-200 text-slate-900'}`}>
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-4 text-left">
                   <div className="flex items-center gap-2">
                     <Zap size={18} className={isWeatherEnabled ? 'text-blue-200' : 'text-blue-600'} />
                     <h2 className="text-sm font-black uppercase tracking-tight text-left">날씨연동 글쓰기</h2>
@@ -214,17 +214,17 @@ const Creator = ({ userStatus }) => {
                   </button>
                 </div>
                 <p className="text-[11px] leading-relaxed opacity-80 font-medium text-left">
-                  {isWeatherEnabled ? `현재 ${weather.desc} 날씨에 맞춰 고객을 설득하는 문구를 추가합니다.` : "날씨와 관계없이 원고를 작성합니다."}
+                  {isWeatherEnabled ? `현재 ${weather.desc} 날씨에 맞춰 고객을 설득하는 문구를 자동으로 추가합니다.` : "날씨와 관계없이 일반적인 홍보용 원고를 작성합니다."}
                 </p>
               </div>
             </section>
 
             <section className="space-y-4 animate-fade-in text-left">
               <h2 className="text-lg font-black text-slate-900 tracking-tight ml-1 text-left">어떤 주제로 글을 쓸까요?</h2>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 gap-2 text-left">
                 {categories.map((cat) => (
                   <button key={cat.id} onClick={() => toggleTopic(cat.id)}
-                    className={`relative py-5 px-2 rounded-2xl border-2 transition-all duration-200 ${
+                    className={`relative py-5 px-2 rounded-2xl border-2 transition-all duration-200 text-left ${
                       selectedTopics.includes(cat.id)
                         ? 'bg-slate-900 border-slate-900 text-white shadow-lg scale-[1.03] z-10 font-bold'
                         : 'bg-white border-slate-100 text-slate-500 hover:border-blue-200 text-xs font-bold'
@@ -245,8 +245,8 @@ const Creator = ({ userStatus }) => {
 
         {step === 'title' && generatedData && (
           <section className="space-y-6 animate-fade-in text-left">
-            <h2 className="text-lg font-black text-slate-900 ml-1">제목을 선택하세요</h2>
-            <div className="space-y-3">
+            <h2 className="text-lg font-black text-slate-900 ml-1 text-left">제목을 선택하세요</h2>
+            <div className="space-y-3 text-left">
               {generatedData.titles.map((title, idx) => (
                 <button key={idx} onClick={() => {
                   setGeneratedData(prev => ({ ...prev, currentTitle: title }));
@@ -254,7 +254,7 @@ const Creator = ({ userStatus }) => {
                 }}
                 className="w-full text-left p-6 rounded-[2rem] bg-white border border-slate-200 hover:border-blue-500 transition-all shadow-sm group"
                 >
-                  <p className="text-sm font-bold text-slate-800 leading-relaxed group-hover:text-blue-600">{title}</p>
+                  <p className="text-sm font-bold text-slate-800 leading-relaxed group-hover:text-blue-600 text-left">{title}</p>
                 </button>
               ))}
             </div>
@@ -265,8 +265,8 @@ const Creator = ({ userStatus }) => {
         )}
 
         {step === 'result' && generatedData && (
-          <section className="space-y-6 animate-fade-in pb-10">
-            <div className="flex bg-white p-1 rounded-2xl border border-slate-200">
+          <section className="space-y-6 animate-fade-in pb-10 text-left">
+            <div className="flex bg-white p-1 rounded-2xl border border-slate-200 text-left">
               {[
                 { id: 'blog', name: '블로그', icon: <Layout size={14}/> },
                 { id: 'insta', name: '인스타', icon: <Instagram size={14}/> },
@@ -282,17 +282,19 @@ const Creator = ({ userStatus }) => {
               ))}
             </div>
 
-            <div className="bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm min-h-[500px] relative">
-              <div className="absolute top-6 right-6">
+            <div className="bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm min-h-[500px] relative text-left">
+              <div className="absolute top-6 right-6 text-left">
                 <button onClick={handleCopy} className={`p-3 rounded-2xl border transition-all ${isCopied ? 'bg-green-50 border-green-200 text-green-600' : 'bg-white border-slate-200 text-slate-400 hover:text-blue-600'}`}>
                   {isCopied ? <Check size={20} /> : <Copy size={20} />}
                 </button>
               </div>
               <div className="pt-10 text-left">
                 {activeTab === 'blog' ? (
-                  <div className="prose prose-slate max-w-none">
-                    <h2 className="text-xl font-black text-slate-900 mb-6 leading-tight border-l-4 border-blue-600 pl-4">{generatedData.currentTitle}</h2>
-                    <div className="text-sm leading-relaxed text-slate-700 font-medium" dangerouslySetInnerHTML={{ __html: generatedData.blog_html }} />
+                  <div className="prose prose-slate max-w-none text-left">
+                    <h2 className="text-xl font-black text-slate-900 mb-6 leading-tight border-l-4 border-blue-600 pl-4 text-left font-noto tracking-tighter italic">
+                      {generatedData.currentTitle}
+                    </h2>
+                    <div className="text-sm leading-relaxed text-slate-700 font-medium text-left font-noto" dangerouslySetInnerHTML={{ __html: generatedData.blog_html }} />
                   </div>
                 ) : (
                   <pre className="whitespace-pre-wrap font-noto text-sm text-slate-700 leading-relaxed pt-10 px-2 font-medium text-left">
@@ -305,11 +307,11 @@ const Creator = ({ userStatus }) => {
         )}
       </main>
 
-      <footer className="fixed bottom-0 left-0 right-0 p-6 bg-white/80 backdrop-blur-xl border-t border-slate-100 max-w-md mx-auto z-40">
+      <footer className="fixed bottom-0 left-0 right-0 p-6 bg-white/80 backdrop-blur-xl border-t border-slate-100 max-w-md mx-auto z-40 text-left">
         {step === 'keyword' ? (
           <button onClick={handleGenerate} disabled={selectedTopics.length === 0}
             className={`w-full py-5 rounded-[1.8rem] font-black text-sm flex items-center justify-center gap-3 transition-all active:scale-95 shadow-2xl ${
-              selectedTopics.length > 0 ? 'bg-slate-900 text-white shadow-xl' : 'bg-slate-100 text-slate-300 cursor-not-allowed'
+              selectedTopics.length > 0 ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/10' : 'bg-slate-100 text-slate-300 cursor-not-allowed'
             }`}
           >
             <Sparkles size={18} /> 제목 추천받기 <ArrowRight size={16} />
