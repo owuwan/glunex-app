@@ -5,58 +5,40 @@ import {
   CheckCircle2, Zap, Layout, Instagram, Video, 
   Copy, Check, ArrowLeft, ArrowRight, RefreshCw,
   Target, ListOrdered, FileText, MousePointer2,
-  Camera, Wand2, Info, Eye, Smartphone, ChevronRight
+  Camera, Wand2, Info, Eye, Smartphone, ChevronRight,
+  Star, ShieldCheck, Palette, ZapOff
 } from 'lucide-react';
 
 /**
- * [AI 프롬프트 설정]
- * 브랜드 언급 금지 및 집필 분량을 엄격하게 통제합니다.
+ * [AI 마스터 프롬프트 설정 - 기술 키워드 추출 및 네이버 검색 참조 로직]
  */
 const SYSTEM_PROMPT_TITLES = `
 당신은 대한민국 최고의 자동차 디테일링 전문 마케터입니다.
-[시공 항목]과 [날씨]를 분석하여 고객의 클릭을 유도하는 트렌디한 제목 5개를 작성하세요.
-상호명(예: 글루넥스, GLUNEX 등)은 절대로 언급하지 마세요. 오직 시공 서비스의 가치에 집중하세요.
+상호명(예: 글루넥스, GLUNEX 등)은 절대로 언급하지 마세요. 오직 서비스의 가치에 집중하세요.
 반드시 JSON 구조로만 응답하세요: { "titles": ["제목1", "제목2", "제목3", "제목4", "제목5"] }
 `;
 
 const SYSTEM_PROMPT_INDEX = `
-선택된 제목을 바탕으로 네이버 블로그에 최적화된 전문적인 5단계 목차를 구성하세요.
-브랜드명은 절대 포함하지 마세요. SEO 최적화된 정보성 목차여야 합니다.
+네이버 블로그 전문 5단계 목차를 구성하세요. 브랜드명 제외. SEO 최적화된 정보성 목차여야 합니다.
 반드시 JSON 구조로만 응답하세요: { "index": ["1. 목차내용", "2. 목차내용", "3. 목차내용", "4. 목차내용", "5. 목차내용"] }
 `;
 
 const SYSTEM_PROMPT_CONTENT = `
-당신은 자동차 디테일링 전문가입니다. 선정된 5개 목차를 바탕으로 블로그 본문, 인스타 문구, 숏폼 대본, 그리고 이미지 생성을 위한 프롬프트를 작성하세요.
+당신은 대한민국 자동차 외장관리 전문가입니다. 선정된 5개 목차를 바탕으로 블로그 본문과 핵심 키워드 기반의 이미지 프롬프트를 생성하세요.
 
-[지시사항]
-1. 블로그 본문 (blog_html): 
-   - 각 목차별 본문 내용은 공백 제외 450~550자 사이로 아주 상세하게 작성하세요. (전체 2,250자 이상 필수)
-   - 각 목차 섹션이 끝나는 지점에 [[image_1]], [[image_2]], [[image_3]], [[image_4]], [[image_5]] 태그를 순서대로 하나씩 배치하세요.
-   - 상호명(글루넥스, GLUNEX 등)은 절대로 언급하지 마세요. 전문적인 용어와 공정 설명을 사용하세요.
-   - HTML 태그(h2, p, br, strong)를 사용하세요. h2는 목차 제목으로 사용하세요.
-2. 이미지 프롬프트 (image_prompts):
-   - 각 목차 주제에 맞게 아래 [시공별 도구 가이드]를 준수하여 영문 프롬프트를 작성하세요.
-   - [공통 스타일]: "A raw, handheld photo taken on iPhone 15 Pro, harsh fluorescent lighting, realistic documentary style, no filters. License plate MUST be blurred or censored."
-   - [공통 배경]: 
-     * 실내: "Modern Korean detailing shop, grid-pattern LED ceiling lights, glossy grey epoxy floor, Korean text signs in the distance."
-     * 야외: "Korean apartment underground parking lot, green urethane floor, white concrete pillars with parking numbers."
-   
-   - [시공별 도구 가이드 (반드시 준수)]:
-     * 유리막코팅(Coating): "Hand holding a black rectangular coating block wrapped in a thin blue suede cloth, applying a thin, wet, transparent liquid streak (No thick blobs, no sponges)."
-     * 세차(Wash): "Lambswool wash mitt with fine white car shampoo bubbles (No thick foam clumps)."
-     * 실내크리닝(Interior): "Small detailing brush cleaning air vents or leather seat creases, high-end steam cleaner nozzle."
-     * 철분제거(Iron): "Realistic deep purple chemical reaction bleeding and dripping from silver multi-spoke wheels."
-     * 발수코팅(Glass Repel): "Small square applicator pad on a windshield, tiny and dense spherical water beads."
-     * 썬팅(Tinting): "Yellow squeegee pushing water out from a dark film on a wet car window, heat gun on a side table."
-     * 가죽코팅(Leather): "Soft circular applicator pad applying a thin sheen to a black leather bolster."
-     * 언더코팅(Undercoating): "Car on a hydraulic lift, technician using a long spray gun to apply black textured coating to the undercarriage."
-     * 유분/철분제거: "Clay bar being rubbed on a wet car surface with lubricant."
-     * 신차패키지/블랙박스: "Technician's hands wiring a small dashcam behind the rearview mirror, plastic interior trim removed."
-   
-   - [금지 사항]: "No large yellow sponges, no thick white cream blobs, no American-style brick garages, no clean/perfect studio lighting, no clear license plate numbers."
+[1단계: 본문 작성 지침]
+- 각 목차별 본문 내용은 공백 제외 450~550자 사이로 아주 상세하게 작성하세요. (전체 최소 2,250자 이상 필수)
+- 상호명(GLUNEX 등) 언급 절대 금지. 전문적인 용어와 실제 공정 설명을 상세히 기술하세요.
+- 각 섹션 끝에 [[image_1]], [[image_2]], [[image_3]], [[image_4]], [[image_5]] 태그를 순서대로 하나씩 배치하세요.
+- HTML 태그(h2, p, br, strong)를 사용하세요. h2는 목차 제목으로 사용하세요.
+
+[2단계: 키워드 요약 및 이미지 프롬프트 생성 지침]
+- 각 섹션의 내용을 분석하여 가장 핵심적인 '기술 장비'나 '시공 상황' 키워드 3개를 한국어로 추출하세요.
+- 추출된 키워드를 다음 영문 템플릿에 넣어 image_prompts(p1~p5)를 생성하세요:
+  "Please check the '[키워드1]' '[키워드2]' '[키워드3]' in Korea detail shop with images within a year through www.naver.com search engine and make an image. The photo should look like a raw, unpolished handheld shot from iPhone 15 Pro, natural lighting, no text, blurred license plate."
 
 [출력 형식]
-JSON으로만 응답하세요:
+JSON으로만 응답:
 {
   "blog_html": "HTML 내용",
   "insta_text": "인스타 내용",
@@ -68,7 +50,7 @@ JSON으로만 응답하세요:
 const Creator = ({ userStatus }) => {
   const navigate = useNavigate();
   
-  // --- 상태 관리 ---
+  // --- 상태 관리 (풍성한 UI 유지를 위한 모든 상태 복구) ---
   const [step, setStep] = useState('keyword'); 
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("");
@@ -185,10 +167,10 @@ const Creator = ({ userStatus }) => {
     finally { setLoading(false); }
   };
 
-  // 3단계: 최종 집필
+  // 3단계: 최종 집필 (네이버 검색 참조 로직 포함)
   const handleGenerateFullContent = async () => {
     setLoading(true);
-    setLoadingMsg("아이폰 15 Pro 감성의 고화질 사진 5장과\n전문 마케팅 원고를 정성껏 생성 중입니다...");
+    setLoadingMsg("글에서 핵심 키워드를 추출하여\n네이버 실제 시공 이미지를 참조 중입니다...");
     try {
       const data = await callGemini(`제목: ${selectedTitle}, 목차: ${indexList.join(', ')}`, SYSTEM_PROMPT_CONTENT);
       const images = await Promise.all([
@@ -209,7 +191,7 @@ const Creator = ({ userStatus }) => {
               <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest italic">Shot on iPhone 15 Pro</span>
             </div>
           </div>
-        ` : `<div class="p-6 text-center text-slate-300 text-xs italic">이미지 생성 지연 중...</div>`;
+        ` : `<div class="p-6 text-center text-slate-300 text-xs italic">이미지 생성 대기 중...</div>`;
         finalHtml = finalHtml.replace(`[[image_${i + 1}]]`, replacement);
       });
 
@@ -291,7 +273,7 @@ const Creator = ({ userStatus }) => {
           </div>
         ) : step === 'keyword' ? (
           <>
-            {/* 날씨 인사이트 섹션 (사이즈 축소) */}
+            {/* 날씨 인사이트 섹션 */}
             <section className="animate-fade-in">
               <div className={`p-6 rounded-[2.5rem] border-2 transition-all duration-700 shadow-xl ${isWeatherEnabled ? 'bg-blue-600 border-blue-400 text-white shadow-blue-200/40' : 'bg-white border-slate-200 text-slate-900'}`}>
                 <div className="flex items-center justify-between mb-4">
@@ -327,7 +309,7 @@ const Creator = ({ userStatus }) => {
                   <button 
                     key={cat.id} 
                     onClick={() => setSelectedTopics(p => p.includes(cat.id) ? p.filter(t => t !== cat.id) : [...p, cat.id])}
-                    className={`relative py-6 px-1 rounded-2xl border-2 transition-all duration-300 text-center ${
+                    className={`relative py-5 px-1 rounded-2xl border-2 transition-all duration-300 text-center ${
                       selectedTopics.includes(cat.id)
                         ? 'bg-slate-900 border-slate-900 text-white shadow-xl scale-[1.03] font-bold'
                         : 'bg-white border-white text-slate-500 hover:border-blue-100 shadow-sm text-[13px] font-bold'
@@ -377,7 +359,8 @@ const Creator = ({ userStatus }) => {
               <p className="text-[11px] text-slate-400 font-bold border-l-3 border-blue-600 pl-4 leading-relaxed mt-3 uppercase tracking-tighter">Detail-writing with 5 premium iPhone photos.</p>
             </div>
             
-            <div className="bg-slate-50 rounded-[2.5rem] border border-slate-100 p-8 space-y-4 shadow-inner">
+            <div className="bg-slate-50 rounded-[2.2rem] border border-slate-100 p-7 space-y-4 shadow-inner relative overflow-hidden">
+               <div className="absolute top-0 right-0 w-32 h-32 bg-blue-100/20 rounded-full blur-3xl -mr-10 -mt-10"></div>
                {indexList.map((idx, i) => (
                  <div key={i} className="flex gap-4 items-start group">
                     <div className="w-7 h-7 rounded-xl bg-white border border-slate-200 text-[10px] font-black flex items-center justify-center text-slate-400 shrink-0 group-hover:border-blue-600 group-hover:text-blue-600 transition-all">
@@ -399,24 +382,26 @@ const Creator = ({ userStatus }) => {
           </section>
         ) : (
           <section className="space-y-6 animate-fade-in pb-20">
+            {/* 채널 탭 선택 */}
             <div className="flex bg-slate-200/50 p-1.5 rounded-2xl border border-slate-100 shadow-inner">
               {[
-                { id: 'blog', name: '블로그' },
-                { id: 'insta', name: '인스타그램' },
-                { id: 'short', name: '숏폼대본' }
+                { id: 'blog', name: '블로그', icon: <Layout size={14}/> },
+                { id: 'insta', name: '인스타그램', icon: <Instagram size={14}/> },
+                { id: 'short', name: '숏폼대본', icon: <Video size={14}/> }
               ].map(tab => (
                 <button 
                   key={tab.id} 
                   onClick={() => setActiveTab(tab.id)} 
-                  className={`flex-1 py-3 rounded-xl text-[12px] font-extrabold transition-all duration-300 ${
+                  className={`flex-1 py-3 rounded-xl text-[12px] font-extrabold flex items-center justify-center gap-2 transition-all duration-300 ${
                     activeTab === tab.id ? 'bg-slate-900 text-white shadow-xl scale-[1.02] z-10' : 'text-slate-500'
                   }`}
                 >
-                  {tab.name}
+                  {tab.icon} {tab.name}
                 </button>
               ))}
             </div>
 
+            {/* 결과 콘텐츠 카드 */}
             <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-2xl min-h-[550px] relative overflow-hidden text-left border-t-[8px] border-t-blue-600 animate-fade-in-up">
               <div className="absolute top-6 right-6 z-30">
                 <button onClick={handleCopy} className={`p-3.5 rounded-xl border transition-all active:scale-90 shadow-lg ${isCopied ? 'bg-green-50 border-green-200 text-green-600' : 'bg-slate-900 border-slate-800 text-white'}`}>
@@ -429,8 +414,8 @@ const Creator = ({ userStatus }) => {
                   <article className="prose prose-slate max-w-none blog-body">
                     <div className="mb-10 pb-6 border-b border-slate-50">
                         <div className="flex items-center gap-2 mb-3">
-                           <Camera size={14} className="text-blue-600 animate-pulse" />
-                           <span className="text-blue-600 font-bold text-[9px] uppercase tracking-[0.1em]">iPhone Style Content</span>
+                           <Camera size={14} className="text-slate-400" />
+                           <span className="text-slate-400 font-bold text-[9px] uppercase tracking-[0.1em]">Naver Search Referenced</span>
                         </div>
                         <h2 className="text-[22px] font-black text-slate-900 leading-[1.3] tracking-tighter italic border-l-[6px] border-blue-600 pl-6">
                            {selectedTitle}
@@ -455,7 +440,7 @@ const Creator = ({ userStatus }) => {
               </div>
               
               <div className="mt-20 pt-8 border-t border-slate-50 text-center opacity-30">
-                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.5em]">GLUNEX AI Engine v5.2</p>
+                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.5em]">GLUNEX AI Engine v5.6</p>
               </div>
             </div>
             
@@ -466,7 +451,7 @@ const Creator = ({ userStatus }) => {
         )}
       </main>
 
-      {/* 하단 고정 액션 바 (사이즈 축소) */}
+      {/* 하단 고정 액션 바 */}
       <footer className="fixed bottom-0 left-0 right-0 p-6 bg-white/80 backdrop-blur-3xl border-t border-slate-100 max-w-md mx-auto z-40 shadow-[0_-15px_40px_rgba(0,0,0,0.04)]">
         {step === 'keyword' && (
           <button 
@@ -478,13 +463,13 @@ const Creator = ({ userStatus }) => {
           >
             <Sparkles size={20} className="animate-pulse text-amber-400" /> 
             제목 생성하기 
-            <ArrowRight size={18} className="ml-1" />
+            <ArrowRight size={18} />
           </button>
         )}
         {step === 'result' && (
            <div className="flex gap-3">
               <button onClick={handleCopy} className="flex-[2.5] py-4.5 bg-slate-900 text-white rounded-[2rem] font-bold text-base shadow-xl active:scale-95 flex items-center justify-center gap-3 transition-all">
-                 {isCopied ? <Check size={20} className="text-green-400"/> : <Copy size={20}/>} {isCopied ? '복사 완료' : '전체 내용 복사'}
+                 {isCopied ? <CheckCircle2 size={20} className="text-green-400"/> : <Copy size={20}/>} {isCopied ? '복사 완료' : '전체 내용 복사'}
               </button>
               <button onClick={() => setStep('keyword')} className="flex-1 py-4.5 bg-white border-2 border-slate-900 text-slate-900 rounded-[2rem] font-bold text-[14px] active:scale-95 transition-all">초기화</button>
            </div>
