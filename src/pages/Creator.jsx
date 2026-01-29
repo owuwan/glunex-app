@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Sparkles, CloudRain, Sun, Snowflake, Cloud, 
   CheckCircle2, Zap, Layout, Instagram, Video, 
@@ -22,25 +22,59 @@ const SYSTEM_PROMPT = `
 
 const Creator = ({ userStatus }) => {
   // 상태 관리
-  const [step, setStep] = useState('keyword'); // keyword -> title -> result
+  const [step, setStep] = useState('keyword'); 
   const [loading, setLoading] = useState(false);
   const [selectedTopics, setSelectedTopics] = useState([]);
   const [isWeatherEnabled, setIsWeatherEnabled] = useState(true);
-  const [weather] = useState({ status: 'rain', desc: '비', temp: 18 });
+  
+  // 실시간 날씨 상태
+  const [weather, setWeather] = useState({ status: 'clear', desc: '맑음', temp: 20 });
   
   const [generatedData, setGeneratedData] = useState(null);
   const [activeTab, setActiveTab] = useState('blog');
   const [isCopied, setIsCopied] = useState(false);
-  
-  // 로컬 토스트 메시지 상태 (AppContext 의존성 제거)
   const [toastMsg, setToastMsg] = useState("");
+
+  // 1. 실시간 날씨 연동 (메인 대시보드와 동일한 로직)
+  useEffect(() => {
+    const fetchWeather = async () => {
+      try {
+        // 위치 권한 허용 시 실제 좌표로, 아니면 서울 기준으로 가져옵니다.
+        const lat = 37.5665;
+        const lon = 126.9780;
+        const API_KEY = "643197669d0c64c7e47a9696328639f2"; // 오픈웨더맵 키 (앱 공통 사용)
+        
+        const response = await fetch(
+          `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric&lang=kr`
+        );
+        const data = await response.json();
+        
+        if (data.weather) {
+          const main = data.weather[0].main.toLowerCase();
+          let status = 'clear';
+          if (main.includes('rain')) status = 'rain';
+          else if (main.includes('snow')) status = 'snow';
+          else if (main.includes('cloud')) status = 'cloud';
+
+          setWeather({
+            status,
+            desc: data.weather[0].description,
+            temp: Math.round(data.main.temp)
+          });
+        }
+      } catch (error) {
+        console.error("날씨 로드 실패", error);
+      }
+    };
+
+    fetchWeather();
+  }, []);
 
   const showLocalToast = (msg) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(""), 3000);
   };
 
-  // 12개 시공 카테고리
   const categories = [
     { id: 'wash', name: '세차' },
     { id: 'detailing', name: '디테일링' },
@@ -65,7 +99,6 @@ const Creator = ({ userStatus }) => {
   const handleGenerate = async () => {
     if (selectedTopics.length === 0) return alert("주제를 하나 이상 선택해주세요.");
     
-    // userStatus가 'approved'가 아니면 차단 (AppRouter에서 넘겨받음)
     if (userStatus !== 'approved') {
       const go = window.confirm("🔒 AI 홍보글 작성은 '프리미엄 파트너' 전용 기능입니다.\n멤버십 페이지로 이동하시겠습니까?");
       if(go) window.location.hash = '/mypage';
@@ -92,7 +125,6 @@ const Creator = ({ userStatus }) => {
       setGeneratedData(content);
       setStep('title');
     } catch (error) {
-      console.error(error);
       alert("생성 중 오류가 발생했습니다.");
     } finally {
       setLoading(false);
@@ -134,7 +166,7 @@ const Creator = ({ userStatus }) => {
           <div className="w-16 h-16 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin"></div>
           <Sparkles className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-blue-600 animate-pulse" size={20} />
         </div>
-        <p className="text-sm font-bold text-slate-900 tracking-tight">AI 에이전트가 맞춤 원고를 작성 중입니다...</p>
+        <p className="text-sm font-bold text-slate-900 tracking-tight">AI 에이전트가 원고 작성 중...</p>
       </div>
     );
   }
@@ -142,7 +174,6 @@ const Creator = ({ userStatus }) => {
   return (
     <div className="h-full flex flex-col bg-slate-50 font-noto overflow-hidden relative text-left">
       
-      {/* 로컬 토스트 알림 UI */}
       {toastMsg && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[9999] animate-bounce">
           <div className="bg-slate-900 text-white px-6 py-3 rounded-2xl text-xs font-bold shadow-2xl flex items-center gap-2">
@@ -183,7 +214,7 @@ const Creator = ({ userStatus }) => {
                   </button>
                 </div>
                 <p className="text-[11px] leading-relaxed opacity-80 font-medium text-left">
-                  {isWeatherEnabled ? `현재 ${weather.desc} 날씨를 분석하여 고객을 설득하는 맞춤형 문구를 자동으로 추가합니다.` : "날씨와 관계없이 일반적인 홍보용 원고를 작성합니다."}
+                  {isWeatherEnabled ? `현재 ${weather.desc} 날씨에 맞춰 고객을 설득하는 문구를 추가합니다.` : "날씨와 관계없이 원고를 작성합니다."}
                 </p>
               </div>
             </section>
@@ -278,7 +309,7 @@ const Creator = ({ userStatus }) => {
         {step === 'keyword' ? (
           <button onClick={handleGenerate} disabled={selectedTopics.length === 0}
             className={`w-full py-5 rounded-[1.8rem] font-black text-sm flex items-center justify-center gap-3 transition-all active:scale-95 shadow-2xl ${
-              selectedTopics.length > 0 ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/10' : 'bg-slate-100 text-slate-300 cursor-not-allowed'
+              selectedTopics.length > 0 ? 'bg-slate-900 text-white shadow-xl' : 'bg-slate-100 text-slate-300 cursor-not-allowed'
             }`}
           >
             <Sparkles size={18} /> 제목 추천받기 <ArrowRight size={16} />
