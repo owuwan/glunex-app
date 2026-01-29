@@ -3,16 +3,18 @@ import {
   Wand2, Sparkles, CloudRain, Sun, Snowflake, Cloud, 
   CheckCircle2, Zap, Layout, Instagram, Video, 
   Copy, Check, ArrowLeft, ArrowRight, AlertCircle, Loader2,
-  Image as ImageIcon
+  Image as ImageIcon, Terminal
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 /**
  * ============================================================
- * [글루넥스 마스터 설정]
- * 아이폰 15 프로 감성의 실사 프롬프트를 유지합니다.
+ * [배포 확인용 코드]
+ * 화면에 이 버전 번호가 보이면 최신 코드가 반영된 것입니다.
  * ============================================================
  */
+const DEPLOY_VERSION = "v1.0.3-updated";
+
 const IPHONE_PHOTO_STYLE = "A raw, unfiltered smartphone photo shot on iPhone 15 Pro, handheld, natural indoor lighting, authentic car detailing shop in Korea, slightly messy background, no filters, photorealistic, orange peel paint texture.";
 
 const SYSTEM_PROMPT = `
@@ -51,6 +53,11 @@ const Creator = () => {
   const [imageUrls, setImageUrls] = useState({ before: '', process: '', after: '' });
   const [activeTab, setActiveTab] = useState('blog');
   const [isCopied, setIsCopied] = useState(false);
+
+  // 배포 확인용 로그
+  useEffect(() => {
+    console.log(`%c GLUNEX AI Creator ${DEPLOY_VERSION} 로드됨`, 'background: #2563eb; color: #fff; padding: 5px; border-radius: 5px;');
+  }, []);
 
   // 12개 시공 카테고리 (홍철님 요청안 기반)
   const categories = [
@@ -194,7 +201,15 @@ const Creator = () => {
   };
 
   return (
-    <div className="h-full flex flex-col bg-slate-50 font-noto overflow-hidden">
+    <div className="h-full flex flex-col bg-slate-50 font-noto overflow-hidden relative">
+      
+      {/* 배포 확인용 워터마크 (최상단) */}
+      <div className="absolute top-0 left-0 right-0 z-[100] flex justify-center pointer-events-none">
+          <span className="bg-blue-600/90 text-[8px] text-white px-2 py-0.5 rounded-b-lg font-black shadow-md border-x border-b border-blue-400 backdrop-blur-sm">
+            RUNNING: {DEPLOY_VERSION}
+          </span>
+      </div>
+
       {/* 헤더 */}
       <header className="px-6 py-5 bg-white border-b border-slate-100 flex items-center justify-between sticky top-0 z-30">
         <div className="flex items-center gap-3">
