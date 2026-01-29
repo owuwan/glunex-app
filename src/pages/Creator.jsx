@@ -36,7 +36,7 @@ const SYSTEM_PROMPT_CONTENT = `
    - HTML 태그(h2, p, br, strong)를 사용하세요. h2는 목차 제목으로 사용하세요.
 2. 이미지 프롬프트 (image_prompts):
    - 각 목차 주제에 맞는 구체적인 영문 프롬프트 5개를 작성하세요 (p1~p5).
-   - 스타일 가이드: "Cinematic shot, hyper-realistic car detailing process in a luxury Korean studio, shot on iPhone 15 Pro, f/1.8 aperture, natural soft lighting, extremely high detail on car surface, no distorted shapes, no text, no logos"
+   - 스타일 가이드: "A raw, unpolished handheld photo taken inside a real Korean car detailing garage. Shot on iPhone 15 Pro, casual composition, natural messy background with detailing tools and spray bottles, harsh overhead fluorescent lighting, authentic documentary style, high ISO grain, no artificial filters, no text, no logo."
 
 [출력 형식]
 JSON으로만 응답하세요:
