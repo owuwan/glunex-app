@@ -10,9 +10,10 @@ import { useApp } from '../context/AppContext';
 /**
  * ============================================================
  * [글루넥스 마스터 설정]
+ * 아이폰 15 프로 감성의 실사 프롬프트를 유지합니다.
  * ============================================================
  */
-const IPHONE_PHOTO_STYLE = "A raw, unfiltered smartphone photo shot on iPhone 15 Pro, handheld, natural indoor lighting, authentic car detailing shop in Korea, slightly messy background, no filters, photorealistic.";
+const IPHONE_PHOTO_STYLE = "A raw, unfiltered smartphone photo shot on iPhone 15 Pro, handheld, natural indoor lighting, authentic car detailing shop in Korea, slightly messy background, no filters, photorealistic, orange peel paint texture.";
 
 const SYSTEM_PROMPT = `
 당신은 대한민국 최고의 자동차 디테일링 마케팅 전문가입니다.
@@ -51,6 +52,7 @@ const Creator = () => {
   const [activeTab, setActiveTab] = useState('blog');
   const [isCopied, setIsCopied] = useState(false);
 
+  // 12개 시공 카테고리 (홍철님 요청안 기반)
   const categories = [
     { id: 'wash', name: '세차' },
     { id: 'detailing', name: '디테일링' },
@@ -197,7 +199,7 @@ const Creator = () => {
       <header className="px-6 py-5 bg-white border-b border-slate-100 flex items-center justify-between sticky top-0 z-30">
         <div className="flex items-center gap-3">
           {step !== 'keyword' && (
-            <button onClick={() => setStep('keyword')} className="p-1 hover:bg-slate-100 rounded-lg">
+            <button onClick={() => setStep('keyword')} className="p-1 hover:bg-slate-100 rounded-lg transition-colors">
               <ArrowLeft size={20} className="text-slate-400" />
             </button>
           )}
@@ -218,7 +220,7 @@ const Creator = () => {
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
                     <Zap size={18} className={isWeatherEnabled ? 'text-blue-200' : 'text-blue-600'} />
-                    <h2 className="text-sm font-black uppercase">날씨연동 글쓰기</h2>
+                    <h2 className="text-sm font-black uppercase tracking-tight">날씨연동 글쓰기</h2>
                   </div>
                   <button 
                     onClick={() => setIsWeatherEnabled(!isWeatherEnabled)}
@@ -227,7 +229,7 @@ const Creator = () => {
                     <div className={`absolute top-1 w-4 h-4 rounded-full transition-all duration-300 ${isWeatherEnabled ? 'right-1 bg-white' : 'left-1 bg-white shadow-sm'}`}></div>
                   </button>
                 </div>
-                <p className="text-[11px] leading-relaxed opacity-80">
+                <p className="text-[11px] leading-relaxed opacity-80 font-medium">
                   {isWeatherEnabled 
                     ? `현재 ${weather.desc} 날씨를 분석하여 고객을 설득하는 맞춤형 문구를 자동으로 추가합니다.` 
                     : "날씨와 관계없이 일반적인 홍보용 원고를 작성합니다."}
@@ -248,12 +250,12 @@ const Creator = () => {
                     className={`relative py-4 px-2 rounded-2xl border transition-all duration-200 ${
                       selectedTopics.includes(cat.id)
                         ? 'bg-slate-900 border-slate-900 text-white shadow-lg scale-[1.03] z-10 font-bold'
-                        : 'bg-white border-slate-100 text-slate-500 hover:border-blue-200 text-xs font-medium'
+                        : 'bg-white border-slate-100 text-slate-500 hover:border-blue-200 text-xs font-bold'
                     }`}
                   >
                     {cat.name}
                     {selectedTopics.includes(cat.id) && (
-                      <div className="absolute top-1.5 right-1.5 text-blue-400">
+                      <div className="absolute top-1.5 right-1.5 text-blue-400 animate-fade-in">
                         <CheckCircle2 size={12} fill="currentColor" className="text-white" />
                       </div>
                     )}
@@ -271,7 +273,7 @@ const Creator = () => {
               <Sparkles className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-blue-600 animate-pulse" size={24} />
             </div>
             <h2 className="text-xl font-black text-slate-900 mb-2 tracking-tight">AI 에이전트 가동 중</h2>
-            <p className="text-xs text-slate-400 leading-relaxed px-10">{loadingMsg}</p>
+            <p className="text-xs text-slate-400 leading-relaxed px-10 font-medium">{loadingMsg}</p>
           </div>
         )}
 
@@ -288,7 +290,7 @@ const Creator = () => {
                   }}
                   className="w-full text-left p-6 rounded-[2rem] bg-white border border-slate-200 hover:border-blue-500 hover:shadow-md transition-all group"
                 >
-                  <p className="text-sm font-bold text-slate-800 leading-relaxed group-hover:text-blue-600">{title}</p>
+                  <p className="text-sm font-bold text-slate-800 leading-relaxed group-hover:text-blue-600 tracking-tight">{title}</p>
                 </button>
               ))}
             </div>
@@ -296,7 +298,7 @@ const Creator = () => {
         )}
 
         {step === 'result' && generatedData && (
-          <section className="space-y-6 animate-fade-in">
+          <section className="space-y-6 animate-fade-in pb-10">
             <div className="flex bg-white p-1 rounded-2xl border border-slate-200">
               {[{id:'blog',name:'블로그'},{id:'insta',name:'인스타'},{id:'short',name:'숏폼'}].map(tab => (
                 <button
@@ -322,10 +324,10 @@ const Creator = () => {
                 {activeTab === 'blog' ? (
                   <div className="prose prose-slate max-w-none">
                     <h2 className="text-xl font-black text-slate-900 mb-6 leading-tight border-l-4 border-blue-600 pl-4">{generatedData.currentTitle || generatedData.titles[0]}</h2>
-                    <div className="text-sm leading-relaxed text-slate-700" dangerouslySetInnerHTML={{ __html: getFinalBlogHtml() }} />
+                    <div className="text-sm leading-relaxed text-slate-700 font-medium" dangerouslySetInnerHTML={{ __html: getFinalBlogHtml() }} />
                   </div>
                 ) : (
-                  <pre className="whitespace-pre-wrap font-noto text-sm text-slate-700 leading-relaxed pt-10 px-2">
+                  <pre className="whitespace-pre-wrap font-noto text-sm text-slate-700 leading-relaxed pt-10 px-2 font-medium">
                     {activeTab === 'insta' ? generatedData.insta_text : generatedData.short_form}
                   </pre>
                 )}
@@ -353,7 +355,7 @@ const Creator = () => {
         {(step === 'result' || step === 'title') && (
           <button 
             onClick={step === 'title' ? () => setStep('keyword') : handleCopy}
-            className="w-full py-5 bg-slate-900 text-white rounded-[1.8rem] font-black text-sm shadow-xl flex items-center justify-center gap-3 active:scale-95"
+            className="w-full py-5 bg-slate-900 text-white rounded-[1.8rem] font-black text-sm shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all"
           >
             {step === 'title' ? <ArrowLeft size={18}/> : isCopied ? <Check size={18}/> : <Copy size={18}/>}
             {step === 'title' ? '주제 다시 고르기' : isCopied ? '복사 완료' : '전체 내용 복사하기'}
