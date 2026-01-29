@@ -1,19 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   Wand2, Sparkles, CloudRain, Sun, Snowflake, Cloud, 
   CheckCircle2, Zap, Layout, Instagram, Video, 
-  Copy, Check, ArrowLeft, ArrowRight, AlertCircle, Loader2,
-  Image as ImageIcon, Terminal
+  Copy, Check, ArrowLeft, ArrowRight
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 /**
  * ============================================================
  * [배포 확인용 코드]
- * 화면에 이 버전 번호가 보이면 최신 코드가 반영된 것입니다.
+ * v1.0.4-fixed: 빌드 오류(Unused vars) 수정 완료
  * ============================================================
  */
-const DEPLOY_VERSION = "v1.0.3-updated";
+const DEPLOY_VERSION = "v1.0.4-fixed";
 
 const IPHONE_PHOTO_STYLE = "A raw, unfiltered smartphone photo shot on iPhone 15 Pro, handheld, natural indoor lighting, authentic car detailing shop in Korea, slightly messy background, no filters, photorealistic, orange peel paint texture.";
 
@@ -54,12 +53,6 @@ const Creator = () => {
   const [activeTab, setActiveTab] = useState('blog');
   const [isCopied, setIsCopied] = useState(false);
 
-  // 배포 확인용 로그
-  useEffect(() => {
-    console.log(`%c GLUNEX AI Creator ${DEPLOY_VERSION} 로드됨`, 'background: #2563eb; color: #fff; padding: 5px; border-radius: 5px;');
-  }, []);
-
-  // 12개 시공 카테고리 (홍철님 요청안 기반)
   const categories = [
     { id: 'wash', name: '세차' },
     { id: 'detailing', name: '디테일링' },
@@ -81,7 +74,6 @@ const Creator = () => {
     );
   };
 
-  // --- fal.ai 실시간 이미지 생성 로직 ---
   const generateFalImage = async (prompt) => {
     const FAL_KEY = import.meta.env.VITE_FAL_API_KEY;
     if (!FAL_KEY) return "https://placehold.co/800x500?text=API+KEY+MISSING";
@@ -109,8 +101,6 @@ const Creator = () => {
 
   const handleGenerate = async () => {
     if (selectedTopics.length === 0) return alert("주제를 선택해주세요.");
-    
-    // 유료 회원 체크
     if (userStatus !== 'approved') {
       const go = window.confirm("🔒 프리미엄 파트너 전용 기능입니다.\n멤버십 페이지로 이동하시겠습니까?");
       if(go) window.location.hash = '/mypage';
@@ -120,11 +110,10 @@ const Creator = () => {
     setStep('generating');
     setLoadingMsg('AI가 마케팅 시나리오를 집필 중입니다...');
 
-    const apiKey = ""; // 런타임 제공
+    const apiKey = import.meta.env.VITE_FIREBASE_API_KEY; 
     const selectedNames = categories.filter(c => selectedTopics.includes(c.id)).map(c => c.name).join(', ');
     
     try {
-      // 1. 텍스트 생성
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -138,8 +127,7 @@ const Creator = () => {
       const resData = await response.json();
       const content = JSON.parse(resData.candidates[0].content.parts[0].text);
       
-      // 2. 이미지 생성 (fal.ai)
-      setLoadingMsg('포스팅에 맞는 실사 사진을 촬영(생성) 중입니다...');
+      setLoadingMsg('포스팅에 맞는 실사 사진을 촬영 중입니다...');
       const [imgBefore, imgProcess, imgAfter] = await Promise.all([
         generateFalImage(content.image_prompts.before),
         generateFalImage(content.image_prompts.process),
@@ -150,22 +138,20 @@ const Creator = () => {
       setGeneratedData(content);
       setStep('title');
     } catch (error) {
-      alert("생성 중 오류가 발생했습니다. API 키나 잔액을 확인해 주세요.");
+      alert("생성 중 오류가 발생했습니다. 환경설정이나 API 잔액을 확인해 주세요.");
       setStep('keyword');
     }
   };
 
-  // 최종 HTML 조립
   const getFinalBlogHtml = () => {
     if (!generatedData) return "";
     let html = generatedData.blog_html;
     
     const imageBox = (url, label) => `
-      <div class="my-6 rounded-[2rem] overflow-hidden border border-slate-100 shadow-xl group relative">
-        <img src="${url}" class="w-full h-auto block" />
+      <div class="my-6 rounded-[2rem] overflow-hidden border border-slate-100 shadow-xl">
+        <img src="${url}" class="w-full h-auto block" alt="${label}" />
         <div class="p-4 bg-white text-center border-t border-slate-50">
           <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">📸 ${label} 실사 에셋</p>
-          <p class="text-[9px] text-blue-500 font-bold mt-1">(사진을 터치하여 내 사진으로 교체 가능)</p>
         </div>
       </div>
     `;
@@ -202,19 +188,16 @@ const Creator = () => {
 
   return (
     <div className="h-full flex flex-col bg-slate-50 font-noto overflow-hidden relative">
-      
-      {/* 배포 확인용 워터마크 (최상단) */}
       <div className="absolute top-0 left-0 right-0 z-[100] flex justify-center pointer-events-none">
           <span className="bg-blue-600/90 text-[8px] text-white px-2 py-0.5 rounded-b-lg font-black shadow-md border-x border-b border-blue-400 backdrop-blur-sm">
             RUNNING: {DEPLOY_VERSION}
           </span>
       </div>
 
-      {/* 헤더 */}
       <header className="px-6 py-5 bg-white border-b border-slate-100 flex items-center justify-between sticky top-0 z-30">
         <div className="flex items-center gap-3">
           {step !== 'keyword' && (
-            <button onClick={() => setStep('keyword')} className="p-1 hover:bg-slate-100 rounded-lg transition-colors">
+            <button onClick={() => setStep('keyword')} className="p-1 hover:bg-slate-100 rounded-lg">
               <ArrowLeft size={20} className="text-slate-400" />
             </button>
           )}
@@ -227,7 +210,6 @@ const Creator = () => {
       </header>
 
       <main className="flex-1 overflow-y-auto p-6 space-y-8 pb-32">
-        
         {step === 'keyword' && (
           <>
             <section className="animate-fade-in">
@@ -253,10 +235,7 @@ const Creator = () => {
             </section>
 
             <section className="space-y-4 animate-fade-in">
-              <h2 className="text-lg font-black text-slate-900 tracking-tight ml-1">
-                어떤 주제로 글을 쓸까요?<br/>
-                <span className="text-xs text-slate-400 font-medium">(복수선택 가능)</span>
-              </h2>
+              <h2 className="text-lg font-black text-slate-900 tracking-tight ml-1">어떤 주제로 글을 쓸까요?</h2>
               <div className="grid grid-cols-3 gap-2">
                 {categories.map((cat) => (
                   <button
@@ -334,7 +313,6 @@ const Creator = () => {
                   {isCopied ? <Check size={20} /> : <Copy size={20} />}
                 </button>
               </div>
-
               <div className="pt-10">
                 {activeTab === 'blog' ? (
                   <div className="prose prose-slate max-w-none">
@@ -350,7 +328,6 @@ const Creator = () => {
             </div>
           </section>
         )}
-
       </main>
 
       <footer className="fixed bottom-0 left-0 right-0 p-6 bg-white/80 backdrop-blur-xl border-t border-slate-100 max-w-md mx-auto z-40">
