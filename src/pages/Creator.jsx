@@ -27,41 +27,56 @@ const Creator = ({ userStatus }) => {
   const [selectedTopics, setSelectedTopics] = useState([]);
   const [isWeatherEnabled, setIsWeatherEnabled] = useState(true);
   
-  // 실시간 날씨 상태 (기본값 null로 설정하여 로딩 감지)
-  const [weather, setWeather] = useState({ status: 'clear', desc: '불러오는 중...', temp: '--' });
+  // 실시간 날씨 상태 (대시보드와 동일한 기본값 설정)
+  const [weather, setWeather] = useState({ status: 'clear', desc: '맑음', temp: 20, loading: true });
   
   const [generatedData, setGeneratedData] = useState(null);
   const [activeTab, setActiveTab] = useState('blog');
   const [isCopied, setIsCopied] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
 
-  // 1. 실시간 날씨 연동 (영어 지역명 'Seoul' 사용으로 속도 최적화)
+  // 1. 실시간 날씨 연동 (대시보드와 100% 동일한 로직 및 타임아웃 적용)
   useEffect(() => {
     const fetchWeather = async () => {
       try {
-        const API_KEY = "643197669d0c64c7e47a9696328639f2"; 
-        // 한글 지역명 대신 영어 'Seoul' 사용
+        const API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
+        if (!API_KEY) {
+          setWeather({ status: 'clear', desc: '맑음', temp: 20, loading: false });
+          return;
+        }
+
+        // [핵심] 3초 타임아웃 적용하여 무한 로딩 방지
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+
         const response = await fetch(
-          `https://api.openweathermap.org/data/2.5/weather?q=Seoul&appid=${API_KEY}&units=metric&lang=kr`
+          `https://api.openweathermap.org/data/2.5/weather?q=Seoul&appid=${API_KEY}&units=metric&lang=kr`,
+          { signal: controller.signal }
         );
+        
+        clearTimeout(timeoutId);
         const data = await response.json();
         
-        if (data.weather && data.main) {
+        if (data.cod === 200) {
           const main = data.weather[0].main.toLowerCase();
           let status = 'clear';
-          if (main.includes('rain')) status = 'rain';
+          if (main.includes('rain') || main.includes('drizzle') || main.includes('thunderstorm')) status = 'rain';
           else if (main.includes('snow')) status = 'snow';
           else if (main.includes('cloud')) status = 'cloud';
 
           setWeather({
             status,
             desc: data.weather[0].description,
-            temp: Math.round(data.main.temp)
+            temp: Math.round(data.main.temp),
+            loading: false
           });
+        } else {
+          throw new Error("데이터 응답 오류");
         }
       } catch (error) {
-        console.error("날씨 데이터 호출 실패", error);
-        setWeather({ status: 'clear', desc: '맑음', temp: 20 }); // 에러 시 폴백
+        console.error("날씨 로드 실패 (기본값 사용):", error);
+        // 에러 시 멈추지 않고 즉시 기본값(20도)으로 세팅
+        setWeather({ status: 'clear', desc: '맑음', temp: 20, loading: false });
       }
     };
 
@@ -185,7 +200,7 @@ const Creator = ({ userStatus }) => {
       <header className="px-6 py-5 bg-white border-b border-slate-100 flex items-center justify-between sticky top-0 z-30">
         <div className="flex items-center gap-3 text-left">
           {step !== 'keyword' && (
-            <button onClick={() => setStep('keyword')} className="p-1 hover:bg-slate-100 rounded-lg">
+            <button onClick={() => setStep('keyword')} className="p-1 hover:bg-slate-100 rounded-lg transition-colors">
               <ArrowLeft size={20} className="text-slate-400" />
             </button>
           )}
@@ -193,7 +208,9 @@ const Creator = ({ userStatus }) => {
         </div>
         <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full min-w-[80px] justify-center">
           {getWeatherIcon(weather.status)}
-          <span className="text-[10px] font-black text-slate-700 uppercase">{weather.desc} {weather.temp}{weather.temp !== '--' ? '°C' : ''}</span>
+          <span className="text-[10px] font-black text-slate-700 uppercase">
+            {weather.loading ? '로딩 중' : `${weather.desc} ${weather.temp}°C`}
+          </span>
         </div>
       </header>
 
@@ -258,7 +275,7 @@ const Creator = ({ userStatus }) => {
                 </button>
               ))}
             </div>
-            <button onClick={() => setStep('keyword')} className="w-full py-4 text-slate-400 text-xs font-bold flex items-center justify-center gap-1">
+            <button onClick={() => setStep('keyword')} className="w-full py-4 text-slate-400 text-xs font-bold flex items-center justify-center gap-1 transition-colors hover:text-slate-600">
               <RefreshCw size={14} className="mr-1" /> 다른 주제 선택하기
             </button>
           </section>
