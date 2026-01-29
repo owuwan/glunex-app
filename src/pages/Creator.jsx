@@ -8,10 +8,18 @@ import {
 
 /**
  * [글루넥스 AI 마스터 프롬프트]
+ * 마케팅 전문가 페르소나를 강화하고 날씨와 키워드의 결합을 강조했습니다.
  */
 const SYSTEM_PROMPT = `
 당신은 대한민국 최고의 자동차 디테일링 전문 마케터입니다.
-사용자가 선택한 [시공 항목]과 [현재 날씨]를 분석하여 네이버 블로그, 인스타그램, 숏폼 대본을 작성하세요.
+사용자가 선택한 [시공 항목]과 [현재 날씨]를 분석하여 고객의 방문을 즉각 유도하는 제목 5개와 콘텐츠를 작성하세요.
+
+[지시사항]
+1. 제목(titles): 날씨 상황을 반드시 언급하여 시급함을 강조할 것. (예: "비 예보 있는 이번 주, 유리발수코팅 안 하면 위험한 이유")
+2. 블로그(blog_html): HTML 형식을 사용하며, 전문적인 공정 설명과 날씨에 따른 관리 팁을 포함할 것.
+3. 인스타그램(insta_text): 이모지와 해시태그를 풍부하게 사용한 감성 마케팅 문구.
+4. 숏폼(short_form): 15초 내외의 짧고 강렬한 후킹 멘트 위주의 대본.
+
 반드시 JSON 구조로만 응답하세요:
 {
   "titles": ["제목1", "제목2", "제목3", "제목4", "제목5"],
@@ -122,12 +130,24 @@ const Creator = ({ userStatus }) => {
     const apiKey = import.meta.env.VITE_FIREBASE_API_KEY; 
     const selectedNames = categories.filter(c => selectedTopics.includes(c.id)).map(c => c.name).join(', ');
     
+    // AI에게 전달할 상세 프롬프트 구성
+    const weatherInfo = isWeatherEnabled 
+      ? `현재 날씨는 '${weather.desc}'이며 기온은 ${weather.temp}도입니다.` 
+      : "날씨 정보는 고려하지 마세요.";
+    
+    const userPrompt = `
+      매장명: 글루 디테일링 (GLUNEX)
+      시공 항목: ${selectedNames}
+      날씨 정보: ${weatherInfo}
+      요청: 위 조건에 딱 맞는 블로그 제목 5개와 각 채널별 원고를 작성해줘.
+    `;
+
     try {
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: `시공 항목: ${selectedNames}, 현재 날씨: ${isWeatherEnabled ? weather.desc : '정보없음'}` }] }],
+          contents: [{ parts: [{ text: userPrompt }] }],
           systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
           generationConfig: { responseMimeType: "application/json" }
         })
@@ -138,7 +158,8 @@ const Creator = ({ userStatus }) => {
       setGeneratedData(content);
       setStep('title');
     } catch (error) {
-      alert("생성 중 오류가 발생했습니다.");
+      console.error(error);
+      alert("AI 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
     } finally {
       setLoading(false);
     }
@@ -181,6 +202,7 @@ const Creator = ({ userStatus }) => {
           <Sparkles className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-blue-600 animate-pulse" size={20} />
         </div>
         <p className="text-sm font-bold text-slate-900 tracking-tight">AI 에이전트가 원고를 작성 중입니다...</p>
+        <p className="text-[10px] text-slate-400 mt-2">날씨와 키워드를 분석하여 제목을 추출하고 있습니다.</p>
       </div>
     );
   }
@@ -196,15 +218,15 @@ const Creator = ({ userStatus }) => {
         </div>
       )}
 
-      {/* 헤더: 뒤로가기 버튼 로직 강화 (useNavigate 적용) */}
+      {/* 헤더 */}
       <header className="px-6 py-5 bg-white border-b border-slate-100 flex items-center justify-between sticky top-0 z-30">
         <div className="flex items-center gap-3 text-left">
           <button 
             onClick={() => {
               if (step === 'keyword') {
-                navigate('/dashboard'); // BrowserRouter 방식 내비게이션
+                navigate('/dashboard');
               } else {
-                setStep('keyword'); // 이전 단계로 이동
+                setStep('keyword');
               }
             }} 
             className="p-1 hover:bg-slate-100 rounded-lg transition-colors group"
@@ -238,7 +260,7 @@ const Creator = ({ userStatus }) => {
                   </button>
                 </div>
                 <p className="text-[11px] leading-relaxed opacity-80 font-medium text-left">
-                  {isWeatherEnabled ? `현재 ${weather.desc} 날씨에 맞춰 고객을 설득하는 문구를 자동으로 추가합니다.` : "날씨와 관계없이 일반적인 홍보용 원고를 작성합니다."}
+                  {isWeatherEnabled ? `현재 '${weather.desc}' 날씨에 맞춰 고객을 설득하는 제목을 우선적으로 추천합니다.` : "날씨와 관계없이 일반적인 홍보용 원고를 작성합니다."}
                 </p>
               </div>
             </section>
@@ -269,14 +291,17 @@ const Creator = ({ userStatus }) => {
 
         {step === 'title' && generatedData && (
           <section className="space-y-6 animate-fade-in text-left">
-            <h2 className="text-lg font-black text-slate-900 ml-1 text-left">제목을 선택하세요</h2>
+            <div className="px-1">
+              <h2 className="text-lg font-black text-slate-900 tracking-tight">가장 끌리는 제목을 선택하세요</h2>
+              <p className="text-xs text-slate-400 mt-1">AI가 추천하는 고효율 마케팅 제목입니다.</p>
+            </div>
             <div className="space-y-3 text-left">
               {generatedData.titles.map((title, idx) => (
                 <button key={idx} onClick={() => {
                   setGeneratedData(prev => ({ ...prev, currentTitle: title }));
                   setStep('result');
                 }}
-                className="w-full text-left p-6 rounded-[2rem] bg-white border border-slate-200 hover:border-blue-500 transition-all shadow-sm group"
+                className="w-full text-left p-6 rounded-[2rem] bg-white border border-slate-200 hover:border-blue-500 transition-all shadow-sm group active:scale-[0.98]"
                 >
                   <p className="text-sm font-bold text-slate-800 leading-relaxed group-hover:text-blue-600 text-left">{title}</p>
                 </button>
@@ -327,6 +352,10 @@ const Creator = ({ userStatus }) => {
                 )}
               </div>
             </div>
+            
+            <button onClick={() => setStep('keyword')} className="w-full py-4 bg-white border border-slate-200 text-slate-400 rounded-2xl font-bold text-xs">
+              처음부터 다시 작성하기
+            </button>
           </section>
         )}
       </main>
@@ -338,7 +367,7 @@ const Creator = ({ userStatus }) => {
               selectedTopics.length > 0 ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/10' : 'bg-slate-100 text-slate-300 cursor-not-allowed'
             }`}
           >
-            <Sparkles size={18} /> 제목 추천받기 <ArrowRight size={16} />
+            <Sparkles size={18} /> 제목 생성하기 <ArrowRight size={16} />
           </button>
         ) : (
           <button onClick={handleCopy}
