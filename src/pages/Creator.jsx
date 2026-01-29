@@ -1,8 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { 
   Sparkles, CloudRain, Sun, Snowflake, Cloud, 
   CheckCircle2, Zap, Layout, Instagram, Video, 
-  Copy, Check, ArrowLeft, ArrowRight, RefreshCw
+  Copy, Check, ArrowLeft, ArrowRight
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
@@ -23,17 +23,17 @@ const SYSTEM_PROMPT = `
 
 const Creator = () => {
   const { showToast, userStatus } = useApp();
+  
   const [step, setStep] = useState('keyword'); 
   const [loading, setLoading] = useState(false);
   const [selectedTopics, setSelectedTopics] = useState([]);
   const [isWeatherEnabled, setIsWeatherEnabled] = useState(true);
   const [weather] = useState({ status: 'rain', desc: '비', temp: 18 });
+  
   const [generatedData, setGeneratedData] = useState(null);
   const [activeTab, setActiveTab] = useState('blog');
   const [isCopied, setIsCopied] = useState(false);
-  const contentRef = useRef(null);
 
-  // 홍철님이 요청하신 12개 시공 카테고리
   const categories = [
     { id: 'wash', name: '세차' },
     { id: 'detailing', name: '디테일링' },
@@ -57,6 +57,7 @@ const Creator = () => {
 
   const handleGenerate = async () => {
     if (selectedTopics.length === 0) return alert("주제를 하나 이상 선택해주세요.");
+    
     if (userStatus !== 'approved') {
       const go = window.confirm("🔒 프리미엄 파트너 전용 기능입니다.\n멤버십 페이지로 이동하시겠습니까?");
       if(go) window.location.hash = '/mypage';
@@ -83,6 +84,7 @@ const Creator = () => {
       setGeneratedData(content);
       setStep('title');
     } catch (error) {
+      console.error(error);
       alert("생성 오류가 발생했습니다.");
     } finally {
       setLoading(false);
@@ -119,10 +121,10 @@ const Creator = () => {
 
   if (loading) {
     return (
-      <div className="flex flex-col h-full bg-white items-center justify-center animate-fade-in font-noto">
+      <div className="flex flex-col h-full bg-white items-center justify-center animate-fade-in font-noto text-center">
         <div className="relative mb-6">
-          <div className="w-20 h-20 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin"></div>
-          <Sparkles className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-blue-600 animate-pulse" size={24} />
+          <div className="w-16 h-16 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin"></div>
+          <Sparkles className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-blue-600 animate-pulse" size={20} />
         </div>
         <p className="text-sm font-bold text-slate-900">AI 에이전트가 원고 작성 중...</p>
       </div>
@@ -134,7 +136,7 @@ const Creator = () => {
       <header className="px-6 py-5 bg-white border-b border-slate-100 flex items-center justify-between sticky top-0 z-30">
         <div className="flex items-center gap-3">
           {step !== 'keyword' && (
-            <button onClick={() => setStep('keyword')} className="p-1 hover:bg-slate-100 rounded-lg">
+            <button onClick={() => setStep('keyword')} className="p-1 hover:bg-slate-100 rounded-lg transition-colors">
               <ArrowLeft size={20} className="text-slate-400" />
             </button>
           )}
@@ -154,12 +156,12 @@ const Creator = () => {
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
                     <Zap size={18} className={isWeatherEnabled ? 'text-blue-200' : 'text-blue-600'} />
-                    <h2 className="text-sm font-black uppercase tracking-tight">날씨연동 글쓰기</h2>
+                    <h2 className="text-sm font-black uppercase tracking-tight text-left">날씨연동 글쓰기</h2>
                   </div>
                   <button onClick={() => setIsWeatherEnabled(!isWeatherEnabled)}
                     className={`w-12 h-6 rounded-full relative transition-all duration-300 ${isWeatherEnabled ? 'bg-white/30' : 'bg-slate-200'}`}
                   >
-                    <div className={`absolute top-1 w-4 h-4 rounded-full transition-all duration-300 ${isWeatherEnabled ? 'right-1 bg-white' : 'left-1 bg-white shadow-sm'}`}></div>
+                    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all duration-300 ${isWeatherEnabled ? 'right-1' : 'left-1'}`}></div>
                   </button>
                 </div>
                 <p className="text-[11px] leading-relaxed opacity-80 font-medium text-left">
@@ -181,7 +183,7 @@ const Creator = () => {
                   >
                     {cat.name}
                     {selectedTopics.includes(cat.id) && (
-                      <div className="absolute top-1.5 right-1.5 text-blue-400">
+                      <div className="absolute top-1.5 right-1.5 text-blue-400 animate-fade-in">
                         <CheckCircle2 size={12} fill="currentColor" className="text-white" />
                       </div>
                     )}
@@ -208,7 +210,7 @@ const Creator = () => {
               ))}
             </div>
             <button onClick={() => setStep('keyword')} className="w-full py-4 text-slate-400 text-xs font-bold flex items-center justify-center gap-1">
-              <RefreshCw size={14} /> 다른 주제 선택하기
+              다른 주제 선택하기
             </button>
           </section>
         )}
@@ -237,7 +239,7 @@ const Creator = () => {
                   {isCopied ? <Check size={20} /> : <Copy size={20} />}
                 </button>
               </div>
-              <div className="pt-10 text-left" ref={contentRef}>
+              <div className="pt-10 text-left">
                 {activeTab === 'blog' ? (
                   <div className="prose prose-slate max-w-none">
                     <h2 className="text-xl font-black text-slate-900 mb-6 leading-tight border-l-4 border-blue-600 pl-4">{generatedData.currentTitle}</h2>
@@ -257,15 +259,15 @@ const Creator = () => {
       <footer className="fixed bottom-0 left-0 right-0 p-6 bg-white/80 backdrop-blur-xl border-t border-slate-100 max-w-md mx-auto z-40">
         {step === 'keyword' ? (
           <button onClick={handleGenerate} disabled={selectedTopics.length === 0}
-            className={`w-full py-5 rounded-[1.8rem] font-black text-sm flex items-center justify-center gap-3 transition-all ${
-              selectedTopics.length > 0 ? 'bg-slate-900 text-white shadow-xl' : 'bg-slate-100 text-slate-300 cursor-not-allowed'
+            className={`w-full py-5 rounded-[1.8rem] font-black text-sm flex items-center justify-center gap-3 transition-all active:scale-95 shadow-2xl ${
+              selectedTopics.length > 0 ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/10' : 'bg-slate-100 text-slate-300 cursor-not-allowed'
             }`}
           >
             <Sparkles size={18} /> 제목 추천받기 <ArrowRight size={16} />
           </button>
         ) : (
           <button onClick={handleCopy}
-            className="w-full py-5 bg-slate-900 text-white rounded-[1.8rem] font-black text-sm shadow-xl flex items-center justify-center gap-3 active:scale-95"
+            className="w-full py-5 bg-slate-900 text-white rounded-[1.8rem] font-black text-sm shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all"
           >
             {isCopied ? <Check size={18}/> : <Copy size={18}/>}
             {isCopied ? '복사 완료' : '전체 내용 복사하기'}
