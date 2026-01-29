@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Sparkles, CloudRain, Sun, Snowflake, Cloud, 
   CheckCircle2, Zap, Layout, Instagram, Video, 
@@ -21,8 +22,10 @@ const SYSTEM_PROMPT = `
 `;
 
 const Creator = ({ userStatus }) => {
+  const navigate = useNavigate();
+  
   // 상태 관리
-  const [step, setStep] = useState('keyword'); 
+  const [step, setStep] = useState('keyword'); // keyword -> title -> result
   const [loading, setLoading] = useState(false);
   const [selectedTopics, setSelectedTopics] = useState([]);
   const [isWeatherEnabled, setIsWeatherEnabled] = useState(true);
@@ -111,7 +114,7 @@ const Creator = ({ userStatus }) => {
     
     if (userStatus !== 'approved') {
       const go = window.confirm("🔒 프리미엄 파트너 전용 기능입니다.\n멤버십 페이지로 이동하시겠습니까?");
-      if(go) window.location.hash = '/mypage';
+      if(go) navigate('/mypage');
       return;
     }
 
@@ -193,13 +196,13 @@ const Creator = ({ userStatus }) => {
         </div>
       )}
 
-      {/* 헤더: 뒤로가기 버튼 로직 강화 */}
+      {/* 헤더: 뒤로가기 버튼 로직 강화 (useNavigate 적용) */}
       <header className="px-6 py-5 bg-white border-b border-slate-100 flex items-center justify-between sticky top-0 z-30">
         <div className="flex items-center gap-3 text-left">
           <button 
             onClick={() => {
               if (step === 'keyword') {
-                window.location.hash = '#/'; // 홈으로 이동
+                navigate('/dashboard'); // BrowserRouter 방식 내비게이션
               } else {
                 setStep('keyword'); // 이전 단계로 이동
               }
