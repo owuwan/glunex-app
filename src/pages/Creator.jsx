@@ -27,7 +27,7 @@ const Creator = ({ userStatus }) => {
   const [selectedTopics, setSelectedTopics] = useState([]);
   const [isWeatherEnabled, setIsWeatherEnabled] = useState(true);
   
-  // 실시간 날씨 상태 (대시보드와 동일한 기본값 설정)
+  // 실시간 날씨 상태
   const [weather, setWeather] = useState({ status: 'clear', desc: '맑음', temp: 20, loading: true });
   
   const [generatedData, setGeneratedData] = useState(null);
@@ -35,7 +35,7 @@ const Creator = ({ userStatus }) => {
   const [isCopied, setIsCopied] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
 
-  // 1. 실시간 날씨 연동 (대시보드와 100% 동일한 로직 및 타임아웃 적용)
+  // 실시간 날씨 연동 (타임아웃 적용)
   useEffect(() => {
     const fetchWeather = async () => {
       try {
@@ -45,7 +45,6 @@ const Creator = ({ userStatus }) => {
           return;
         }
 
-        // [핵심] 3초 타임아웃 적용하여 무한 로딩 방지
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 3000);
 
@@ -71,11 +70,9 @@ const Creator = ({ userStatus }) => {
             loading: false
           });
         } else {
-          throw new Error("데이터 응답 오류");
+          throw new Error("Data Error");
         }
       } catch (error) {
-        console.error("날씨 로드 실패 (기본값 사용):", error);
-        // 에러 시 멈추지 않고 즉시 기본값(20도)으로 세팅
         setWeather({ status: 'clear', desc: '맑음', temp: 20, loading: false });
       }
     };
@@ -138,7 +135,6 @@ const Creator = ({ userStatus }) => {
       setGeneratedData(content);
       setStep('title');
     } catch (error) {
-      console.error(error);
       alert("생성 중 오류가 발생했습니다.");
     } finally {
       setLoading(false);
@@ -181,7 +177,7 @@ const Creator = ({ userStatus }) => {
           <div className="w-16 h-16 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin mx-auto"></div>
           <Sparkles className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-blue-600 animate-pulse" size={20} />
         </div>
-        <p className="text-sm font-bold text-slate-900 tracking-tight">AI 에이전트가 맞춤 원고를 작성 중입니다...</p>
+        <p className="text-sm font-bold text-slate-900 tracking-tight">AI 에이전트가 원고를 작성 중입니다...</p>
       </div>
     );
   }
@@ -197,13 +193,21 @@ const Creator = ({ userStatus }) => {
         </div>
       )}
 
+      {/* 헤더: 뒤로가기 버튼 로직 강화 */}
       <header className="px-6 py-5 bg-white border-b border-slate-100 flex items-center justify-between sticky top-0 z-30">
         <div className="flex items-center gap-3 text-left">
-          {step !== 'keyword' && (
-            <button onClick={() => setStep('keyword')} className="p-1 hover:bg-slate-100 rounded-lg transition-colors">
-              <ArrowLeft size={20} className="text-slate-400" />
-            </button>
-          )}
+          <button 
+            onClick={() => {
+              if (step === 'keyword') {
+                window.location.hash = '#/'; // 홈으로 이동
+              } else {
+                setStep('keyword'); // 이전 단계로 이동
+              }
+            }} 
+            className="p-1 hover:bg-slate-100 rounded-lg transition-colors group"
+          >
+            <ArrowLeft size={20} className="text-slate-400 group-hover:text-slate-900 transition-colors" />
+          </button>
           <h1 className="text-xl font-black text-slate-900 tracking-tighter italic uppercase">Glunex <span className="text-blue-600">Ai</span></h1>
         </div>
         <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full min-w-[80px] justify-center">
