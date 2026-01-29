@@ -4,12 +4,13 @@ import {
   Sparkles, CloudRain, Sun, Snowflake, Cloud, 
   CheckCircle2, Zap, Layout, Instagram, Video, 
   Copy, Check, ArrowLeft, ArrowRight, RefreshCw,
-  Loader2, AlertCircle, Thermometer, Info,
-  Smartphone, Monitor, ChevronRight, Wand2
+  Loader2, AlertCircle, Thermometer, Wand2,
+  Info, Smartphone, Monitor, ChevronRight
 } from 'lucide-react';
 
 /**
  * [글루넥스 AI 마스터 프롬프트]
+ * 제미니 엔진이 대한민국 최고의 자동차 마케팅 전문가로서 응답하도록 설정합니다.
  */
 const SYSTEM_PROMPT = `
 당신은 대한민국 최고의 자동차 디테일링 전문 마케터이자 '글루넥스(GLUNEX)'의 수석 카피라이터입니다.
@@ -21,7 +22,7 @@ const SYSTEM_PROMPT = `
    - 전문성과 신뢰감이 느껴지는 전문직 어조를 사용하되, 사장님의 친절함과 디테일이 묻어나야 함.
    - HTML 태그(h2, p, br, strong, ul, li 등)를 사용하여 네이버 블로그에 최적화된 가독성 확보.
    - 시공 전(오염), 시공 중(노하우), 시공 후(결과)의 과정을 드라마틱하게 설명.
-3. 인스타그램(insta_text): 해시태그(#)와 이모지를 풍부하게 사용하여 방문을 유도하는 감성 마케팅 문구 작성.
+3. 인스타그램(insta_text): 해시태그(#)와 이모지를 풍부하게 사용하여 방문을 유도하는 감성 문구 작성.
 4. 숏폼(short_form): 15초 내외의 빠른 템포 편집점과 자막 내용을 포함한 강렬한 후킹 대본.
 
 반드시 다른 설명 없이 아래와 같은 순수 JSON 구조로만 응답하세요:
@@ -36,17 +37,27 @@ const SYSTEM_PROMPT = `
 const Creator = ({ userStatus }) => {
   const navigate = useNavigate();
   
-  const [step, setStep] = useState('keyword'); 
+  // --- 상태 관리 (모든 UI 기능 유지) ---
+  const [step, setStep] = useState('keyword'); // keyword -> title -> result
   const [loading, setLoading] = useState(false);
   const [selectedTopics, setSelectedTopics] = useState([]);
   const [isWeatherEnabled, setIsWeatherEnabled] = useState(true);
-  const [weather, setWeather] = useState({ status: 'clear', desc: '맑음', temp: 20, loading: true });
+  
+  // 실시간 날씨 상태 (기본값 및 로딩 상태)
+  const [weather, setWeather] = useState({ 
+    status: 'clear', 
+    desc: '맑음', 
+    temp: 20, 
+    loading: true 
+  });
+  
   const [generatedData, setGeneratedData] = useState(null);
   const [activeTab, setActiveTab] = useState('blog');
   const [isCopied, setIsCopied] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
   const contentRef = useRef(null);
 
+  // --- 실시간 날씨 연동 (대시보드 로직과 100% 동기화) ---
   useEffect(() => {
     const fetchWeather = async () => {
       try {
@@ -55,26 +66,39 @@ const Creator = ({ userStatus }) => {
           setWeather({ status: 'clear', desc: '맑음', temp: 20, loading: false });
           return;
         }
+
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 3500);
+
         const response = await fetch(
           `https://api.openweathermap.org/data/2.5/weather?q=Seoul&appid=${API_KEY}&units=metric&lang=kr`,
           { signal: controller.signal }
         );
+        
         clearTimeout(timeoutId);
         const data = await response.json();
+        
         if (data.cod === 200) {
           const main = data.weather[0].main.toLowerCase();
           let status = 'clear';
           if (main.includes('rain') || main.includes('drizzle') || main.includes('thunderstorm')) status = 'rain';
           else if (main.includes('snow')) status = 'snow';
           else if (main.includes('cloud')) status = 'cloud';
-          setWeather({ status, desc: data.weather[0].description, temp: Math.round(data.main.temp), loading: false });
-        } else { throw new Error(); }
+
+          setWeather({
+            status,
+            desc: data.weather[0].description,
+            temp: Math.round(data.main.temp),
+            loading: false
+          });
+        } else {
+          throw new Error("Weather API Response Error");
+        }
       } catch (error) {
         setWeather({ status: 'clear', desc: '맑음', temp: 20, loading: false });
       }
     };
+
     fetchWeather();
   }, []);
 
@@ -83,34 +107,46 @@ const Creator = ({ userStatus }) => {
     setTimeout(() => setToastMsg(""), 3000);
   };
 
+  // 12개 시공 카테고리 (홍철님 확정 목록)
   const categories = [
-    { id: 'wash', name: '세차' }, { id: 'detailing', name: '디테일링' },
-    { id: 'coating', name: '유리막코팅' }, { id: 'undercoating', name: '언더코팅' },
-    { id: 'special_wash', name: '실내특수세차' }, { id: 'interior_clean', name: '실내크리닝' },
-    { id: 'iron_remove', name: '철분제거' }, { id: 'glass_repel', name: '유리발수코팅' },
-    { id: 'tinting', name: '썬팅' }, { id: 'blackbox', name: '블랙박스' },
-    { id: 'new_car', name: '신차패키지' }, { id: 'leather_coating', name: '가죽코팅' }
+    { id: 'wash', name: '세차' },
+    { id: 'detailing', name: '디테일링' },
+    { id: 'coating', name: '유리막코팅' },
+    { id: 'undercoating', name: '언더코팅' },
+    { id: 'special_wash', name: '실내특수세차' },
+    { id: 'interior_clean', name: '실내크리닝' },
+    { id: 'iron_remove', name: '철분제거' },
+    { id: 'glass_repel', name: '유리발수코팅' },
+    { id: 'tinting', name: '썬팅' },
+    { id: 'blackbox', name: '블랙박스' },
+    { id: 'new_car', name: '신차패키지' },
+    { id: 'leather_coating', name: '가죽코팅' }
   ];
 
   const toggleTopic = (id) => {
-    setSelectedTopics(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id]);
+    setSelectedTopics(prev => 
+      prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id]
+    );
   };
 
-  // [중요] AI가 보내준 텍스트에서 JSON만 쏙 뽑아내는 안전장치 함수
+  // [핵심] AI 응답에서 JSON 데이터만 안전하게 추출하는 로직
   const extractJson = (text) => {
     try {
       const jsonStart = text.indexOf('{');
       const jsonEnd = text.lastIndexOf('}') + 1;
       if (jsonStart === -1 || jsonEnd === -1) throw new Error("JSON 형식을 찾을 수 없음");
-      return JSON.parse(text.slice(jsonStart, jsonEnd));
+      const cleanJson = text.slice(jsonStart, jsonEnd);
+      return JSON.parse(cleanJson);
     } catch (e) {
       console.error("JSON 파싱 에러:", e);
       return null;
     }
   };
 
+  // --- AI 콘텐츠 생성 핸들러 (Gemini 1.5 Flash 최적화) ---
   const handleGenerate = async () => {
     if (selectedTopics.length === 0) return alert("주제를 하나 이상 선택해주세요.");
+    
     if (userStatus !== 'approved') {
       const go = window.confirm("🔒 AI 마케팅 기능은 '프리미엄 파트너' 전용입니다.\n멤버십 페이지로 이동하여 승인을 요청하시겠습니까?");
       if(go) navigate('/mypage');
@@ -122,7 +158,7 @@ const Creator = ({ userStatus }) => {
     
     if (!apiKey) {
       setLoading(false);
-      alert("⚠️ API 키가 설정되지 않았습니다. Vercel 환경 변수를 확인해주세요.");
+      alert("API 설정 오류: Vercel 대시보드에서 VITE_FIREBASE_API_KEY를 확인해주세요.");
       return;
     }
 
@@ -143,22 +179,20 @@ const Creator = ({ userStatus }) => {
         body: JSON.stringify({
           contents: [{ parts: [{ text: userPrompt }] }],
           systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-          generationConfig: { temperature: 0.7 }
+          generationConfig: { 
+            responseMimeType: "application/json",
+            temperature: 0.8 
+          }
         })
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error("API Error Detail:", errorData);
-        throw new Error(errorData.error?.message || "API 호출 실패");
+        const errInfo = await response.json();
+        throw new Error(errInfo.error?.message || "AI 엔진 응답 실패");
       }
 
       const resData = await response.json();
-      const rawText = resData.candidates?.[0]?.content?.parts?.[0]?.text;
-      
-      if (!rawText) throw new Error("AI 응답 내용이 비어있습니다.");
-
-      // 추출 함수 사용 (껍데기 제거)
+      const rawText = resData.candidates[0].content.parts[0].text;
       const content = extractJson(rawText);
       
       if (!content) {
@@ -168,20 +202,23 @@ const Creator = ({ userStatus }) => {
       setGeneratedData(content);
       setStep('title');
     } catch (error) {
-      console.error("AI 생성 최종 실패:", error);
-      alert(`❌ 오류 발생: ${error.message}\n\n잠시 후 '제목 생성하기'를 다시 눌러주세요.`);
+      console.error("AI 생성 실패:", error);
+      alert(`AI 생성 중 오류가 발생했습니다: ${error.message}\n\n잠시 후 다시 시도해 주세요.`);
     } finally {
       setLoading(false);
     }
   };
 
+  // --- 복사 핸들러 (HTML/텍스트 자동 구분) ---
   const handleCopy = async () => {
     if (!generatedData) return;
     const text = activeTab === 'blog' ? generatedData.blog_html : (activeTab === 'insta' ? generatedData.insta_text : generatedData.short_form);
+    
     try {
       if (activeTab === 'blog') {
         const blob = new Blob([text], { type: "text/html" });
-        await navigator.clipboard.write([new ClipboardItem({ ["text/html"]: blob })]);
+        const data = [new ClipboardItem({ ["text/html"]: blob })];
+        await navigator.clipboard.write(data);
       } else {
         await navigator.clipboard.writeText(text);
       }
@@ -189,7 +226,7 @@ const Creator = ({ userStatus }) => {
       showLocalToast("클립보드에 복사되었습니다!");
       setTimeout(() => setIsCopied(false), 2000);
     } catch (err) {
-      alert("복사 실패");
+      alert("복사 실패: 브라우저의 클립보드 권한을 확인해주세요.");
     }
   };
 
@@ -202,6 +239,7 @@ const Creator = ({ userStatus }) => {
     }
   };
 
+  // --- 로딩 화면 (애니메이션 강화) ---
   if (loading) {
     return (
       <div className="flex flex-col h-full bg-white items-center justify-center animate-fade-in font-noto p-8 text-center">
@@ -209,10 +247,10 @@ const Creator = ({ userStatus }) => {
           <div className="w-24 h-24 border-[6px] border-slate-100 border-t-blue-600 rounded-full animate-spin mx-auto shadow-inner"></div>
           <Sparkles className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-blue-600 animate-pulse" size={28} />
         </div>
-        <h2 className="text-2xl font-black text-slate-900 mb-3 tracking-tight">AI 마케팅 원고 집필 중...</h2>
-        <div className="space-y-1">
-          <p className="text-sm text-slate-500 font-medium leading-relaxed italic">"날씨 데이터를 분석하여 최고의 제목을 추출하고 있습니다."</p>
-          <p className="text-[11px] text-slate-400">잠시만 기다려주세요 (약 3~5초 소요)</p>
+        <h2 className="text-2xl font-black text-slate-900 mb-3 tracking-tight italic uppercase leading-none">Glunex <span className="text-blue-600">Ai</span> Agent</h2>
+        <div className="space-y-1 mt-4">
+          <p className="text-sm text-slate-500 font-medium leading-relaxed">"현재 날씨와 선택하신 키워드를 분석하여<br/>최고의 마케팅 원고를 작성하고 있습니다."</p>
+          <p className="text-[11px] text-slate-400 mt-2 tracking-widest">PROCESING DATA...</p>
         </div>
       </div>
     );
@@ -220,17 +258,26 @@ const Creator = ({ userStatus }) => {
 
   return (
     <div className="h-full flex flex-col bg-[#F8F9FB] font-noto overflow-hidden relative text-left">
+      
+      {/* 플로팅 토스트 알림 */}
       {toastMsg && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[9999] animate-bounce">
-          <div className="bg-slate-900 text-white px-8 py-4 rounded-3xl text-sm font-bold shadow-2xl flex items-center gap-3 border border-slate-700">
+          <div className="bg-slate-900 text-white px-8 py-4 rounded-3xl text-sm font-bold shadow-2xl flex items-center gap-3 border border-slate-700 backdrop-blur-md">
             <CheckCircle2 size={18} className="text-green-400" /> {toastMsg}
           </div>
         </div>
       )}
 
+      {/* 상단 헤더 섹션 */}
       <header className="px-6 py-6 bg-white border-b border-slate-100 flex items-center justify-between sticky top-0 z-30 shadow-sm">
         <div className="flex items-center gap-3">
-          <button onClick={() => step === 'keyword' ? navigate('/dashboard') : setStep('keyword')} className="p-2 hover:bg-slate-100 rounded-xl transition-all group active:scale-90">
+          <button 
+            onClick={() => {
+              if (step === 'keyword') navigate('/dashboard');
+              else setStep('keyword');
+            }} 
+            className="p-2 hover:bg-slate-100 rounded-xl transition-all group active:scale-90"
+          >
             <ArrowLeft size={22} className="text-slate-400 group-hover:text-slate-900" />
           </button>
           <div>
@@ -247,6 +294,8 @@ const Creator = ({ userStatus }) => {
       </header>
 
       <main className="flex-1 overflow-y-auto p-6 space-y-8 pb-40">
+        
+        {/* [1단계] 키워드 및 날씨 연동 선택 화면 */}
         {step === 'keyword' && (
           <>
             <section className="animate-fade-in text-left">
@@ -264,8 +313,8 @@ const Creator = ({ userStatus }) => {
                 </div>
                 <p className="text-xs leading-relaxed opacity-90 font-medium text-left">
                   {isWeatherEnabled 
-                    ? `현재 '${weather.desc}' 날씨에 고객이 가장 불안해하거나 필요로 하는 포인트를 분석하여 제목을 생성합니다.` 
-                    : "날씨 상황을 배제하고 품목의 장점을 부각하는 마케팅 원고를 생성합니다."}
+                    ? `현재 '${weather.desc}' 날씨에 고객이 가장 불안해하거나 필요로 하는 포인트를 분석하여 "클릭을 부르는 제목"을 생성합니다.` 
+                    : "날씨 상황을 배제하고 시공 항목의 장점을 부각하는 일반적인 마케팅 원고를 생성합니다."}
                 </p>
               </div>
             </section>
@@ -275,10 +324,13 @@ const Creator = ({ userStatus }) => {
                  <h2 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
                     <Wand2 size={18} className="text-blue-600" /> 어떤 주제로 글을 쓸까요?
                  </h2>
+                 <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-lg border border-blue-100 uppercase">Multi-select</span>
               </div>
               <div className="grid grid-cols-3 gap-2.5">
                 {categories.map((cat) => (
-                  <button key={cat.id} onClick={() => toggleTopic(cat.id)}
+                  <button 
+                    key={cat.id} 
+                    onClick={() => toggleTopic(cat.id)}
                     className={`relative py-6 px-2 rounded-2xl border-2 transition-all duration-300 ${
                       selectedTopics.includes(cat.id)
                         ? 'bg-slate-900 border-slate-900 text-white shadow-2xl scale-[1.05] z-10 font-black'
@@ -298,35 +350,49 @@ const Creator = ({ userStatus }) => {
           </>
         )}
 
+        {/* [2단계] 생성된 제목 리스트 선택 화면 */}
         {step === 'title' && generatedData && (
           <section className="space-y-8 animate-fade-in text-left">
             <div className="px-1">
-              <h2 className="text-2xl font-black text-slate-900 tracking-tight leading-tight">가장 끌리는 제목을<br/>선택해 주세요</h2>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="bg-blue-600 text-white text-[10px] font-black px-2 py-0.5 rounded uppercase shadow-sm">AI Recommended</span>
+              </div>
+              <h2 className="text-2xl font-black text-slate-900 tracking-tight leading-tight">가장 끌리는 제목을<br/>하나만 선택해 주세요</h2>
+              <p className="text-sm text-slate-400 mt-2 font-medium">데이터 분석을 통한 고효율 블로그 제목들입니다.</p>
             </div>
             <div className="space-y-4">
               {generatedData.titles.map((title, idx) => (
-                <button key={idx} onClick={() => { setGeneratedData(prev => ({ ...prev, currentTitle: title })); setStep('result'); }}
+                <button 
+                  key={idx} 
+                  onClick={() => {
+                    setGeneratedData(prev => ({ ...prev, currentTitle: title }));
+                    setStep('result');
+                  }}
                   className="w-full text-left p-7 rounded-[2.2rem] bg-white border border-slate-100 hover:border-blue-500 hover:shadow-xl transition-all shadow-sm group active:scale-95"
                 >
                   <p className="text-base font-black text-slate-800 leading-snug group-hover:text-blue-600 tracking-tight">{title}</p>
                 </button>
               ))}
             </div>
-            <button onClick={() => setStep('keyword')} className="w-full py-5 text-slate-400 text-xs font-black flex items-center justify-center gap-2 hover:text-slate-900 transition-colors uppercase tracking-widest">
-              <RefreshCw size={14} /> 다른 주제 선택
+            <button onClick={() => setStep('keyword')} className="w-full py-5 text-slate-400 text-xs font-black flex items-center justify-center gap-2 hover:text-slate-900 transition-colors uppercase tracking-widest mt-4">
+              <RefreshCw size={14} /> 다른 주제로 다시 생성하기
             </button>
           </section>
         )}
 
+        {/* [3단계] 최종 채널별 원고 결과 화면 */}
         {step === 'result' && generatedData && (
           <section className="space-y-6 animate-fade-in pb-10">
+            {/* 채널 선택 탭 메뉴 */}
             <div className="flex bg-slate-200/50 p-1.5 rounded-[1.5rem] border border-slate-100 shadow-inner">
               {[
                 { id: 'blog', name: '블로그', icon: <Layout size={15}/> },
                 { id: 'insta', name: '인스타', icon: <Instagram size={15}/> },
                 { id: 'short', name: '숏폼', icon: <Video size={15}/> }
               ].map(tab => (
-                <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                <button 
+                  key={tab.id} 
+                  onClick={() => setActiveTab(tab.id)}
                   className={`flex-1 py-3.5 rounded-2xl text-[13px] font-black flex items-center justify-center gap-2.5 transition-all ${
                     activeTab === tab.id ? 'bg-slate-900 text-white shadow-xl scale-[1.02]' : 'text-slate-500 hover:text-slate-700'
                   }`}
@@ -336,27 +402,47 @@ const Creator = ({ userStatus }) => {
               ))}
             </div>
 
+            {/* 원고 카드 본문 */}
             <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-2xl min-h-[550px] relative overflow-hidden group">
               <div className="absolute top-8 right-8 z-10">
-                <button onClick={handleCopy} className={`p-4 rounded-2xl border transition-all shadow-lg active:scale-90 ${isCopied ? 'bg-green-50 border-green-200 text-green-600' : 'bg-slate-900 border-slate-800 text-white hover:bg-slate-800'}`}>
+                <button 
+                  onClick={handleCopy} 
+                  className={`p-4 rounded-2xl border transition-all shadow-lg active:scale-90 ${isCopied ? 'bg-green-50 border-green-200 text-green-600' : 'bg-slate-900 border-slate-800 text-white hover:bg-slate-800'}`}
+                >
                   {isCopied ? <Check size={22} /> : <Copy size={22} />}
                 </button>
               </div>
+
               <div className="pt-12 text-left" ref={contentRef}>
                 {activeTab === 'blog' ? (
                   <article className="prose prose-slate max-w-none">
                     <div className="mb-10 pb-6 border-b border-slate-50">
-                        <h2 className="text-2xl font-black text-slate-900 leading-tight tracking-tighter italic border-l-[6px] border-blue-600 pl-5">{generatedData.currentTitle}</h2>
+                        <span className="text-blue-600 font-black text-xs uppercase tracking-widest block mb-2">Recommended Blog Title</span>
+                        <h2 className="text-2xl font-black text-slate-900 leading-tight tracking-tighter italic border-l-[6px] border-blue-600 pl-5">
+                          {generatedData.currentTitle}
+                        </h2>
                     </div>
                     <div className="text-[15px] leading-[1.8] text-slate-700 font-medium space-y-6 font-noto" dangerouslySetInnerHTML={{ __html: generatedData.blog_html }} />
                   </article>
                 ) : (
-                  <pre className="whitespace-pre-wrap font-noto text-sm text-slate-700 leading-relaxed font-bold bg-slate-50 p-6 rounded-3xl border border-slate-100">
-                    {activeTab === 'insta' ? generatedData.insta_text : generatedData.short_form}
-                  </pre>
+                  <div className="pt-8">
+                    <div className="flex items-center gap-2 mb-6">
+                       <span className="bg-blue-600 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-tighter shadow-sm">
+                          {activeTab === 'insta' ? 'Instagram Content' : 'Short-form Script'}
+                       </span>
+                    </div>
+                    <pre className="whitespace-pre-wrap font-noto text-sm text-slate-700 leading-relaxed font-bold bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                      {activeTab === 'insta' ? generatedData.insta_text : generatedData.short_form}
+                    </pre>
+                  </div>
                 )}
               </div>
+              
+              <div className="mt-12 pt-8 border-t border-slate-50 text-center">
+                 <p className="text-[10px] text-slate-300 font-bold uppercase tracking-[0.3em]">Glunex AI Marketing Engine v2.0</p>
+              </div>
             </div>
+            
             <button onClick={() => setStep('keyword')} className="w-full py-5 bg-white border border-slate-200 text-slate-500 rounded-[1.8rem] font-black text-xs hover:bg-slate-50 transition-all shadow-sm active:scale-[0.98]">
               다시 처음부터 시작하기
             </button>
@@ -364,18 +450,29 @@ const Creator = ({ userStatus }) => {
         )}
       </main>
 
+      {/* 하단 고정 인터랙티브 버튼 바 */}
       <footer className="fixed bottom-0 left-0 right-0 p-6 bg-white/80 backdrop-blur-2xl border-t border-slate-100 max-w-md mx-auto z-40 shadow-[0_-10px_30px_rgba(0,0,0,0.03)]">
         {step === 'keyword' ? (
-          <button onClick={handleGenerate} disabled={selectedTopics.length === 0}
+          <button 
+            onClick={handleGenerate} 
+            disabled={selectedTopics.length === 0}
             className={`w-full py-5 rounded-[2.2rem] font-black text-[15px] flex items-center justify-center gap-3 transition-all active:scale-95 shadow-2xl ${
-              selectedTopics.length > 0 ? 'bg-slate-900 text-white shadow-slate-900/30' : 'bg-slate-100 text-slate-300 cursor-not-allowed'
+              selectedTopics.length > 0 
+                ? 'bg-slate-900 text-white shadow-slate-900/30' 
+                : 'bg-slate-100 text-slate-300 cursor-not-allowed'
             }`}
           >
-            <Sparkles size={20} className="text-amber-400" /> 제목 생성하기 <ArrowRight size={18} />
+            <Sparkles size={20} className="text-amber-400" />
+            제목 생성하기
+            <ArrowRight size={18} />
           </button>
         ) : (
-          <button onClick={handleCopy} className="w-full py-5 bg-slate-900 text-white rounded-[2.2rem] font-black text-[15px] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all shadow-slate-900/20">
-            {isCopied ? <CheckCircle2 size={20} className="text-green-400"/> : <Copy size={20}/>} {isCopied ? '복사 완료!' : '전체 내용 복사하기'}
+          <button 
+            onClick={handleCopy}
+            className="w-full py-5 bg-slate-900 text-white rounded-[2.2rem] font-black text-[15px] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all shadow-slate-900/20"
+          >
+            {isCopied ? <CheckCircle2 size={20} className="text-green-400"/> : <Copy size={20}/>}
+            {isCopied ? '복사 완료!' : '전체 내용 복사하기'}
           </button>
         )}
       </footer>
