@@ -35,17 +35,25 @@ const SYSTEM_PROMPT_CONTENT = `
    - 상호명(글루넥스, GLUNEX 등)은 절대로 언급하지 마세요. 전문적인 용어와 공정 설명을 사용하세요.
    - HTML 태그(h2, p, br, strong)를 사용하세요. h2는 목차 제목으로 사용하세요.
 2. 이미지 프롬프트 (image_prompts):
-   - 각 목차 주제에 맞는 구체적인 영문 프롬프트를 작성하세요.
-   - [필수 시각적 고증]:
-     * 유리막코팅: "A small black rectangular coating block wrapped in a blue suede cloth held by a hand" (대형 스펀지 절대 금지)
-     * 발수코팅: "Dense, tight spherical water beading on a car windshield or hood" (공중에 뜬 물방울 금지)
-     * 철분제거: "Deep purple chemical reaction (bleeding) melting off from the silver car wheels"
-     * 세차/오염: "Real mud splashes on wheel wells, yellow pollen dust on the hood, or water streaks on a dirty car"
-   - [한국식 배경 고정]:
-     * 실내: "Korean premium detailing studio, grid-pattern LED ceiling lights, glossy grey epoxy floor"
-     * 야외/주차장: "Typical Korean apartment underground parking lot, green urethane floor, white pillars with column numbers"
-     * 번호판: "Long white Korean license plate (e.g., 123가 4567)"
-   - [사진 스타일]: "A raw, unpolished handheld photo taken on iPhone 15 Pro, natural harsh fluorescent lighting, realistic documentary style, no artificial filters, no text, no logo."
+   - 각 목차 주제에 맞게 아래 [시공별 도구 가이드]를 준수하여 영문 프롬프트를 작성하세요.
+   - [공통 스타일]: "A raw, handheld photo taken on iPhone 15 Pro, harsh fluorescent lighting, realistic documentary style, no filters. License plate MUST be blurred or censored."
+   - [공통 배경]: 
+     * 실내: "Modern Korean detailing shop, grid-pattern LED ceiling lights, glossy grey epoxy floor, Korean text signs in the distance."
+     * 야외: "Korean apartment underground parking lot, green urethane floor, white concrete pillars with parking numbers."
+   
+   - [시공별 도구 가이드 (반드시 준수)]:
+     * 유리막코팅(Coating): "Hand holding a black rectangular coating block wrapped in a thin blue suede cloth, applying a thin, wet, transparent liquid streak (No thick blobs, no sponges)."
+     * 세차(Wash): "Lambswool wash mitt with fine white car shampoo bubbles (No thick foam clumps)."
+     * 실내크리닝(Interior): "Small detailing brush cleaning air vents or leather seat creases, high-end steam cleaner nozzle."
+     * 철분제거(Iron): "Realistic deep purple chemical reaction bleeding and dripping from silver multi-spoke wheels."
+     * 발수코팅(Glass Repel): "Small square applicator pad on a windshield, tiny and dense spherical water beads."
+     * 썬팅(Tinting): "Yellow squeegee pushing water out from a dark film on a wet car window, heat gun on a side table."
+     * 가죽코팅(Leather): "Soft circular applicator pad applying a thin sheen to a black leather bolster."
+     * 언더코팅(Undercoating): "Car on a hydraulic lift, technician using a long spray gun to apply black textured coating to the undercarriage."
+     * 유분/철분제거: "Clay bar being rubbed on a wet car surface with lubricant."
+     * 신차패키지/블랙박스: "Technician's hands wiring a small dashcam behind the rearview mirror, plastic interior trim removed."
+   
+   - [금지 사항]: "No large yellow sponges, no thick white cream blobs, no American-style brick garages, no clean/perfect studio lighting, no clear license plate numbers."
 
 [출력 형식]
 JSON으로만 응답하세요:
