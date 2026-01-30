@@ -26,7 +26,7 @@ const SYSTEM_PROMPT_INDEX = `
 `;
 
 const SYSTEM_PROMPT_CONTENT = `
-당신은 대한민국 자동차 외장관리 전문가입니다. 선정된 5개 목차를 바탕으로 블로그 본문과 Flux Pro v1.1 전용 고해상도 실사 이미지 프롬프트를 생성하세요.
+당신은 대한민국 자동차 외장관리 전문가입니다. 선정된 5개 목차를 바탕으로 블로그 본문과 Flux Pro v1.1 전용 실사 이미지 프롬프트를 생성하세요.
 
 [1단계: 본문 작성 지침]
 - 각 목차별 본문 내용은 공백 제외 450~550자 사이로 아주 상세하게 작성하세요. (전체 최소 2,250자 이상 필수)
@@ -89,7 +89,7 @@ const Creator = ({ userStatus }) => {
       "읽기 편하고 설득력 있는 스토리보드를 짜고 있습니다"
     ],
     content: [
-      "실제 현장의 생생함을 담은 이미지를 초고화질로 현상하고 있습니다",
+      "실제 현장의 생생함을 담은 이미지를 현상하고 있습니다",
       "디테일링 전문가의 깊이가 느껴지는 상세 공정 원고를 집필 중입니다",
       "네이버 블로그 알고리즘에 최적화된 포스팅을 완성하고 있습니다",
       "마지막 검수를 통해 문장의 디테일을 다듬는 중입니다"
@@ -157,6 +157,9 @@ const Creator = ({ userStatus }) => {
     return JSON.parse(resData.candidates[0].content.parts[0].text);
   };
 
+  /**
+   * [수정] 해상도 최적화 ($0.02 타겟)
+   */
   const callFalAI = async (prompt) => {
     const apiKey = import.meta.env.VITE_FAL_API_KEY;
     if (!apiKey || apiKey === "undefined") return null;
@@ -166,7 +169,7 @@ const Creator = ({ userStatus }) => {
         headers: { "Authorization": `Key ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: prompt,
-          image_size: { width: 896, height: 672 } // 비용 최적화 ($0.015 수준)
+          image_size: { width: 896, height: 672 } // 최적 해상도로 비용 조절
         })
       });
       const data = await response.json();
@@ -215,14 +218,13 @@ const Creator = ({ userStatus }) => {
 
       let finalHtml = data.blog_html;
       images.forEach((url, i) => {
+        // [수정] 복사 호환성을 위해 불필요한 스타일 제거 및 표준 <img> 태그 사용
         const replacement = url ? `
-          <div class="blog-image-wrapper" style="margin: 30px 0; border-radius: 20px; overflow: hidden; border: 1px solid #f1f5f9;">
-            <img src="${url}" style="width: 100%; display: block; border-radius: 20px;" alt="시공사진" />
-            <div style="padding: 10px; background: #fff; text-align: center; border-top: 1px solid #f8fafc;">
-              <span style="font-size: 10px; color: #94a3b8; font-weight: bold; letter-spacing: 1px;">Raw Shot | Captured On-Site</span>
-            </div>
+          <div style="margin: 30px 0; text-align: center;">
+            <img src="${url}" style="width: 100%; max-width: 896px; border-radius: 15px; border: 1px solid #eee;" alt="시공사진" />
+            <p style="margin-top: 8px; font-size: 10px; color: #999; letter-spacing: 1px;">Shot on iPhone 15 Pro | Raw Snapshot</p>
           </div>
-        ` : `<div style="padding: 30px; text-align: center; color: #cbd5e1; font-size: 12px;">[이미지 처리 오류]</div>`;
+        ` : `<div style="padding: 20px; color: #ccc;">[이미지 처리 중]</div>`;
         finalHtml = finalHtml.replace(`[[image_${i + 1}]]`, replacement);
       });
 
@@ -233,26 +235,31 @@ const Creator = ({ userStatus }) => {
   };
 
   /**
-   * [수정] 모바일 붙여넣기 호환성 극대화 로직
+   * [수정] 모바일 복사/붙여넣기 및 이미지 호환성 강화
    */
   const handleCopy = async () => {
     if (!generatedData) return;
 
     try {
       if (activeTab === 'blog') {
-        // 블로그 에디터가 잘 인식할 수 있도록 HTML을 래핑함
-        const htmlContent = `<html><body><div>${generatedData.blog_html}</div></body></html>`;
+        // HTML 원본 그대로 복사 (에디터가 인식하기 좋은 구조)
+        const htmlContent = `<div>${generatedData.blog_html}</div>`;
         const plainText = generatedData.blog_html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
         
         const blobHtml = new Blob([htmlContent], { type: "text/html" });
         const blobText = new Blob([plainText], { type: "text/plain" });
         
-        await navigator.clipboard.write([
-          new ClipboardItem({
-            "text/html": blobHtml,
-            "text/plain": blobText
-          })
-        ]);
+        // 최신 API 시도
+        if (navigator.clipboard && window.ClipboardItem) {
+          await navigator.clipboard.write([
+            new ClipboardItem({
+              "text/html": blobHtml,
+              "text/plain": blobText
+            })
+          ]);
+        } else {
+          throw new Error("Clipboard API unavailable");
+        }
       } else {
         const text = activeTab === 'insta' ? generatedData.insta_text : generatedData.short_form;
         await navigator.clipboard.writeText(text);
@@ -262,20 +269,16 @@ const Creator = ({ userStatus }) => {
       showToast("내용이 복사되었습니다!");
       setTimeout(() => setIsCopied(false), 2000);
     } catch (err) {
-      console.error("Copy failed:", err);
-      // fallback
-      try {
-        const textArea = document.createElement("textarea");
-        textArea.value = activeTab === 'blog' ? generatedData.blog_html : (activeTab === 'insta' ? generatedData.insta_text : generatedData.short_form);
-        document.body.appendChild(textArea);
-        textArea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textArea);
-        setIsCopied(true);
-        showToast("내용이 복사되었습니다!");
-      } catch (e) {
-        alert("복사에 실패했습니다. 브라우저 설정을 확인해주세요.");
-      }
+      console.warn("Clipboard API failed, using fallback:", err);
+      // Fallback: 텍스트 위주로라도 복사
+      const textArea = document.createElement("textarea");
+      textArea.value = activeTab === 'blog' ? generatedData.blog_html : (activeTab === 'insta' ? generatedData.insta_text : generatedData.short_form);
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setIsCopied(true);
+      showToast("내용이 복사되었습니다!");
     }
   };
 
@@ -298,7 +301,7 @@ const Creator = ({ userStatus }) => {
         .scrollbar-hide::-webkit-scrollbar { display: none; }
       `}</style>
 
-      {/* 토스트 알림 (중앙 정렬 수정) */}
+      {/* 토스트 알림 (중앙 정렬) */}
       {toastMsg && (
         <div className="fixed top-12 inset-x-0 z-[9999] flex justify-center px-4 animate-fade-in-down pointer-events-none">
           <div className="bg-slate-900 text-white px-5 py-3.5 rounded-2xl text-[13px] font-bold shadow-2xl flex items-center justify-center gap-2 border border-slate-700 backdrop-blur-md max-w-[260px] w-full">
@@ -335,7 +338,7 @@ const Creator = ({ userStatus }) => {
       <main className="flex-1 overflow-y-auto p-6 space-y-6 pb-44 scrollbar-hide">
         
         {loading ? (
-          /* [로딩 화면] 단계별 지능형 메시지 적용 */
+          /* [로딩 화면] 텍스트 짤림 방지 및 단계별 메시지 적용 */
           <div className="flex flex-col h-full items-center justify-center animate-fade-in py-24 text-center">
             <div className="relative mb-14 animate-floating">
               <div className="w-24 h-24 bg-blue-600/5 rounded-full flex items-center justify-center relative shadow-inner">
@@ -344,17 +347,18 @@ const Creator = ({ userStatus }) => {
               </div>
             </div>
             
-            <div className="space-y-4 px-6 max-w-[300px]">
+            <div className="space-y-4 px-6 max-w-[320px]">
                <h3 className="text-base font-black text-slate-900 tracking-tight uppercase italic opacity-60">
                  {loadingType === 'title' ? 'Analyzing Keywords' : loadingType === 'index' ? 'Planning Structure' : 'Generating Content'}
                </h3>
-               <div className="h-14 overflow-hidden relative">
-                  <p key={loadingMsgIndex} className="text-[15px] text-slate-600 font-bold leading-relaxed animate-text-fade absolute w-full left-0">
+               {/* [수정] 높이 제한 해제하여 3~4줄 문구 지원 */}
+               <div className="min-h-[5rem] h-auto flex items-center justify-center">
+                  <p key={loadingMsgIndex} className="text-[15px] text-slate-600 font-bold leading-relaxed animate-text-fade">
                     {loadingMessages[loadingType][loadingMsgIndex]}
                   </p>
                </div>
-               <div className="pt-2 flex justify-center gap-1.5">
-                 {[0, 1, 2].map(i => <div key={i} className="w-1 h-1 bg-blue-600/20 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.1}s` }} />)}
+               <div className="pt-4 flex justify-center gap-1.5">
+                 {[0, 1, 2].map(i => <div key={i} className="w-1.5 h-1.5 bg-blue-600/20 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.1}s` }} />)}
                </div>
             </div>
           </div>
