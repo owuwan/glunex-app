@@ -10,32 +10,40 @@ import {
 } from 'lucide-react';
 
 /**
- * [AI 마스터 프롬프트 설정]
+ * [AI 마스터 프롬프트 설정 - 고증 로직 완벽 복구]
  */
 const SYSTEM_PROMPT_TITLES = `
 당신은 대한민국 최고의 자동차 디테일링 전문 마케터입니다.
-상호명(예: 글루넥스, GLUNEX 등)은 절대로 언급하지 마세요. 오직 서비스의 가치에 집중하세요.
+사용자가 선택한 시공 항목과 현재 날씨를 분석하여 네이버 블로그 유입을 극대화하는 제목 5개를 제안하세요.
+상호명(예: 글루넥스, GLUNEX 등)은 절대로 언급하지 마세요. 
 반드시 JSON 구조로만 응답하세요: { "titles": ["제목1", "제목2", "제목3", "제목4", "제목5"] }
 `;
 
 const SYSTEM_PROMPT_INDEX = `
 네이버 블로그 전문 5단계 목차를 구성하세요. 브랜드명 제외. SEO 최적화된 정보성 목차여야 합니다.
+사용자가 선택한 제목에 맞춰 논리적인 흐름을 설계하세요.
 반드시 JSON 구조로만 응답하세요: { "index": ["1. 목차내용", "2. 목차내용", "3. 목차내용", "4. 목차내용", "5. 목차내용"] }
 `;
 
 const SYSTEM_PROMPT_CONTENT = `
-당신은 대한민국 자동차 외장관리 전문가입니다. 선정된 5개 목차를 바탕으로 블로그 본문과 실사 이미지 프롬프트를 생성하세요.
+당신은 대한민국 자동차 외장관리 전문가입니다. 선정된 5개 목차를 바탕으로 블로그 본문과 Flux Pro v1.1 전용 고해상도 실사 이미지 프롬프트를 생성하세요.
 
 [1단계: 본문 작성 지침]
-- 각 목차별 본문 내용은 공백 제외 450~550자 사이로 상세하게 작성하세요. (전체 최소 2,250자 이상)
-- 상호명(GLUNEX 등) 언급 절대 금지. 전문적인 용어와 실제 공정 설명을 기술하세요.
-- 각 섹션 끝에 [[image_1]] ~ [[image_5]] 태그를 순서대로 배치하세요.
-- HTML 태그(h2, p, br, strong)를 사용하세요.
+- 각 목차별 본문 내용은 공백 제외 450~550자 사이로 아주 상세하게 작성하세요. (전체 최소 2,250자 이상 필수)
+- 상호명(GLUNEX 등) 언급 절대 금지. 전문적인 용어와 실제 공정 설명을 상세히 기술하세요.
+- 각 섹션 끝에 [[image_1]] ~ [[image_5]] 태그를 순서대로 하나씩 배치하세요.
+- HTML 태그(h2, p, br, strong)를 사용하여 네이버 블로그에 바로 붙여넣기 좋게 만드세요.
 
-[2단계: 이미지 프롬프트 생성 지침]
-- 모든 프롬프트(p1~p5)는 반드시 다음 형식을 준수하세요:
-  "Authentic real-life photo, Authentic real-work photo of [상황] referencing images from portal search. [물리적 묘사]. Shot on iPhone 15 Pro, unpolished, natural lighting, blurred license plate."
-- [중요]: 너무 선명하지 않게, 실제 작업자가 현장에서 찍은 듯한 'raw handheld shot' 느낌을 강조하세요.
+[2단계: 이미지 프롬프트 생성 지침 (100대 시나리오 고증 로직)]
+- 모든 프롬프트(p1~p5)는 반드시 다음 '네이버 검색 기반 실사 고증' 형식을 엄격히 따르세요:
+  "Authentic real-life photo, Authentic real-work photo, Work-in-progress (WIP) of [상황 키워드] referencing professional work images from www.naver.com. [구체적인 물리적 묘사]. Raw handheld shot, iPhone 15 Pro, no UI elements, no text, realistic, harsh overhead fluorescent lighting, blurred license plate."
+- [필수 물리적/도구 고증 가이드]:
+  1. 철분제거: "Thin, watery, translucent dark-purple streaks and stains bleeding from silver car wheel spokes. NO thick paint, NO jelly, NO opaque slime. Watery consistency only."
+  2. 유리막코팅: "Hand holding a black rectangular coating block wrapped in a blue suede cloth, applying a thin wet liquid layer. NO sponges, NO thick blobs."
+  3. 세차: "Lambswool wash mitt with fine white bubbles scrubbing the car body. NO thick foam clumps."
+  4. 썬팅/PPF: "Yellow squeegee pushing water out from curved window film."
+  5. 블랙박스: "Technician wiring through car A-pillar, showing fuse box or black Tesa absorbent tape."
+  6. 배경: "Korean detailing shop with grid LED ceiling lights" 또는 "Green urethane floor of a Korean apartment parking lot."
 
 [출력 형식]
 JSON으로만 응답:
@@ -53,6 +61,7 @@ const Creator = ({ userStatus }) => {
   // --- 상태 관리 ---
   const [step, setStep] = useState('keyword'); 
   const [loading, setLoading] = useState(false);
+  const [loadingType, setLoadingType] = useState('title'); // title | index | content
   const [loadingMsgIndex, setLoadingMsgIndex] = useState(0); 
   const [selectedTopics, setSelectedTopics] = useState([]);
   const [isWeatherEnabled, setIsWeatherEnabled] = useState(true);
@@ -67,23 +76,35 @@ const Creator = ({ userStatus }) => {
   const [isCopied, setIsCopied] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
 
-  const loadingMessages = [
-    "오늘의 날씨를 분석하여 가장 효과적인 키워드를 선정하고 있습니다",
-    "고객의 클릭을 유도하는 최적의 문장들을 다듬는 중입니다",
-    "시공 현장의 생생함이 느껴지는 이미지를 현상하고 있어요",
-    "디테일링 전문가의 관점에서 정성스럽게 글을 작성하고 있습니다",
-    "거의 다 되었습니다. 마지막 검수를 시작합니다"
-  ];
+  // [수정] 단계별 그럴싸한 로딩 메시지
+  const loadingMessages = {
+    title: [
+      "고객의 시선을 사로잡는 최적의 헤드라인을 설계하고 있습니다",
+      "검색량 분석을 통해 유입이 가장 잘 되는 키워드를 추출 중입니다",
+      "전환율을 높이는 마케팅 첫 문장을 고민하고 있습니다"
+    ],
+    index: [
+      "정보성 가치가 높은 체계적인 목차를 구성하고 있습니다",
+      "글의 논리적인 흐름과 SEO 최적화 구조를 설계 중입니다",
+      "읽기 편하고 설득력 있는 스토리보드를 짜고 있습니다"
+    ],
+    content: [
+      "실제 현장의 생생함을 담은 이미지를 초고화질로 현상하고 있습니다",
+      "디테일링 전문가의 깊이가 느껴지는 상세 공정 원고를 집필 중입니다",
+      "네이버 블로그 알고리즘에 최적화된 포스팅을 완성하고 있습니다",
+      "마지막 검수를 통해 문장의 디테일을 다듬는 중입니다"
+    ]
+  };
 
   useEffect(() => {
     let timer;
     if (loading) {
       timer = setInterval(() => {
-        setLoadingMsgIndex((prev) => (prev + 1) % loadingMessages.length);
-      }, 3500);
+        setLoadingMsgIndex((prev) => (prev + 1) % (loadingMessages[loadingType]?.length || 1));
+      }, 3000);
     }
     return () => clearInterval(timer);
-  }, [loading]);
+  }, [loading, loadingType]);
 
   useEffect(() => {
     const fetchWeather = async () => {
@@ -145,7 +166,7 @@ const Creator = ({ userStatus }) => {
         headers: { "Authorization": `Key ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: prompt,
-          image_size: { width: 896, height: 672 } 
+          image_size: { width: 896, height: 672 } // 비용 최적화 ($0.015 수준)
         })
       });
       const data = await response.json();
@@ -155,6 +176,8 @@ const Creator = ({ userStatus }) => {
 
   const handleGenerateTitles = async () => {
     if (selectedTopics.length === 0) return alert("시공 항목을 선택해주세요.");
+    setLoadingType('title');
+    setLoadingMsgIndex(0);
     setLoading(true);
     try {
       const selectedNames = categories.filter(c => selectedTopics.includes(c.id)).map(c => c.name).join(', ');
@@ -167,6 +190,8 @@ const Creator = ({ userStatus }) => {
 
   const handleGenerateIndex = async (title) => {
     setSelectedTitle(title);
+    setLoadingType('index');
+    setLoadingMsgIndex(0);
     setLoading(true);
     try {
       const data = await callGemini(`제목: ${title}`, SYSTEM_PROMPT_INDEX);
@@ -177,6 +202,8 @@ const Creator = ({ userStatus }) => {
   };
 
   const handleGenerateFullContent = async () => {
+    setLoadingType('content');
+    setLoadingMsgIndex(0);
     setLoading(true);
     try {
       const data = await callGemini(`제목: ${selectedTitle}, 목차: ${indexList.join(', ')}`, SYSTEM_PROMPT_CONTENT);
@@ -189,14 +216,13 @@ const Creator = ({ userStatus }) => {
       let finalHtml = data.blog_html;
       images.forEach((url, i) => {
         const replacement = url ? `
-          <div class="my-8 rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-slate-50">
-            <img src="${url}" class="w-full h-auto block" alt="detail" />
-            <div class="p-3 bg-white text-center border-t border-slate-50 flex items-center justify-center gap-1.5">
-              <div class="w-1 h-1 rounded-full bg-blue-600/40 animate-pulse"></div>
-              <span class="text-[8px] font-black text-slate-300 uppercase tracking-widest italic">Raw Shot | Captured On-Site</span>
+          <div class="blog-image-wrapper" style="margin: 30px 0; border-radius: 20px; overflow: hidden; border: 1px solid #f1f5f9;">
+            <img src="${url}" style="width: 100%; display: block; border-radius: 20px;" alt="시공사진" />
+            <div style="padding: 10px; background: #fff; text-align: center; border-top: 1px solid #f8fafc;">
+              <span style="font-size: 10px; color: #94a3b8; font-weight: bold; letter-spacing: 1px;">Raw Shot | Captured On-Site</span>
             </div>
           </div>
-        ` : `<div class="p-8 text-center text-slate-200 text-xs italic">이미지 처리 대기 중...</div>`;
+        ` : `<div style="padding: 30px; text-align: center; color: #cbd5e1; font-size: 12px;">[이미지 처리 오류]</div>`;
         finalHtml = finalHtml.replace(`[[image_${i + 1}]]`, replacement);
       });
 
@@ -207,15 +233,15 @@ const Creator = ({ userStatus }) => {
   };
 
   /**
-   * [수정] 모바일 호환성 강화된 복사 로직
-   * HTML(이미지 포함)과 일반 텍스트를 함께 복사하여 모바일 블로그/메모장 호환성을 확보합니다.
+   * [수정] 모바일 붙여넣기 호환성 극대화 로직
    */
   const handleCopy = async () => {
     if (!generatedData) return;
 
     try {
       if (activeTab === 'blog') {
-        const htmlContent = `<div>${generatedData.blog_html}</div>`;
+        // 블로그 에디터가 잘 인식할 수 있도록 HTML을 래핑함
+        const htmlContent = `<html><body><div>${generatedData.blog_html}</div></body></html>`;
         const plainText = generatedData.blog_html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
         
         const blobHtml = new Blob([htmlContent], { type: "text/html" });
@@ -237,7 +263,19 @@ const Creator = ({ userStatus }) => {
       setTimeout(() => setIsCopied(false), 2000);
     } catch (err) {
       console.error("Copy failed:", err);
-      alert("복사 중 오류가 발생했습니다. 브라우저 설정을 확인해주세요.");
+      // fallback
+      try {
+        const textArea = document.createElement("textarea");
+        textArea.value = activeTab === 'blog' ? generatedData.blog_html : (activeTab === 'insta' ? generatedData.insta_text : generatedData.short_form);
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        setIsCopied(true);
+        showToast("내용이 복사되었습니다!");
+      } catch (e) {
+        alert("복사에 실패했습니다. 브라우저 설정을 확인해주세요.");
+      }
     }
   };
 
@@ -254,15 +292,15 @@ const Creator = ({ userStatus }) => {
         .animate-fade-in-down { animation: fadeInDown 0.4s ease-out forwards; }
         .animate-floating { animation: floating 3s ease-in-out infinite; }
         .animate-text-fade { animation: textFade 0.6s ease-out forwards; }
-        .blog-preview h2 { font-size: 1.25rem; font-weight: 900; color: #1e293b; margin-top: 2rem; margin-bottom: 0.8rem; border-left: 4px solid #2563eb; padding-left: 0.8rem; letter-spacing: -0.02em; }
-        .blog-preview p { font-size: 0.95rem; line-height: 1.8; color: #475569; margin-bottom: 1.2rem; text-align: justify; word-break: keep-all; }
+        .blog-preview h2 { font-size: 1.25rem; font-weight: 900; color: #1e293b; margin-top: 2.5rem; margin-bottom: 0.8rem; border-left: 4px solid #2563eb; padding-left: 0.8rem; letter-spacing: -0.02em; }
+        .blog-preview p { font-size: 1rem; line-height: 1.9; color: #475569; margin-bottom: 1.2rem; text-align: justify; word-break: keep-all; }
         .blog-preview strong { color: #0f172a; font-weight: 800; }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
       `}</style>
 
-      {/* [수정] 토스트 알림 위치 센터링 최적화 */}
+      {/* 토스트 알림 (중앙 정렬 수정) */}
       {toastMsg && (
-        <div className="fixed top-12 inset-x-0 z-[9999] flex justify-center px-4 animate-fade-in-down">
+        <div className="fixed top-12 inset-x-0 z-[9999] flex justify-center px-4 animate-fade-in-down pointer-events-none">
           <div className="bg-slate-900 text-white px-5 py-3.5 rounded-2xl text-[13px] font-bold shadow-2xl flex items-center justify-center gap-2 border border-slate-700 backdrop-blur-md max-w-[260px] w-full">
             <CheckCircle2 size={16} className="text-green-400" /> {toastMsg}
           </div>
@@ -297,6 +335,7 @@ const Creator = ({ userStatus }) => {
       <main className="flex-1 overflow-y-auto p-6 space-y-6 pb-44 scrollbar-hide">
         
         {loading ? (
+          /* [로딩 화면] 단계별 지능형 메시지 적용 */
           <div className="flex flex-col h-full items-center justify-center animate-fade-in py-24 text-center">
             <div className="relative mb-14 animate-floating">
               <div className="w-24 h-24 bg-blue-600/5 rounded-full flex items-center justify-center relative shadow-inner">
@@ -305,11 +344,13 @@ const Creator = ({ userStatus }) => {
               </div>
             </div>
             
-            <div className="space-y-4 px-6 max-w-[280px]">
-               <h3 className="text-base font-black text-slate-900 tracking-tight uppercase italic opacity-60">Wait for Excellence</h3>
+            <div className="space-y-4 px-6 max-w-[300px]">
+               <h3 className="text-base font-black text-slate-900 tracking-tight uppercase italic opacity-60">
+                 {loadingType === 'title' ? 'Analyzing Keywords' : loadingType === 'index' ? 'Planning Structure' : 'Generating Content'}
+               </h3>
                <div className="h-14 overflow-hidden relative">
-                  <p key={loadingMsgIndex} className="text-[14px] text-slate-500 font-bold leading-relaxed animate-text-fade absolute w-full left-0">
-                    {loadingMessages[loadingMsgIndex]}
+                  <p key={loadingMsgIndex} className="text-[15px] text-slate-600 font-bold leading-relaxed animate-text-fade absolute w-full left-0">
+                    {loadingMessages[loadingType][loadingMsgIndex]}
                   </p>
                </div>
                <div className="pt-2 flex justify-center gap-1.5">
