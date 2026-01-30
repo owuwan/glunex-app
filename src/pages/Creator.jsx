@@ -154,8 +154,8 @@ const Creator = ({ userStatus }) => {
   };
 
   /**
-   * [이미지 엔진 교체: fal-ai/flux-2] 
-   * 장당 $0.012의 비용으로 고품질 실사 이미지를 생성합니다.
+   * [이미지 엔진: fal-ai/flux-2] 
+   * 장당 $0.012 비용 소진 모델
    */
   const callFalAI = async (prompt) => {
     const apiKey = import.meta.env.VITE_FAL_API_KEY;
@@ -250,7 +250,7 @@ const Creator = ({ userStatus }) => {
         
         if (successful) {
           setIsCopied(true);
-          showToast("원고가 복사되었습니다!");
+          showToast("이미지와 원고가 복사되었습니다!");
           setTimeout(() => setIsCopied(false), 2000);
         } else {
           throw new Error("Copy failed");
@@ -430,7 +430,7 @@ const Creator = ({ userStatus }) => {
           </section>
         ) : (
           /* [결과 페이지] 최종 포스팅 */
-          <section className="space-y-6 animate-fade-in-up pb-24">
+          <section className="space-y-6 animate-fade-in-up pb-10">
             <div className="flex bg-slate-200/50 p-1.5 rounded-2xl border border-slate-100 shadow-inner mx-1">
               {[
                 { id: 'blog', name: '블로그', icon: <Layout size={14}/> },
@@ -447,7 +447,7 @@ const Creator = ({ userStatus }) => {
               ))}
             </div>
 
-            {/* [모바일 가이드 배너] 가시성 유지 */}
+            {/* [모바일 가이드 배너] */}
             <div className="mx-1 bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-200 p-5 rounded-[2rem] flex items-center gap-4 shadow-md animate-fade-in-up">
                 <div className="bg-amber-500 p-3 rounded-2xl text-white shadow-lg shadow-amber-200"><SmartphoneIcon size={24} /></div>
                 <div>
@@ -459,29 +459,14 @@ const Creator = ({ userStatus }) => {
                 </div>
             </div>
 
-            <div className="bg-white p-7 rounded-[3rem] border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.05)] min-h-[650px] relative overflow-hidden text-left animate-fade-in-up">
+            <div className="bg-white p-7 rounded-[3rem] border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.05)] min-h-[600px] relative overflow-hidden text-left animate-fade-in-up">
               
-              <div className="flex justify-between items-center mb-10 pb-5 border-b border-slate-50">
-                 <div className="flex items-center gap-2.5">
-                    <div className="p-2 bg-blue-50 rounded-xl text-blue-600"><FileSearch size={18} /></div>
-                    <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Document</p>
-                      <p className="text-[12px] font-black text-slate-800 tracking-tight mt-1 capitalize">{activeTab} Preview</p>
-                    </div>
-                 </div>
-                 <div className="flex flex-col items-end gap-1">
-                    <button onClick={handleCopy} className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl border transition-all active:scale-90 font-black text-[12px] ${isCopied ? 'bg-green-50 border-green-200 text-green-600' : 'bg-slate-900 border-slate-800 text-white shadow-lg shadow-slate-900/10'}`}>
-                        {isCopied ? <Check size={16} /> : <Copy size={16} />}
-                        {isCopied ? '복사됨' : '복사'}
-                    </button>
-                    <span className="text-[8px] text-slate-400 font-bold">* 모바일은 텍스트 위주 복사</span>
-                 </div>
-              </div>
+              {/* [개선] 내부 툴바 제거 (중복 복사 버튼 및 텍스트 삭제) */}
 
-              <div className="content-container px-1">
+              <div className="content-container px-1 pt-4">
                 {activeTab === 'blog' ? (
                   <article className="blog-preview">
-                    <div className="mb-12">
+                    <div className="mb-10">
                        <div className="flex items-center gap-2 mb-4">
                           <Camera size={14} className="text-blue-500" />
                           <span className="text-[10px] font-black text-blue-500/60 uppercase tracking-[0.2em]">Real-Life Documentation</span>
@@ -513,7 +498,7 @@ const Creator = ({ userStatus }) => {
                 dangerouslySetInnerHTML={{ __html: generatedData ? `<h2>${selectedTitle}</h2>` + generatedData.blog_html : '' }}
               />
 
-              <div className="mt-24 pt-10 border-t border-slate-50 text-center opacity-30">
+              <div className="mt-14 pt-8 border-t border-slate-50 text-center opacity-30">
                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.6em]">GLUNEX AI Marketing Platform</p>
               </div>
             </div>
