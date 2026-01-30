@@ -10,40 +10,32 @@ import {
 } from 'lucide-react';
 
 /**
- * [AI 마스터 프롬프트 설정 - 고증 로직 완벽 복구]
+ * [AI 마스터 프롬프트 설정]
  */
 const SYSTEM_PROMPT_TITLES = `
 당신은 대한민국 최고의 자동차 디테일링 전문 마케터입니다.
-사용자가 선택한 시공 항목과 현재 날씨를 분석하여 네이버 블로그 유입을 극대화하는 제목 5개를 제안하세요.
-상호명(예: 글루넥스, GLUNEX 등)은 절대로 언급하지 마세요. 
+상호명(예: 글루넥스, GLUNEX 등)은 절대로 언급하지 마세요. 오직 서비스의 가치에 집중하세요.
 반드시 JSON 구조로만 응답하세요: { "titles": ["제목1", "제목2", "제목3", "제목4", "제목5"] }
 `;
 
 const SYSTEM_PROMPT_INDEX = `
 네이버 블로그 전문 5단계 목차를 구성하세요. 브랜드명 제외. SEO 최적화된 정보성 목차여야 합니다.
-사용자가 선택한 제목에 맞춰 논리적인 흐름을 설계하세요.
 반드시 JSON 구조로만 응답하세요: { "index": ["1. 목차내용", "2. 목차내용", "3. 목차내용", "4. 목차내용", "5. 목차내용"] }
 `;
 
 const SYSTEM_PROMPT_CONTENT = `
-당신은 대한민국 자동차 외장관리 전문가입니다. 선정된 5개 목차를 바탕으로 블로그 본문과 Flux Pro v1.1 전용 실사 이미지 프롬프트를 생성하세요.
+당신은 대한민국 자동차 외장관리 전문가입니다. 선정된 5개 목차를 바탕으로 블로그 본문과 실사 이미지 프롬프트를 생성하세요.
 
 [1단계: 본문 작성 지침]
-- 각 목차별 본문 내용은 공백 제외 450~550자 사이로 아주 상세하게 작성하세요. (전체 최소 2,250자 이상 필수)
-- 상호명(GLUNEX 등) 언급 절대 금지. 전문적인 용어와 실제 공정 설명을 상세히 기술하세요.
-- 각 섹션 끝에 [[image_1]] ~ [[image_5]] 태그를 순서대로 하나씩 배치하세요.
-- HTML 태그(h2, p, br, strong)를 사용하여 네이버 블로그에 바로 붙여넣기 좋게 만드세요.
+- 각 목차별 본문 내용은 공백 제외 450~550자 사이로 상세하게 작성하세요. (전체 최소 2,250자 이상)
+- 상호명(GLUNEX 등) 언급 절대 금지. 전문적인 용어와 실제 공정 설명을 기술하세요.
+- 각 섹션 끝에 [[image_1]] ~ [[image_5]] 태그를 순서대로 배치하세요.
+- HTML 태그(h2, p, br, strong)를 사용하세요.
 
-[2단계: 이미지 프롬프트 생성 지침 (100대 시나리오 고증 로직)]
-- 모든 프롬프트(p1~p5)는 반드시 다음 '네이버 검색 기반 실사 고증' 형식을 엄격히 따르세요:
-  "Authentic real-life photo, Authentic real-work photo, Work-in-progress (WIP) of [상황 키워드] referencing professional work images from www.naver.com. [구체적인 물리적 묘사]. Raw handheld shot, iPhone 15 Pro, no UI elements, no text, realistic, harsh overhead fluorescent lighting, blurred license plate."
-- [필수 물리적/도구 고증 가이드]:
-  1. 철분제거: "Thin, watery, translucent dark-purple streaks and stains bleeding from silver car wheel spokes. NO thick paint, NO jelly, NO opaque slime. Watery consistency only."
-  2. 유리막코팅: "Hand holding a black rectangular coating block wrapped in a blue suede cloth, applying a thin wet liquid layer. NO sponges, NO thick blobs."
-  3. 세차: "Lambswool wash mitt with fine white bubbles scrubbing the car body. NO thick foam clumps."
-  4. 썬팅/PPF: "Yellow squeegee pushing water out from curved window film."
-  5. 블랙박스: "Technician wiring through car A-pillar, showing fuse box or black Tesa absorbent tape."
-  6. 배경: "Korean detailing shop with grid LED ceiling lights" 또는 "Green urethane floor of a Korean apartment parking lot."
+[2단계: 이미지 프롬프트 생성 지침 (100대 시나리오 고증)]
+- 모든 프롬프트는 반드시 다음 형식을 엄격히 준수하세요:
+  "Authentic real-life photo, Authentic real-work photo, Work-in-progress (WIP) of [상황] referencing professional images from portal search. [물리적 묘사]. Raw handheld shot, iPhone 15 Pro, no UI elements, no text, realistic, harsh overhead fluorescent lighting, blurred license plate."
+- [필수 고증]: 철분제거는 'Thin, watery streaks', 유리막은 'Black block with blue suede', 세차는 'Lambswool mitt' 등 실제 도구를 묘사하세요.
 
 [출력 형식]
 JSON으로만 응답:
@@ -61,7 +53,7 @@ const Creator = ({ userStatus }) => {
   // --- 상태 관리 ---
   const [step, setStep] = useState('keyword'); 
   const [loading, setLoading] = useState(false);
-  const [loadingType, setLoadingType] = useState('title'); // title | index | content
+  const [loadingType, setLoadingType] = useState('title'); 
   const [loadingMsgIndex, setLoadingMsgIndex] = useState(0); 
   const [selectedTopics, setSelectedTopics] = useState([]);
   const [isWeatherEnabled, setIsWeatherEnabled] = useState(true);
@@ -76,23 +68,22 @@ const Creator = ({ userStatus }) => {
   const [isCopied, setIsCopied] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
 
-  // [수정] 단계별 그럴싸한 로딩 메시지
   const loadingMessages = {
     title: [
-      "고객의 시선을 사로잡는 최적의 헤드라인을 설계하고 있습니다",
-      "검색량 분석을 통해 유입이 가장 잘 되는 키워드를 추출 중입니다",
-      "전환율을 높이는 마케팅 첫 문장을 고민하고 있습니다"
+      "고객의 시선을 사로잡는\n최적의 헤드라인을 설계하고 있습니다",
+      "검색량 분석을 통해 유입이 가장 잘 되는\n키워드를 정밀하게 추출 중입니다",
+      "예약 전환율을 높이는\n전략적인 마케팅 첫 문장을 고민 중입니다"
     ],
     index: [
-      "정보성 가치가 높은 체계적인 목차를 구성하고 있습니다",
-      "글의 논리적인 흐름과 SEO 최적화 구조를 설계 중입니다",
-      "읽기 편하고 설득력 있는 스토리보드를 짜고 있습니다"
+      "정보성 가치가 높은\n체계적인 목차를 구성하고 있습니다",
+      "글의 논리적인 흐름과\nSEO 최적화 구조를 설계 중입니다",
+      "읽기 편하고 설득력 있는\n스토리보드를 짜고 있습니다"
     ],
     content: [
-      "실제 현장의 생생함을 담은 이미지를 현상하고 있습니다",
-      "디테일링 전문가의 깊이가 느껴지는 상세 공정 원고를 집필 중입니다",
-      "네이버 블로그 알고리즘에 최적화된 포스팅을 완성하고 있습니다",
-      "마지막 검수를 통해 문장의 디테일을 다듬는 중입니다"
+      "실제 현장의 생생함을 담은 이미지를\n초고화질로 현상하고 있습니다",
+      "디테일링 전문가의 깊이가 느껴지는\n상세 공정 원고를 집필 중입니다",
+      "네이버 블로그 알고리즘에 최적화된\n포스팅을 완성하고 있습니다",
+      "마지막 검수를 통해\n문장의 디테일을 세밀하게 다듬는 중입니다"
     ]
   };
 
@@ -101,7 +92,7 @@ const Creator = ({ userStatus }) => {
     if (loading) {
       timer = setInterval(() => {
         setLoadingMsgIndex((prev) => (prev + 1) % (loadingMessages[loadingType]?.length || 1));
-      }, 3000);
+      }, 3500);
     }
     return () => clearInterval(timer);
   }, [loading, loadingType]);
@@ -157,9 +148,6 @@ const Creator = ({ userStatus }) => {
     return JSON.parse(resData.candidates[0].content.parts[0].text);
   };
 
-  /**
-   * [수정] 해상도 최적화 ($0.02 타겟)
-   */
   const callFalAI = async (prompt) => {
     const apiKey = import.meta.env.VITE_FAL_API_KEY;
     if (!apiKey || apiKey === "undefined") return null;
@@ -169,7 +157,8 @@ const Creator = ({ userStatus }) => {
         headers: { "Authorization": `Key ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: prompt,
-          image_size: { width: 896, height: 672 } // 최적 해상도로 비용 조절
+          // [해상도 고정] 비용 최적화 ($0.02 수준)
+          image_size: { width: 896, height: 672 } 
         })
       });
       const data = await response.json();
@@ -218,11 +207,10 @@ const Creator = ({ userStatus }) => {
 
       let finalHtml = data.blog_html;
       images.forEach((url, i) => {
-        // [수정] 복사 호환성을 위해 불필요한 스타일 제거 및 표준 <img> 태그 사용
+        // [수정] 복사 호환성 극대화를 위한 단순 구조 이미지 태그
         const replacement = url ? `
-          <div style="margin: 30px 0; text-align: center;">
-            <img src="${url}" style="width: 100%; max-width: 896px; border-radius: 15px; border: 1px solid #eee;" alt="시공사진" />
-            <p style="margin-top: 8px; font-size: 10px; color: #999; letter-spacing: 1px;">Shot on iPhone 15 Pro | Raw Snapshot</p>
+          <div class="img-container" style="margin: 40px 0; text-align: center;">
+            <img src="${url}" style="width: 100%; border-radius: 12px; display: block;" alt="시공사진" />
           </div>
         ` : `<div style="padding: 20px; color: #ccc;">[이미지 처리 중]</div>`;
         finalHtml = finalHtml.replace(`[[image_${i + 1}]]`, replacement);
@@ -235,21 +223,35 @@ const Creator = ({ userStatus }) => {
   };
 
   /**
-   * [수정] 모바일 복사/붙여넣기 및 이미지 호환성 강화
+   * [수정] 모바일 네이버 블로그 호환성 끝판왕 복사 로직
    */
   const handleCopy = async () => {
     if (!generatedData) return;
 
     try {
       if (activeTab === 'blog') {
-        // HTML 원본 그대로 복사 (에디터가 인식하기 좋은 구조)
-        const htmlContent = `<div>${generatedData.blog_html}</div>`;
-        const plainText = generatedData.blog_html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+        // 1. 에디터가 사진이라고 확신하게 만드는 HTML 구조 (스타일 최소화)
+        const htmlContent = `
+          <!DOCTYPE html>
+          <html>
+          <body>
+            <div style="font-family: sans-serif; line-height: 1.8;">
+              ${generatedData.blog_html}
+            </div>
+          </body>
+          </html>
+        `;
+        
+        // 2. 텍스트 폴백 (메모장 등)
+        const plainText = generatedData.blog_html
+          .replace(/<h2[^>]*>(.*?)<\/h2>/gi, '\n[ $1 ]\n')
+          .replace(/<[^>]*>/g, '')
+          .replace(/\n\s*\n/g, '\n\n')
+          .trim();
         
         const blobHtml = new Blob([htmlContent], { type: "text/html" });
         const blobText = new Blob([plainText], { type: "text/plain" });
         
-        // 최신 API 시도
         if (navigator.clipboard && window.ClipboardItem) {
           await navigator.clipboard.write([
             new ClipboardItem({
@@ -269,8 +271,7 @@ const Creator = ({ userStatus }) => {
       showToast("내용이 복사되었습니다!");
       setTimeout(() => setIsCopied(false), 2000);
     } catch (err) {
-      console.warn("Clipboard API failed, using fallback:", err);
-      // Fallback: 텍스트 위주로라도 복사
+      // 구형 모바일 기기용 폴백
       const textArea = document.createElement("textarea");
       textArea.value = activeTab === 'blog' ? generatedData.blog_html : (activeTab === 'insta' ? generatedData.insta_text : generatedData.short_form);
       document.body.appendChild(textArea);
@@ -290,7 +291,7 @@ const Creator = ({ userStatus }) => {
         @keyframes fadeInUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes fadeInDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes floating { 0% { transform: translateY(0); } 50% { transform: translateY(-8px); } 100% { transform: translateY(0); } }
-        @keyframes textFade { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes textFade { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in-up { animation: fadeInUp 0.5s ease-out forwards; }
         .animate-fade-in-down { animation: fadeInDown 0.4s ease-out forwards; }
         .animate-floating { animation: floating 3s ease-in-out infinite; }
@@ -301,7 +302,7 @@ const Creator = ({ userStatus }) => {
         .scrollbar-hide::-webkit-scrollbar { display: none; }
       `}</style>
 
-      {/* 토스트 알림 (중앙 정렬) */}
+      {/* 토스트 알림 */}
       {toastMsg && (
         <div className="fixed top-12 inset-x-0 z-[9999] flex justify-center px-4 animate-fade-in-down pointer-events-none">
           <div className="bg-slate-900 text-white px-5 py-3.5 rounded-2xl text-[13px] font-bold shadow-2xl flex items-center justify-center gap-2 border border-slate-700 backdrop-blur-md max-w-[260px] w-full">
@@ -338,7 +339,7 @@ const Creator = ({ userStatus }) => {
       <main className="flex-1 overflow-y-auto p-6 space-y-6 pb-44 scrollbar-hide">
         
         {loading ? (
-          /* [로딩 화면] 텍스트 짤림 방지 및 단계별 메시지 적용 */
+          /* [로딩 화면] 줄바꿈 최적화 및 상황별 메시지 */
           <div className="flex flex-col h-full items-center justify-center animate-fade-in py-24 text-center">
             <div className="relative mb-14 animate-floating">
               <div className="w-24 h-24 bg-blue-600/5 rounded-full flex items-center justify-center relative shadow-inner">
@@ -347,18 +348,18 @@ const Creator = ({ userStatus }) => {
               </div>
             </div>
             
-            <div className="space-y-4 px-6 max-w-[320px]">
+            <div className="space-y-6 px-4 w-full">
                <h3 className="text-base font-black text-slate-900 tracking-tight uppercase italic opacity-60">
                  {loadingType === 'title' ? 'Analyzing Keywords' : loadingType === 'index' ? 'Planning Structure' : 'Generating Content'}
                </h3>
-               {/* [수정] 높이 제한 해제하여 3~4줄 문구 지원 */}
-               <div className="min-h-[5rem] h-auto flex items-center justify-center">
-                  <p key={loadingMsgIndex} className="text-[15px] text-slate-600 font-bold leading-relaxed animate-text-fade">
+               {/* [수정] 줄바꿈 짤림 방지 컨테이너 */}
+               <div className="min-h-[6rem] flex items-center justify-center">
+                  <p key={loadingMsgIndex} className="text-[17px] text-slate-700 font-bold leading-[1.6] animate-text-fade whitespace-pre-line" style={{ wordBreak: 'keep-all' }}>
                     {loadingMessages[loadingType][loadingMsgIndex]}
                   </p>
                </div>
-               <div className="pt-4 flex justify-center gap-1.5">
-                 {[0, 1, 2].map(i => <div key={i} className="w-1.5 h-1.5 bg-blue-600/20 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.1}s` }} />)}
+               <div className="pt-2 flex justify-center gap-1.5">
+                 {[0, 1, 2].map(i => <div key={i} className="w-1.5 h-1.5 bg-blue-600/20 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}
                </div>
             </div>
           </div>
