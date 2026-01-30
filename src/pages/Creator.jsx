@@ -71,6 +71,9 @@ const Creator = ({ userStatus }) => {
   const [isCopied, setIsCopied] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
 
+  // [수정] 복사할 콘텐츠 영역(DOM)을 직접 참조하기 위한 Ref 생성
+  const contentRef = useRef(null);
+
   // 상황별 로딩 메시지
   const loadingMessages = {
     title: [
@@ -226,52 +229,66 @@ const Creator = ({ userStatus }) => {
   };
 
   /**
-   * [수정] 모바일 네이버 블로그 호환성 끝판왕 복사 로직
-   * 뷰어용 HTML과 복사용 HTML을 정교하게 분리하여 이미지 누락을 방지합니다.
+   * [수정 완료] 모바일 및 네이버 블로그 앱 호환성 강화 복사 로직
+   * Blob 생성 방식이 아닌, 실제 DOM 요소를 선택(Select)하여 복사(execCommand)하는 방식으로 변경.
+   * 이 방식은 렌더링된 이미지를 포함한 리치 텍스트를 가장 확실하게 클립보드로 전달합니다.
    */
   const handleCopy = async () => {
     if (!generatedData) return;
 
     try {
-      if (activeTab === 'blog') {
-        // 에디터가 '미디어'로 인식할 수 있게 body 래핑 제거 후 직관적인 HTML 구조 전송
-        const cleanHtml = generatedData.blog_html;
-        const plainText = generatedData.blog_html
-          .replace(/<[^>]*>/g, '')
-          .replace(/\s+/g, ' ')
-          .trim();
+      // 1. 블로그 탭일 경우 (이미지 포함 복사)
+      if (activeTab === 'blog' && contentRef.current) {
+        // 현재 선택 영역 초기화
+        const selection = window.getSelection();
+        const range = document.createRange();
         
-        const blobHtml = new Blob([cleanHtml], { type: "text/html" });
-        const blobText = new Blob([plainText], { type: "text/plain" });
+        // 블로그 본문 DOM을 선택 영역으로 지정 (이미지 포함)
+        range.selectNodeContents(contentRef.current);
+        selection.removeAllRanges();
+        selection.addRange(range);
         
-        if (navigator.clipboard && window.ClipboardItem) {
-          await navigator.clipboard.write([
-            new ClipboardItem({
-              "text/html": blobHtml,
-              "text/plain": blobText
-            })
-          ]);
+        // 브라우저 내장 복사 명령 실행 (Rich Text 복사 트리거)
+        // 이 방식이 모바일에서 이미지를 포함해 복사하는 가장 강력한 방법입니다.
+        const successful = document.execCommand('copy');
+        
+        // 선택 영역 해제 (UX)
+        selection.removeAllRanges();
+        
+        if (successful) {
+          setIsCopied(true);
+          showToast("이미지와 원고가 복사되었습니다!");
+          setTimeout(() => setIsCopied(false), 2000);
         } else {
-          throw new Error("API Unavailable");
+          throw new Error("Copy command failed");
         }
-      } else {
+      } 
+      // 2. 인스타/숏폼 탭일 경우 (단순 텍스트 복사)
+      else {
         const text = activeTab === 'insta' ? generatedData.insta_text : generatedData.short_form;
         await navigator.clipboard.writeText(text);
+        
+        setIsCopied(true);
+        showToast("텍스트가 복사되었습니다!");
+        setTimeout(() => setIsCopied(false), 2000);
       }
       
-      setIsCopied(true);
-      showToast("내용이 복사되었습니다!");
-      setTimeout(() => setIsCopied(false), 2000);
     } catch (err) {
-      // 최후의 수단: 텍스트 위주 폴백
+      console.error("Copy failed:", err);
+      // 최후의 수단: 텍스트만이라도 복사
+      const fallbackText = activeTab === 'blog' 
+        ? generatedData.blog_html.replace(/<[^>]*>/g, '\n') // 태그 제거 후 텍스트만
+        : (activeTab === 'insta' ? generatedData.insta_text : generatedData.short_form);
+      
       const textArea = document.createElement("textarea");
-      textArea.value = activeTab === 'blog' ? generatedData.blog_html : (activeTab === 'insta' ? generatedData.insta_text : generatedData.short_form);
+      textArea.value = fallbackText;
       document.body.appendChild(textArea);
       textArea.select();
       document.execCommand('copy');
       document.body.removeChild(textArea);
+      
       setIsCopied(true);
-      showToast("내용이 복사되었습니다!");
+      showToast("텍스트만 복사되었습니다. (이미지 호환 불가)");
     }
   };
 
@@ -291,6 +308,8 @@ const Creator = ({ userStatus }) => {
         .blog-preview h2 { font-size: 1.25rem; font-weight: 900; color: #1e293b; margin-top: 2.5rem; margin-bottom: 0.8rem; border-left: 4px solid #2563eb; padding-left: 0.8rem; letter-spacing: -0.02em; }
         .blog-preview p { font-size: 1rem; line-height: 1.9; color: #475569; margin-bottom: 1.2rem; text-align: justify; word-break: keep-all; }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
+        /* [추가] 복사 영역 드래그 선택 허용 (중요) - select-none이 적용된 상위 요소 무시 */
+        .user-select-text { user-select: text !important; -webkit-user-select: text !important; }
       `}</style>
 
       {/* 토스트 알림 (중앙 정렬 완벽 수정) */}
@@ -480,7 +499,8 @@ const Creator = ({ userStatus }) => {
                  </button>
               </div>
 
-              <div className="content-container px-1">
+              {/* [수정] contentRef 추가 및 드래그 허용 클래스 추가 */}
+              <div className="content-container px-1 user-select-text" ref={contentRef}>
                 {activeTab === 'blog' ? (
                   <article className="blog-preview">
                     <div className="mb-12">
