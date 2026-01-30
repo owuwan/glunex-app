@@ -11,13 +11,13 @@ import {
 } from 'lucide-react';
 
 /**
- * [AI 마스터 프롬프트 설정 - 자동차 시공 전문성 2중 잠금]
+ * [AI 마스터 프롬프트 설정 - 자동차 시공 전문성 극대화]
  */
 const SYSTEM_PROMPT_TITLES = `
 당신은 대한민국 최고의 '자동차 외장관리(Automotive Detailing)' 전문 마케터입니다.
-[경고] 피부 관리, 화장품, 뷰티, 에스테틱 등 자동차와 무관한 내용은 절대로 생성하지 마세요. 
-오직 자동차 광택, 세차, 유리막 코팅, 썬팅, PPF 등 자동차 시공 서비스의 가치에만 집중하세요.
-사용자가 선택한 자동차 시공 항목과 날씨를 분석하여 네이버 블로그 유입을 극대화하는 '차량 시공 전문' 제목 5개를 제안하세요.
+[필수] 피부 관리, 화장품, 뷰티, 에스테틱 등 자동차와 무관한 내용은 절대로 생성하지 마세요. 
+오직 자동차 광택, 세차, 유리막 코팅, 썬팅, PPF 등 자동차 전문 시공 서비스의 가치에만 집중하세요.
+사용자가 선택한 자동차 시공 항목과 날씨를 분석하여 네이버 블로그 유입을 극대화하는 '자동차 시공 전문' 제목 5개를 제안하세요.
 반드시 JSON 구조로만 응답하세요: { "titles": ["제목1", "제목2", "제목3", "제목4", "제목5"] }
 `;
 
@@ -87,7 +87,7 @@ const Creator = ({ userStatus }) => {
     content: [
       "실제 시공 현장의 생생함을 담은 이미지를\n비용 최적화 실사 질감으로 현상하고 있습니다",
       "디테일링 전문가의 관점에서\n정성스럽게 전문 원고를 집필 중입니다",
-      "이미지와 글의 완벽한 복사 호환을 위해\n데이터 구조를 가공하고 있습니다",
+      "이미지와 글의 완벽한 복사 호환을 위해\n데이터 구조를 정밀하게 가공하고 있습니다",
       "네이버 블로그 알고리즘에 맞춘\n맞춤형 포스팅을 곧 완성합니다"
     ]
   };
@@ -154,20 +154,19 @@ const Creator = ({ userStatus }) => {
   };
 
   /**
-   * [비용 최종 해결책: $0.02 구간 강제 진입] 
-   * 640x480 = 307,200 pixels (약 0.3MP)
-   * 0.5MP보다 훨씬 낮은 수치로 설정하여 시스템이 무조건 하위 과금 티어($0.02 수준)를 적용하게 합니다.
+   * [이미지 엔진 교체: fal-ai/flux-2] 
+   * 장당 $0.012의 비용으로 고품질 실사 이미지를 생성합니다.
    */
   const callFalAI = async (prompt) => {
     const apiKey = import.meta.env.VITE_FAL_API_KEY;
     if (!apiKey || apiKey === "undefined") return null;
     try {
-      const response = await fetch("https://fal.run/fal-ai/flux-pro/v1.1", {
+      const response = await fetch("https://fal.run/fal-ai/flux-2", {
         method: "POST",
         headers: { "Authorization": `Key ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: prompt,
-          image_size: { width: 640, height: 480 } // 확실한 $0.02 구간
+          image_size: "landscape_4_3" 
         })
       });
       const data = await response.json();
@@ -251,7 +250,7 @@ const Creator = ({ userStatus }) => {
         
         if (successful) {
           setIsCopied(true);
-          showToast("이미지와 원고가 복사되었습니다!");
+          showToast("원고가 복사되었습니다!");
           setTimeout(() => setIsCopied(false), 2000);
         } else {
           throw new Error("Copy failed");
@@ -265,7 +264,7 @@ const Creator = ({ userStatus }) => {
       }
     } catch (err) {
       console.error(err);
-      alert("복사 기능이 현재 브라우저를 지원하지 않습니다.");
+      alert("복사 기능을 현재 브라우저를 지원하지 않습니다.");
     }
   };
 
@@ -448,7 +447,7 @@ const Creator = ({ userStatus }) => {
               ))}
             </div>
 
-            {/* [신규] 모바일 사진 저장 안내 배너 (가시성 대폭 강화) */}
+            {/* [모바일 가이드 배너] 가시성 유지 */}
             <div className="mx-1 bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-200 p-5 rounded-[2rem] flex items-center gap-4 shadow-md animate-fade-in-up">
                 <div className="bg-amber-500 p-3 rounded-2xl text-white shadow-lg shadow-amber-200"><SmartphoneIcon size={24} /></div>
                 <div>
