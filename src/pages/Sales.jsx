@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Wallet, TrendingUp, Calendar, CheckCircle2, 
   Clock, Sparkles, MessageSquare, Edit3, 
-  ChevronRight, Info, X, Loader2, ArrowUpRight, Target, Zap
+  ChevronRight, Info, X, Loader2, ArrowUpRight, Target, Zap,
+  ArrowRight
 } from 'lucide-react';
 import { auth, db } from '../firebase';
-import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 
 const Sales = () => {
@@ -27,11 +28,13 @@ const Sales = () => {
 
   const [chartData, setChartData] = useState([]);
 
-  // --- 인증 로직 ---
+  // --- (Rule 3) 인증 로직: 데이터 쿼리 전 반드시 수행 ---
   useEffect(() => {
     const initAuth = async () => {
       try {
-        if (!auth.currentUser) {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
           await signInAnonymously(auth);
         }
       } catch (err) {
@@ -49,6 +52,7 @@ const Sales = () => {
 
   // --- 데이터 페칭 및 통합 계산 ---
   useEffect(() => {
+    // (Rule 3) Guard every Firestore operation with if (!user) return;
     if (!user) return;
 
     const now = new Date();
@@ -59,6 +63,7 @@ const Sales = () => {
     const qWarranties = query(collection(db, "warranties"), where("userId", "==", user.uid));
     const schedulesRef = collection(db, 'artifacts', appId, 'public', 'data', 'schedules');
 
+    // (Rule 1) Using strict paths
     const unsubW = onSnapshot(qWarranties, (wSnap) => {
       const unsubS = onSnapshot(schedulesRef, (sSnap) => {
         let confirmedSum = 0;
@@ -75,6 +80,7 @@ const Sales = () => {
         // 2. 스케줄 기반 (미발행/예정 매출)
         sSnap.docs.forEach(doc => {
           const data = doc.data();
+          // (Rule 2) Fetch all data, then filter in JavaScript memory
           if (data.userId !== user.uid) return;
 
           const price = Number(String(data.price || "0").replace(/[^0-9]/g, '')) || 0;
@@ -84,10 +90,8 @@ const Sales = () => {
           const isTodayPastTime = data.date === todayStr && (sH < currentH || (sH === currentH && sM < currentM));
 
           if (isPastDate || isTodayPastTime) {
-            // 시간은 지났는데 보증서 미발행 상태 (초록색)
             pendingSum += price;
           } else {
-            // 아직 오지 않은 예약 시간 (노란색/앰버)
             upcomingSum += price;
           }
         });
@@ -99,7 +103,7 @@ const Sales = () => {
           total: confirmedSum + pendingSum + upcomingSum
         });
 
-        // 월간 성장 추이를 보여주는 데이터 시뮬레이션 (4주차 흐름)
+        // 월간 성장 추이를 보여주는 데이터 시뮬레이션
         const weeks = ['1주차', '2주차', '3주차', '4주차'];
         setChartData(weeks.map((name, i) => ({
           name,
@@ -116,7 +120,6 @@ const Sales = () => {
     return () => unsubW();
   }, [user, appId]);
 
-  // SVG 곡선 생성 함수 (성취감이 느껴지도록 부드럽게)
   const generatePath = (data, key, height = 150, width = 350) => {
     if (data.length === 0) return "";
     const points = data.map((d, i) => {
@@ -142,7 +145,6 @@ const Sales = () => {
   return (
     <div className="flex flex-col h-full w-full bg-[#F8F9FB] text-slate-800 font-sans overflow-hidden max-w-md mx-auto relative select-none">
       
-      {/* 헤더 */}
       <header className="px-6 pt-12 pb-6 flex items-center gap-4 bg-white border-b border-slate-100 z-10">
         <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-50 rounded-full transition-colors active:scale-90 text-slate-400">
           <ArrowLeft size={24} />
@@ -152,7 +154,6 @@ const Sales = () => {
 
       <main className="flex-1 overflow-y-auto p-6 space-y-6 pb-36 scrollbar-hide">
         
-        {/* 매출 대시보드 카드 */}
         <section className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 right-0 w-40 h-40 bg-blue-500/20 rounded-full blur-[60px] -mr-20 -mt-20"></div>
           <div className="relative z-10 text-left">
@@ -182,7 +183,6 @@ const Sales = () => {
           </div>
         </section>
 
-        {/* 월간 성장 흐름 차트 (주식형 영역 차트) */}
         <section className="bg-white rounded-[2.5rem] p-7 border border-slate-200 shadow-[0_10px_30px_rgba(0,0,0,0.03)] space-y-6">
           <div className="flex justify-between items-center">
             <h3 className="text-base font-black text-slate-900 flex items-center gap-2 italic">
@@ -208,20 +208,16 @@ const Sales = () => {
                 </linearGradient>
               </defs>
               
-              {/* 가이드 라인 */}
               <line x1="0" y1="0" x2="350" y2="0" stroke="#f8fafc" strokeWidth="1" />
               <line x1="0" y1="75" x2="350" y2="75" stroke="#f8fafc" strokeWidth="1" />
               <line x1="0" y1="150" x2="350" y2="150" stroke="#f1f5f9" strokeWidth="1" />
 
-              {/* 확정 매출 (블루 영역) */}
               <path d={generateAreaPath(chartData, 'confirmed')} fill="url(#gradBlue)" className="transition-all duration-1000" />
               <path d={generatePath(chartData, 'confirmed')} fill="none" stroke="#3b82f6" strokeWidth="4" strokeLinecap="round" />
               
-              {/* 완료 매출 (그린 점선) */}
               <path d={generateAreaPath(chartData, 'pending')} fill="url(#gradGreen)" className="transition-all duration-1000" />
               <path d={generatePath(chartData, 'pending')} fill="none" stroke="#22c55e" strokeWidth="2.5" strokeDasharray="6 4" strokeLinecap="round" />
               
-              {/* 예정 매출 (노란색 실선) */}
               <path d={generatePath(chartData, 'upcoming')} fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" opacity="0.6" />
             </svg>
             
@@ -233,7 +229,6 @@ const Sales = () => {
           </div>
         </section>
 
-        {/* 실적 상세 지표 */}
         <section className="grid grid-cols-1 gap-3">
            <div className="bg-white p-6 rounded-[2rem] border border-slate-200 flex items-center justify-between shadow-sm">
               <div className="flex items-center gap-4 text-left">
@@ -278,7 +273,6 @@ const Sales = () => {
         </div>
       </main>
 
-      {/* 하단 고정 액션 버튼 */}
       <footer className="fixed bottom-0 left-0 right-0 p-8 bg-white/80 backdrop-blur-2xl border-t border-slate-100 max-w-md mx-auto z-40">
         <button 
           onClick={() => setShowMarketingModal(true)}
@@ -290,7 +284,6 @@ const Sales = () => {
         </button>
       </footer>
 
-      {/* 마케팅 브릿지 모달 (화면 정중앙 배치) */}
       {showMarketingModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/80 backdrop-blur-md animate-fade-in" onClick={() => setShowMarketingModal(false)}>
            <div className="bg-white w-full max-w-sm rounded-[3.5rem] shadow-2xl relative flex flex-col p-8 pb-12 overflow-hidden animate-scale-in" onClick={e => e.stopPropagation()}>
@@ -304,7 +297,6 @@ const Sales = () => {
               </div>
 
               <div className="space-y-4">
-                 {/* 단골 케어 */}
                  <button 
                     onClick={() => navigate('/marketing')}
                     className="w-full p-7 bg-blue-600 rounded-[2.5rem] flex items-center justify-between group active:scale-[0.98] transition-all shadow-xl shadow-blue-200"
@@ -319,7 +311,6 @@ const Sales = () => {
                     <ArrowUpRight className="text-white opacity-40 group-hover:opacity-100 transition-all" />
                  </button>
 
-                 {/* 신규 유입 */}
                  <button 
                     onClick={() => navigate('/creator')}
                     className="w-full p-7 bg-slate-900 rounded-[2.5rem] flex items-center justify-between group active:scale-[0.98] transition-all shadow-xl shadow-slate-400"
