@@ -6,7 +6,8 @@ import {
   Copy, Check, ArrowLeft, ArrowRight, RefreshCw,
   Target, ListOrdered, FileText, MousePointer2,
   Camera, Wand2, Info, Eye, Smartphone, ChevronRight,
-  Star, ShieldCheck, Palette, ZapOff, X, FileSearch, CheckCircle
+  Star, ShieldCheck, Palette, ZapOff, X, FileSearch, CheckCircle,
+  Download, AlertTriangle
 } from 'lucide-react';
 
 /**
@@ -56,7 +57,7 @@ const Creator = ({ userStatus }) => {
   // --- 상태 관리 ---
   const [step, setStep] = useState('keyword'); 
   const [loading, setLoading] = useState(false);
-  const [loadingType, setLoadingType] = useState('title'); // title | index | content
+  const [loadingType, setLoadingType] = useState('title'); 
   const [loadingMsgIndex, setLoadingMsgIndex] = useState(0); 
   const [selectedTopics, setSelectedTopics] = useState([]);
   const [isWeatherEnabled, setIsWeatherEnabled] = useState(true);
@@ -71,10 +72,8 @@ const Creator = ({ userStatus }) => {
   const [isCopied, setIsCopied] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
 
-  // [수정] 복사 전용 가상 DOM Ref
   const copyBufferRef = useRef(null);
 
-  // 상황별 로딩 메시지 (줄바꿈 적용)
   const loadingMessages = {
     title: [
       "고객의 시선을 사로잡는\n최적의 자동차 시공 제목을 설계 중입니다",
@@ -155,6 +154,11 @@ const Creator = ({ userStatus }) => {
     return JSON.parse(resData.candidates[0].content.parts[0].text);
   };
 
+  /**
+   * [비용 최적화 $0.02 세팅] 
+   * Flux Pro v1.1은 1MP 미만 시 비용이 대폭 절감됩니다. 
+   * 832x624 = 519,168 pixels (0.5MP) -> 장당 약 $0.02 타겟
+   */
   const callFalAI = async (prompt) => {
     const apiKey = import.meta.env.VITE_FAL_API_KEY;
     if (!apiKey || apiKey === "undefined") return null;
@@ -164,7 +168,7 @@ const Creator = ({ userStatus }) => {
         headers: { "Authorization": `Key ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: prompt,
-          image_size: { width: 896, height: 672 } // 비용 최적화 ($0.02)
+          image_size: { width: 832, height: 624 } // $0.02를 위한 0.5MP 고정
         })
       });
       const data = await response.json();
@@ -213,7 +217,6 @@ const Creator = ({ userStatus }) => {
 
       let finalHtml = data.blog_html;
       images.forEach((url, i) => {
-        // [수정] 복사 시 '사진'으로 100% 인식시키기 위해 블로그 에디터 표준 형식 사용
         const replacement = url ? `
           <p style="text-align: center; margin: 30px 0;">
             <img src="${url}" width="100%" style="display: block; border-radius: 12px;" alt="자동차 시공 사진" />
@@ -228,31 +231,22 @@ const Creator = ({ userStatus }) => {
     finally { setLoading(false); }
   };
 
-  /**
-   * [최종 수정] 모바일/네이버 블로그 앱 이미지 복사 끝판왕 로직
-   * 구글 이미지 복사와 동일한 "Native HTML Selection" 방식을 사용하여 
-   * 모바일 에디터가 '미디어 데이터'를 강제로 긁어가게 만듭니다.
-   */
   const handleCopy = async () => {
     if (!generatedData) return;
 
     try {
       if (activeTab === 'blog' && copyBufferRef.current) {
-        // 1. 복사 전용 버퍼를 일시적으로 화면에 표시 (복사 성능 극대화)
         const buffer = copyBufferRef.current;
         buffer.style.display = 'block';
         
-        // 2. 버퍼 내부의 모든 내용(순수 HTML + 이미지)을 선택
         const selection = window.getSelection();
         const range = document.createRange();
         range.selectNodeContents(buffer);
         selection.removeAllRanges();
         selection.addRange(range);
         
-        // 3. 브라우저 내장 복사 명령 실행 (OS 레벨의 리치 텍스트 복사)
         const successful = document.execCommand('copy');
         
-        // 4. 선택 해제 및 버퍼 숨김
         selection.removeAllRanges();
         buffer.style.display = 'none';
         
@@ -264,7 +258,6 @@ const Creator = ({ userStatus }) => {
           throw new Error("Copy failed");
         }
       } else {
-        // 인스타/숏폼용 텍스트 전용 복사
         const text = activeTab === 'insta' ? generatedData.insta_text : generatedData.short_form;
         await navigator.clipboard.writeText(text);
         setIsCopied(true);
@@ -295,7 +288,6 @@ const Creator = ({ userStatus }) => {
         .scrollbar-hide::-webkit-scrollbar { display: none; }
       `}</style>
 
-      {/* 토스트 알림 */}
       {toastMsg && (
         <div className="fixed top-12 inset-x-0 z-[9999] flex justify-center px-4 animate-fade-in-down pointer-events-none">
           <div className="bg-slate-900 text-white px-5 py-3.5 rounded-2xl text-[13px] font-bold shadow-2xl flex items-center justify-center gap-2 border border-slate-700 backdrop-blur-md max-w-[260px] w-full">
@@ -304,7 +296,6 @@ const Creator = ({ userStatus }) => {
         </div>
       )}
 
-      {/* 헤더 */}
       <header className="px-6 py-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur-md z-30">
         <div className="flex items-center gap-4">
           <button onClick={() => {
@@ -318,7 +309,7 @@ const Creator = ({ userStatus }) => {
           <div className="text-left">
             <h1 className="text-xl font-black text-slate-900 tracking-tighter uppercase italic leading-none flex items-center gap-2">
               GLUNEX <span className="text-blue-600">AI</span>
-              <span className="bg-blue-600 text-white text-[9px] px-1.5 py-0.5 rounded-md not-italic tracking-normal">V1.1</span>
+              <span className="bg-blue-600 text-white text-[9px] px-1.5 py-0.5 rounded-md not-italic tracking-normal shadow-sm">V1.1</span>
             </h1>
             <p className="text-[9px] text-slate-400 font-bold uppercase tracking-[0.1em] mt-1.5 italic">Hyper-Realism Agent</p>
           </div>
@@ -332,7 +323,6 @@ const Creator = ({ userStatus }) => {
       <main className="flex-1 overflow-y-auto p-6 space-y-6 pb-44 scrollbar-hide">
         
         {loading ? (
-          /* [로딩 화면] 줄바꿈 최적화 및 짤림 방지 */
           <div className="flex flex-col h-full items-center justify-center animate-fade-in py-24 text-center">
             <div className="relative mb-14 animate-floating">
               <div className="w-24 h-24 bg-blue-600/5 rounded-full flex items-center justify-center relative shadow-inner">
@@ -345,7 +335,6 @@ const Creator = ({ userStatus }) => {
                <h3 className="text-base font-black text-slate-900 tracking-tight uppercase italic opacity-60">
                  Processing Data...
                </h3>
-               {/* [수정] 줄바꿈 가독성 컨테이너 */}
                <div className="min-h-[7rem] flex items-center justify-center">
                   <p key={loadingMsgIndex} className="text-[16px] text-slate-700 font-bold leading-[1.6] animate-text-fade whitespace-pre-line" style={{ wordBreak: 'keep-all' }}>
                     {loadingMessages[loadingType][loadingMsgIndex]}
@@ -460,6 +449,15 @@ const Creator = ({ userStatus }) => {
               ))}
             </div>
 
+            {/* [신규] 모바일 사진 저장 안내 배너 */}
+            <div className="mx-1 bg-amber-50 border border-amber-200 p-4 rounded-2xl flex items-center gap-3 shadow-sm animate-pulse">
+                <div className="bg-amber-100 p-2 rounded-full text-amber-600"><AlertTriangle size={18} /></div>
+                <div>
+                   <p className="text-[11px] font-black text-amber-900 leading-tight">모바일 유저 필수 안내</p>
+                   <p className="text-[10px] text-amber-700 mt-1 font-medium leading-relaxed">사진을 꾹 눌러 저장하신 후 블로그 앱에서 업로드해 주세요!</p>
+                </div>
+            </div>
+
             <div className="bg-white p-7 rounded-[3rem] border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.05)] min-h-[650px] relative overflow-hidden text-left animate-fade-in-up">
               
               <div className="flex justify-between items-center mb-10 pb-5 border-b border-slate-50">
@@ -470,10 +468,13 @@ const Creator = ({ userStatus }) => {
                       <p className="text-[12px] font-black text-slate-800 tracking-tight mt-1 capitalize">{activeTab} Preview</p>
                     </div>
                  </div>
-                 <button onClick={handleCopy} className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl border transition-all active:scale-90 font-black text-[12px] ${isCopied ? 'bg-green-50 border-green-200 text-green-600' : 'bg-slate-900 border-slate-800 text-white shadow-lg shadow-slate-900/10'}`}>
-                    {isCopied ? <Check size={16} /> : <Copy size={16} />}
-                    {isCopied ? '복사됨' : '복사'}
-                 </button>
+                 <div className="flex flex-col items-end gap-1">
+                    <button onClick={handleCopy} className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl border transition-all active:scale-90 font-black text-[12px] ${isCopied ? 'bg-green-50 border-green-200 text-green-600' : 'bg-slate-900 border-slate-800 text-white shadow-lg shadow-slate-900/10'}`}>
+                        {isCopied ? <Check size={16} /> : <Copy size={16} />}
+                        {isCopied ? '복사됨' : '복사'}
+                    </button>
+                    <span className="text-[8px] text-slate-400 font-bold">* 모바일은 텍스트 위주 복사</span>
+                 </div>
               </div>
 
               <div className="content-container px-1">
@@ -502,7 +503,6 @@ const Creator = ({ userStatus }) => {
                 )}
               </div>
               
-              {/* [신규] 복사 전용 숨겨진 버퍼 (블로그 복사 최적화) */}
               <div 
                 ref={copyBufferRef}
                 style={{ 
@@ -528,7 +528,7 @@ const Creator = ({ userStatus }) => {
         {step === 'keyword' && (
           <button onClick={handleGenerateTitles} disabled={selectedTopics.length === 0} 
             className={`w-full py-5 rounded-[2.5rem] font-black text-lg flex items-center justify-center gap-5 transition-all active:scale-95 shadow-2xl ${
-              selectedTopics.length > 0 ? 'bg-slate-900 text-white shadow-slate-900/40' : 'bg-slate-100 text-slate-300 border border-slate-200 cursor-not-allowed'
+              selectedTopics.length > 0 ? 'bg-slate-900 text-white shadow-slate-900/50' : 'bg-slate-100 text-slate-300 border border-slate-200 cursor-not-allowed'
             }`}
           >
             <Sparkles size={22} className="text-amber-400 animate-pulse" /> 마케팅 제목 생성 <ArrowRight size={20} />
