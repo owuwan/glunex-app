@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { 
   User, Crown, MessageSquare, ChevronRight, CloudRain, Sun, 
   TrendingUp, Sparkles, Loader2, MapPin, Wallet, Bell, 
-  ArrowUpRight, Calendar, Clock, Car, Tag, Phone, Plus, X, ChevronLeft
+  ArrowUpRight, Calendar, Clock, Car, Tag, Phone, Plus, X, ChevronLeft,
+  ChevronDown
 } from 'lucide-react';
 import { auth, db } from '../firebase';
 import { doc, getDoc, collection, query, where, getDocs, addDoc, onSnapshot } from 'firebase/firestore';
@@ -33,6 +34,13 @@ const Dashboard = () => {
     time: '', carModel: '', serviceType: '', price: '', phone: '', date: new Date().toISOString().split('T')[0]
   });
 
+  // 커스텀 시간 선택 상태
+  const [timeParts, setTimeParts] = useState({
+    ampm: '', // 오전, 오후
+    hour: '', // 1~12
+    minute: '' // 00~55 (5분 단위)
+  });
+
   // 캘린더 월 관리
   const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -40,7 +48,7 @@ const Dashboard = () => {
   useEffect(() => {
     const initAuth = async () => {
       if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        // 커스텀 토큰 처리 (환경변수 기반)
+        // 커스텀 토큰 처리
       } else {
         await signInAnonymously(auth);
       }
@@ -130,20 +138,28 @@ const Dashboard = () => {
   };
 
   const handleAddSchedule = async () => {
-    // 유효성 검사 최적화
-    const { time, carModel, serviceType, price, phone, date } = newSchedule;
+    const { ampm, hour, minute } = timeParts;
+    const { carModel, serviceType, price, phone, date } = newSchedule;
     
-    if (!time || time.trim() === "") return alert("예약 시간을 선택해주세요.");
+    // 시간 유효성 검사
+    if (!ampm || !hour || !minute) return alert("예약 시간을 모두 선택해주세요.");
     if (!carModel || carModel.trim() === "") return alert("차종을 입력해주세요.");
     if (!serviceType || serviceType.trim() === "") return alert("시공 품목을 입력해주세요.");
     if (!user) return;
 
+    // 24시간 형식으로 변환 (정렬용)
+    let h = parseInt(hour);
+    if (ampm === '오후' && h < 12) h += 12;
+    if (ampm === '오전' && h === 12) h = 0;
+    const formattedTime = `${String(h).padStart(2, '0')}:${minute}`;
+
     try {
       const scheduleToSave = {
-        time,
+        time: formattedTime, // 24H 포맷
+        displayTime: `${ampm} ${hour}:${minute}`, // 뷰 전용 포맷
         carModel,
         serviceType,
-        price: (price || "").replace(/,/g, ''), // 저장 직전 콤마 제거
+        price: (price || "").replace(/,/g, ''),
         phone: phone || "",
         date: date || selectedDateStr,
         userId: user.uid,
@@ -153,27 +169,41 @@ const Dashboard = () => {
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'schedules'), scheduleToSave);
       
       setShowAddModal(false);
-      // 등록 후 폼 초기화
+      // 등록 후 폼 및 시간 선택기 초기화
       setNewSchedule({ 
         time: '', carModel: '', serviceType: '', price: '', phone: '', 
         date: selectedDateStr 
       });
+      setTimeParts({ ampm: '', hour: '', minute: '' });
     } catch (e) { 
       console.error(e);
       alert("일정 저장에 실패했습니다."); 
     }
   };
 
-  // 오늘의 일정 필터링
+  // 24시간 포맷을 보기 좋게 변환
+  const formatTimeDisplay = (time24) => {
+    if (!time24) return "";
+    const [h, m] = time24.split(':');
+    const hourNum = parseInt(h);
+    const ampm = hourNum >= 12 ? '오후' : '오전';
+    const hour12 = hourNum % 12 || 12;
+    return `${ampm} ${hour12}:${m}`;
+  };
+
   const todaySchedules = schedules
     .filter(s => s.date === new Date().toISOString().split('T')[0])
     .sort((a, b) => (a.time || "").localeCompare(b.time || ""));
 
-  // --- 달력 렌더링 로직 ---
   const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
   const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const padding = Array.from({ length: firstDayOfMonth }, (_, i) => i);
+
+  // 시간 선택 옵션들
+  const ampmOptions = ['오전', '오후'];
+  const hourOptions = Array.from({ length: 12 }, (_, i) => String(i + 1));
+  const minuteOptions = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'));
 
   return (
     <div className="flex flex-col h-full w-full bg-[#F8F9FB] text-slate-800 font-sans overflow-hidden max-w-md mx-auto shadow-2xl relative select-none">
@@ -262,7 +292,7 @@ const Dashboard = () => {
                        {todaySchedules.length > 0 ? (
                          todaySchedules.slice(0, 2).map((s, idx) => (
                            <div key={idx} className="flex flex-col gap-0.5 border-l-2 border-blue-600 pl-2">
-                              <p className="text-[11px] font-black text-slate-800 leading-none">{s.time} | {s.carModel}</p>
+                              <p className="text-[11px] font-black text-slate-800 leading-none">{formatTimeDisplay(s.time)} | {s.carModel}</p>
                               <p className="text-[9px] text-slate-400 font-bold truncate">{s.serviceType}</p>
                            </div>
                          ))
@@ -282,7 +312,7 @@ const Dashboard = () => {
               </button>
             </div>
 
-            {/* 메인 서비스 */}
+            {/* 서비스 버튼 */}
             <div className="flex flex-col gap-3">
               <button onClick={() => navigate('/creator')} className="bg-gradient-to-r from-indigo-50 to-white rounded-3xl border border-indigo-100 p-6 flex items-center justify-between group active:scale-[0.98] transition-all shadow-sm">
                  <div className="flex flex-col items-start text-left">
@@ -385,7 +415,10 @@ const Dashboard = () => {
                       schedules.filter(s => s.date === selectedDateStr).sort((a,b)=> (a.time || "").localeCompare(b.time || "")).map(s => (
                         <div key={s.id} className="bg-white p-5 rounded-[2rem] flex justify-between items-center border border-slate-100 shadow-sm animate-fade-in-up">
                            <div className="flex items-center gap-4">
-                              <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 font-black text-xs border border-blue-100">{s.time}</div>
+                              <div className="w-14 h-14 rounded-2xl bg-blue-50 flex flex-col items-center justify-center text-blue-600 font-black border border-blue-100">
+                                 <span className="text-[9px] uppercase">{s.time.split(':')[0] < 12 ? 'AM' : 'PM'}</span>
+                                 <span className="text-xs">{formatTimeDisplay(s.time).split(' ')[1]}</span>
+                              </div>
                               <div>
                                  <p className="text-sm font-black text-slate-800">{s.carModel}</p>
                                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">{s.serviceType}</p>
@@ -415,7 +448,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* 예약 등록 모달 */}
+      {/* 예약 등록 모달 (수정됨: 드롭다운 시간 선택) */}
       {showAddModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in" onClick={() => setShowAddModal(false)}>
            <div className="bg-white w-full max-w-sm rounded-[3rem] shadow-2xl relative flex flex-col p-8 overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -429,37 +462,61 @@ const Dashboard = () => {
                  <button onClick={() => setShowAddModal(false)} className="p-2.5 bg-slate-50 rounded-full text-slate-400 active:scale-90"><X size={20}/></button>
               </div>
 
-              <div className="space-y-4 relative z-10">
-                 <div className="grid grid-cols-2 gap-3">
-                   <div className="space-y-1.5">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Time</p>
-                      <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3 focus-within:border-blue-500 transition-colors">
-                        <input 
-                          type="time" 
-                          className="bg-transparent text-sm font-black w-full outline-none" 
-                          value={newSchedule.time} 
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setNewSchedule(prev => ({ ...prev, time: val }));
-                          }}
-                        />
-                      </div>
-                   </div>
-                   <div className="space-y-1.5">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Car Model</p>
-                      <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3 focus-within:border-blue-500 transition-colors">
-                        <input 
-                          type="text" 
-                          placeholder="예: BMW 5" 
-                          className="bg-transparent text-sm font-black w-full outline-none" 
-                          value={newSchedule.carModel} 
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setNewSchedule(prev => ({ ...prev, carModel: val }));
-                          }}
-                        />
-                      </div>
-                   </div>
+              <div className="space-y-4 relative z-10 overflow-y-auto max-h-[70vh] pr-1 scrollbar-hide">
+                 {/* 커스텀 시간 선택 드롭다운 영역 */}
+                 <div className="space-y-1.5">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Reservation Time</p>
+                    <div className="grid grid-cols-3 gap-2">
+                       <div className="relative group">
+                          <select 
+                            className="appearance-none w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm font-bold outline-none focus:border-blue-500 transition-colors cursor-pointer"
+                            value={timeParts.ampm}
+                            onChange={(e) => setTimeParts(prev => ({ ...prev, ampm: e.target.value }))}
+                          >
+                            <option value="">오전/오후</option>
+                            {ampmOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                          </select>
+                          <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                       </div>
+                       <div className="relative group">
+                          <select 
+                            className="appearance-none w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm font-bold outline-none focus:border-blue-500 transition-colors cursor-pointer"
+                            value={timeParts.hour}
+                            onChange={(e) => setTimeParts(prev => ({ ...prev, hour: e.target.value }))}
+                          >
+                            <option value="">시</option>
+                            {hourOptions.map(opt => <option key={opt} value={opt}>{opt}시</option>)}
+                          </select>
+                          <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                       </div>
+                       <div className="relative group">
+                          <select 
+                            className="appearance-none w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm font-bold outline-none focus:border-blue-500 transition-colors cursor-pointer"
+                            value={timeParts.minute}
+                            onChange={(e) => setTimeParts(prev => ({ ...prev, minute: e.target.value }))}
+                          >
+                            <option value="">분</option>
+                            {minuteOptions.map(opt => <option key={opt} value={opt}>{opt}분</option>)}
+                          </select>
+                          <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                       </div>
+                    </div>
+                 </div>
+
+                 <div className="space-y-1.5">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Car Model</p>
+                    <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3 focus-within:border-blue-500 transition-colors">
+                      <input 
+                        type="text" 
+                        placeholder="예: BMW 5 / 쏘렌토" 
+                        className="bg-transparent text-sm font-bold w-full outline-none" 
+                        value={newSchedule.carModel} 
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setNewSchedule(prev => ({ ...prev, carModel: val }));
+                        }}
+                      />
+                    </div>
                  </div>
 
                  <div className="space-y-1.5">
@@ -467,8 +524,8 @@ const Dashboard = () => {
                     <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3 focus-within:border-blue-500 transition-colors">
                       <input 
                         type="text" 
-                        placeholder="예: 광택 + 유리막" 
-                        className="bg-transparent text-sm font-black w-full outline-none" 
+                        placeholder="예: 광택 + 유리막코팅" 
+                        className="bg-transparent text-sm font-bold w-full outline-none" 
                         value={newSchedule.serviceType} 
                         onChange={(e) => {
                           const val = e.target.value;
@@ -483,7 +540,7 @@ const Dashboard = () => {
                     <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3 focus-within:border-blue-500 transition-colors">
                       <input 
                         type="text" 
-                        placeholder="금액 입력" 
+                        placeholder="시공 금액" 
                         className="bg-transparent text-sm font-black w-full outline-none" 
                         value={newSchedule.price} 
                         onChange={handlePriceInput} 
