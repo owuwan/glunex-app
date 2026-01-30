@@ -32,8 +32,10 @@ const SYSTEM_PROMPT_CONTENT = `
 - 각 섹션 끝에 [[image_1]], [[image_2]], [[image_3]], [[image_4]], [[image_5]] 태그를 순서대로 하나씩 배치하세요.
 - HTML 태그(h2, p, br, strong)를 사용하세요. h2는 목차 제목으로 사용하세요.
 
-[2단계: 이미지 프롬프트 생성 지침]
-  "Please check the '[실내세차]' '[디테일링]' '[유리막코팅]' in Korea detail shop with images within a year through www.naver.com search engine and make an image."
+[2단계: 키워드 요약 및 이미지 프롬프트 생성 지침]
+- 각 섹션의 내용을 분석하여 가장 핵심적인 '기술 장비'나 '시공 상황' 키워드 3개를 한국어로 추출하세요.
+- 추출된 키워드를 다음 영문 템플릿에 넣어 image_prompts(p1~p5)를 생성하세요:
+  "Please check the '[키워드1]' '[키워드2]' '[키워드3]' in Korea detail shop with images within a year through www.naver.com search engine and make an image. The photo should look like a raw, unpolished handheld shot from iPhone 15 Pro, natural lighting, no text, blurred license plate."
 
 [출력 형식]
 JSON으로만 응답:
