@@ -228,7 +228,7 @@ const Dashboard = () => {
           <h2 className="text-xl font-black text-slate-900 tracking-tight truncate pr-2">{loadingUser ? '...' : userName}</h2>
         </div>
 
-        {/* [수정] 날씨/타겟 정보 - 영어 지역명 로직 적용 */}
+        {/* [날씨/타겟 정보] */}
         <div className="flex items-center gap-2 bg-white/70 backdrop-blur-md px-3 py-2 rounded-full border border-slate-200 shadow-sm mx-2 shrink-0">
            <div className="flex items-center gap-1.5 border-r border-slate-200 pr-2">
               {weather.loading ? (
@@ -258,7 +258,7 @@ const Dashboard = () => {
         
         {view === 'main' ? (
           <div className="flex flex-col gap-4 animate-fade-in">
-            <div className="flex gap-3 h-[180px] shrink-0">
+            <div className="flex gap-3 h-[190px] shrink-0">
               <button 
                 onClick={() => navigate('/sales')}
                 className="flex-[1.4] bg-white rounded-[2.5rem] p-6 border border-slate-200 shadow-sm relative overflow-hidden group active:scale-[0.98] transition-all flex flex-col justify-between text-left"
@@ -283,44 +283,50 @@ const Dashboard = () => {
                 </div>
               </button>
 
-              {/* [수정] 오늘의 스케줄 카드 - 2건 제한 및 요약 표시 로직 추가 */}
+              {/* [수정] 오늘의 스케줄 카드 - 레이아웃 및 배지 디자인 최적화 */}
               <button 
                 onClick={() => setView('calendar')}
                 className="flex-[1.1] bg-white rounded-[2.5rem] p-6 border border-slate-200 shadow-sm relative overflow-hidden flex flex-col group active:scale-[0.98] transition-all text-left"
               >
                  <div className="absolute top-0 right-0 w-20 h-20 bg-blue-50 rounded-full blur-2xl -mr-10 -mt-10 group-hover:bg-blue-100 transition-colors" />
-                 <div className="relative z-10 h-full flex flex-col">
-                    <div className="flex items-center gap-1.5 mb-3">
-                       <div className="p-1.5 bg-blue-600 rounded-xl text-white shadow-lg"><Calendar size={14} /></div>
-                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Today</span>
-                    </div>
-                    
-                    <div className="flex-1 space-y-2 overflow-hidden">
-                       {todaySchedules.length > 0 ? (
-                         <>
-                           {todaySchedules.slice(0, 2).map((s, idx) => (
-                             <div key={idx} className="flex flex-col gap-0.5 border-l-2 border-blue-600 pl-2">
-                                <p className="text-[10px] font-black text-slate-800 leading-none truncate">{formatTimeDisplay(s.time).split(' ')[1]} | {s.carModel}</p>
-                                <p className="text-[8px] text-slate-400 font-bold truncate">{s.serviceType}</p>
-                             </div>
-                           ))}
-                           {todaySchedules.length > 2 && (
-                             <div className="mt-2 flex items-center gap-1 bg-blue-50 px-2 py-1 rounded-lg border border-blue-100 animate-pulse">
-                                <span className="text-[9px] font-black text-blue-600">외 {todaySchedules.length - 2}건의 일정 더 있음</span>
-                             </div>
-                           )}
-                         </>
-                       ) : (
-                         <div className="h-full flex flex-col items-center justify-center opacity-30">
-                            <Clock size={16} className="text-slate-400 mb-1" />
-                            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">Empty</p>
-                         </div>
-                       )}
+                 <div className="relative z-10 h-full flex flex-col justify-between">
+                    <div>
+                        <div className="flex items-center gap-1.5 mb-3">
+                        <div className="p-1.5 bg-blue-600 rounded-xl text-white shadow-lg"><Calendar size={14} /></div>
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Today</span>
+                        </div>
+                        
+                        <div className="space-y-2.5 overflow-hidden">
+                        {todaySchedules.length > 0 ? (
+                            <>
+                            {todaySchedules.slice(0, 2).map((s, idx) => (
+                                <div key={idx} className="flex flex-col gap-0.5 border-l-2 border-blue-600 pl-2">
+                                    <p className="text-[10px] font-black text-slate-800 leading-none truncate">{formatTimeDisplay(s.time).split(' ')[1]} | {s.carModel}</p>
+                                    <p className="text-[8px] text-slate-400 font-bold truncate">{s.serviceType}</p>
+                                </div>
+                            ))}
+                            </>
+                        ) : (
+                            <div className="py-4 flex flex-col items-center justify-center opacity-30">
+                                <Clock size={16} className="text-slate-400 mb-1" />
+                                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">Empty</p>
+                            </div>
+                        )}
+                        </div>
                     </div>
 
-                    <div className="mt-auto flex items-center justify-between text-[10px] font-black text-slate-300 group-hover:text-blue-600 transition-colors">
-                       <span>Calendar</span>
-                       <ChevronRight size={12} />
+                    <div className="mt-2">
+                        {todaySchedules.length >= 3 ? (
+                            <div className="flex items-center gap-1.5 bg-blue-50/80 px-2.5 py-1.5 rounded-xl border border-blue-100 animate-pulse mb-3">
+                                <Sparkles size={10} className="text-blue-600 fill-blue-600" />
+                                <span className="text-[9px] font-black text-blue-600 leading-none">오늘 총 {todaySchedules.length}건 시공 예정</span>
+                            </div>
+                        ) : null}
+                        
+                        <div className="flex items-center justify-between text-[10px] font-black text-slate-300 group-hover:text-blue-600 transition-colors">
+                            <span>Calendar</span>
+                            <ChevronRight size={12} />
+                        </div>
                     </div>
                  </div>
               </button>
@@ -554,7 +560,7 @@ const Dashboard = () => {
                       <input 
                         type="text" 
                         placeholder="시공 금액" 
-                        className="bg-transparent text-sm font-black w-full outline-none" 
+                        className="bg-transparent text-sm font-bold w-full outline-none" 
                         value={newSchedule.price} 
                         onChange={handlePriceInput} 
                       />
