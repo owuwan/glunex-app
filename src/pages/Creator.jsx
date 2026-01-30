@@ -7,11 +7,11 @@ import {
   Target, ListOrdered, FileText, MousePointer2,
   Camera, Wand2, Info, Eye, Smartphone, ChevronRight,
   Star, ShieldCheck, Palette, ZapOff, X, FileSearch, CheckCircle,
-  Download, AlertTriangle, SmartphoneIcon, Film, Type
+  Download, AlertTriangle, SmartphoneIcon, Film, Type, Hash, Clock3, Play
 } from 'lucide-react';
 
 /**
- * [AI 마스터 프롬프트 설정 - 장비 고증 강화 버전]
+ * [AI 마스터 프롬프트 설정 - 장비 고증 강화 버전 유지]
  */
 const SYSTEM_PROMPT_TITLES = `
 당신은 대한민국 최고의 '자동차 외장관리(Automotive Detailing)' 전문 마케터입니다.
@@ -313,7 +313,6 @@ const Creator = ({ userStatus }) => {
         </div>
       </header>
 
-      {/* [수정] 메인 컨테이너 패딩 조절 - 푸터 노출 여부에 따라 가변적용 */}
       <main className={`flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide ${(step === 'keyword' || step === 'result') && !loading ? 'pb-44' : 'pb-10'}`}>
         
         {loading ? (
@@ -425,7 +424,7 @@ const Creator = ({ userStatus }) => {
             </div>
           </section>
         ) : (
-          /* [결과 페이지] 리뉴얼된 SNS UI */
+          /* [결과 페이지] 최종 포스팅 및 SNS UI 리뉴얼 */
           <section className="space-y-6 animate-fade-in-up pb-10">
             <div className="flex bg-slate-200/50 p-1.5 rounded-2xl border border-slate-100 shadow-inner mx-1">
               {[
@@ -443,21 +442,46 @@ const Creator = ({ userStatus }) => {
               ))}
             </div>
 
-            {/* [모바일 가이드 배너] */}
-            <div className="mx-1 bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-200 p-5 rounded-[2rem] flex items-center gap-4 shadow-md animate-fade-in-up">
-                <div className="bg-amber-500 p-3 rounded-2xl text-white shadow-lg shadow-amber-200"><SmartphoneIcon size={24} /></div>
-                <div>
-                   <p className="text-[13px] font-black text-amber-900 leading-tight">모바일 필독: 사진 저장 가이드</p>
-                   <p className="text-[11px] text-amber-700 mt-1.5 font-bold leading-relaxed">
-                     사진을 <span className="underline decoration-2 decoration-amber-400 underline-offset-2">꾹 눌러 '이미지 저장'</span> 하신 후,<br/>
-                     블로그 앱 글쓰기에서 직접 첨부해 주세요!
-                   </p>
+            {/* [탭별 맞춤형 상단 안내 배너] */}
+            {activeTab === 'blog' ? (
+                <div className="mx-1 bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-200 p-5 rounded-[2rem] flex items-center gap-4 shadow-md animate-fade-in-up">
+                    <div className="bg-amber-500 p-3 rounded-2xl text-white shadow-lg shadow-amber-200"><SmartphoneIcon size={24} /></div>
+                    <div>
+                    <p className="text-[13px] font-black text-amber-900 leading-tight">모바일 필독: 사진 저장 가이드</p>
+                    <p className="text-[11px] text-amber-700 mt-1.5 font-bold leading-relaxed">
+                        사진을 <span className="underline decoration-2 decoration-amber-400 underline-offset-2">꾹 눌러 '이미지 저장'</span> 하신 후,<br/>
+                        블로그 앱 글쓰기에서 직접 첨부해 주세요!
+                    </p>
+                    </div>
                 </div>
-            </div>
+            ) : activeTab === 'insta' ? (
+                <div className="mx-1 bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-100 p-5 rounded-[2rem] flex items-center gap-4 shadow-md animate-fade-in-up">
+                    <div className="bg-gradient-to-tr from-purple-600 to-pink-500 p-3 rounded-2xl text-white shadow-lg shadow-purple-200"><Hash size={24} /></div>
+                    <div>
+                    <p className="text-[13px] font-black text-purple-900 leading-tight">인스타그램 알고리즘 가이드</p>
+                    <p className="text-[11px] text-purple-700 mt-1.5 font-bold leading-relaxed">
+                        인스타그램은 해시태그의 연관성이 노출을 결정합니다.<br/>
+                        추천된 <span className="text-purple-600">핵심 키워드 위주</span>로 본문을 구성했습니다.
+                    </p>
+                    </div>
+                </div>
+            ) : (
+                <div className="mx-1 bg-gradient-to-r from-slate-800 to-slate-900 border-2 border-slate-700 p-5 rounded-[2rem] flex items-center gap-4 shadow-md animate-fade-in-up text-white">
+                    <div className="bg-blue-500 p-3 rounded-2xl text-white shadow-lg shadow-blue-400/30"><Play size={24} /></div>
+                    <div>
+                    <p className="text-[13px] font-black text-blue-100 leading-tight">숏폼 떡상의 법칙: 3초 후킹</p>
+                    <p className="text-[11px] text-slate-300 mt-1.5 font-bold leading-relaxed">
+                        숏폼은 <span className="text-blue-400">초반 3초</span>에 성과가 결정됩니다.<br/>
+                        타임라인별 최적의 촬영 연출법을 확인하세요.
+                    </p>
+                    </div>
+                </div>
+            )}
 
             <div className="bg-white p-7 rounded-[3rem] border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.05)] min-h-[600px] relative overflow-hidden text-left animate-fade-in-up">
               <div className="content-container px-1 pt-4">
                 {activeTab === 'blog' ? (
+                  /* 블로그 탭 UI */
                   <article className="blog-preview">
                     <div className="mb-10">
                        <div className="flex items-center gap-2 mb-4">
@@ -488,9 +512,17 @@ const Creator = ({ userStatus }) => {
                           {generatedData.insta_text}
                        </pre>
                     </div>
+                    <div className="mt-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                            <Hash size={12} className="text-purple-500" /> Recommended Hashtags
+                        </p>
+                        <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                            #GLUNEX #디테일링 #광택 #자동차관리 #시공후기 #차쟁이 #카스타그램 #프리미엄세차 #블로그체험단
+                        </p>
+                    </div>
                   </div>
                 ) : (
-                  /* 숏폼 UI */
+                  /* 숏폼 UI - 디렉터 스튜디오 스타일 */
                   <div className="animate-fade-in-up py-4 space-y-6">
                     <div className="flex items-center gap-3 mb-6">
                         <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center text-white shadow-lg">
@@ -501,11 +533,61 @@ const Creator = ({ userStatus }) => {
                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Reels / Shorts</p>
                         </div>
                     </div>
-                    <div className="bg-slate-900 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden transition-all">
-                       <div className="relative z-10">
-                          <pre className="whitespace-pre-wrap text-[15px] text-white leading-relaxed font-bold tracking-tight italic opacity-90">
-                             {generatedData.short_form}
-                          </pre>
+                    
+                    <div className="bg-slate-900 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden transition-all border border-slate-800">
+                       <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
+                          <div className="absolute top-10 left-10 w-20 h-20 bg-blue-500 rounded-full blur-3xl"></div>
+                          <div className="absolute bottom-10 right-10 w-20 h-20 bg-purple-500 rounded-full blur-3xl"></div>
+                       </div>
+                       
+                       <div className="relative z-10 space-y-6">
+                          {/* 그럴싸한 타임라인 가이드 */}
+                          <div className="flex flex-col gap-4">
+                             <div className="flex items-start gap-4 group">
+                                <div className="flex flex-col items-center">
+                                    <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/30">
+                                        <Zap size={14} fill="white" />
+                                    </div>
+                                    <div className="w-0.5 h-12 bg-slate-800 my-1"></div>
+                                </div>
+                                <div className="pt-1">
+                                    <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">00:00 - 00:03 [The Hook]</p>
+                                    <p className="text-xs text-slate-400 font-medium">강렬한 전/후 비교 혹은 시각적 충격(철분 반응 등)으로 시선을 잡으세요.</p>
+                                </div>
+                             </div>
+
+                             <div className="flex items-start gap-4 group">
+                                <div className="flex flex-col items-center">
+                                    <div className="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center text-white">
+                                        <Clock3 size={14} />
+                                    </div>
+                                    <div className="w-0.5 h-12 bg-slate-800 my-1"></div>
+                                </div>
+                                <div className="pt-1">
+                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">00:03 - 00:12 [Expert Process]</p>
+                                    <p className="text-xs text-slate-400 font-medium">전문 장비가 작동하는 생생한 소리(ASMR)와 공정 위주로 보여주세요.</p>
+                                </div>
+                             </div>
+
+                             <div className="flex items-start gap-4 group">
+                                <div className="flex flex-col items-center">
+                                    <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center text-white shadow-lg shadow-amber-500/30">
+                                        <Star size={14} fill="white" />
+                                    </div>
+                                </div>
+                                <div className="pt-1">
+                                    <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-1">00:12 - 00:15 [Call to Action]</p>
+                                    <p className="text-xs text-slate-400 font-medium">완성된 광택 샷과 함께 프로필 링크 클릭 유도.</p>
+                                </div>
+                             </div>
+                          </div>
+
+                          <div className="pt-6 border-t border-slate-800">
+                            <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-4">Final Script</p>
+                            <pre className="whitespace-pre-wrap text-[15px] text-white leading-relaxed font-bold tracking-tight italic opacity-90">
+                                {generatedData.short_form}
+                            </pre>
+                          </div>
                        </div>
                     </div>
                   </div>
