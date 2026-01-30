@@ -126,20 +126,26 @@ const Dashboard = () => {
   const handlePriceInput = (e) => {
     const rawValue = e.target.value.replace(/[^0-9]/g, "");
     const formattedValue = rawValue.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-    setNewSchedule({ ...newSchedule, price: formattedValue });
+    setNewSchedule(prev => ({ ...prev, price: formattedValue }));
   };
 
   const handleAddSchedule = async () => {
-    // 유효성 검사 수정 (빈 문자열 및 공백 체크 강화)
-    if (!newSchedule.time || newSchedule.time === "") return alert("예약 시간을 선택해주세요.");
-    if (!newSchedule.carModel || newSchedule.carModel.trim() === "") return alert("차종을 입력해주세요.");
-    if (!newSchedule.serviceType || newSchedule.serviceType.trim() === "") return alert("시공 품목을 입력해주세요.");
+    // 유효성 검사 최적화
+    const { time, carModel, serviceType, price, phone, date } = newSchedule;
+    
+    if (!time || time.trim() === "") return alert("예약 시간을 선택해주세요.");
+    if (!carModel || carModel.trim() === "") return alert("차종을 입력해주세요.");
+    if (!serviceType || serviceType.trim() === "") return alert("시공 품목을 입력해주세요.");
     if (!user) return;
 
     try {
       const scheduleToSave = {
-        ...newSchedule,
-        price: (newSchedule.price || "").replace(/,/g, ''), // 콤마 제거 후 숫자 문자열로 저장
+        time,
+        carModel,
+        serviceType,
+        price: (price || "").replace(/,/g, ''), // 저장 직전 콤마 제거
+        phone: phone || "",
+        date: date || selectedDateStr,
         userId: user.uid,
         createdAt: new Date().toISOString()
       };
@@ -147,7 +153,7 @@ const Dashboard = () => {
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'schedules'), scheduleToSave);
       
       setShowAddModal(false);
-      // 등록 후 폼 완전 초기화
+      // 등록 후 폼 초기화
       setNewSchedule({ 
         time: '', carModel: '', serviceType: '', price: '', phone: '', 
         date: selectedDateStr 
@@ -428,13 +434,30 @@ const Dashboard = () => {
                    <div className="space-y-1.5">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Time</p>
                       <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3 focus-within:border-blue-500 transition-colors">
-                        <input type="time" className="bg-transparent text-sm font-black w-full outline-none" value={newSchedule.time} onChange={e=>setNewSchedule({...newSchedule, time: e.target.value})}/>
+                        <input 
+                          type="time" 
+                          className="bg-transparent text-sm font-black w-full outline-none" 
+                          value={newSchedule.time} 
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setNewSchedule(prev => ({ ...prev, time: val }));
+                          }}
+                        />
                       </div>
                    </div>
                    <div className="space-y-1.5">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Car Model</p>
                       <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3 focus-within:border-blue-500 transition-colors">
-                        <input type="text" placeholder="예: BMW 5" className="bg-transparent text-sm font-black w-full outline-none" value={newSchedule.carModel} onChange={e=>setNewSchedule({...newSchedule, carModel: e.target.value})}/>
+                        <input 
+                          type="text" 
+                          placeholder="예: BMW 5" 
+                          className="bg-transparent text-sm font-black w-full outline-none" 
+                          value={newSchedule.carModel} 
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setNewSchedule(prev => ({ ...prev, carModel: val }));
+                          }}
+                        />
                       </div>
                    </div>
                  </div>
@@ -442,7 +465,16 @@ const Dashboard = () => {
                  <div className="space-y-1.5">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Service Item</p>
                     <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3 focus-within:border-blue-500 transition-colors">
-                      <input type="text" placeholder="예: 광택 + 유리막" className="bg-transparent text-sm font-black w-full outline-none" value={newSchedule.serviceType} onChange={e=>setNewSchedule({...newSchedule, serviceType: e.target.value})}/>
+                      <input 
+                        type="text" 
+                        placeholder="예: 광택 + 유리막" 
+                        className="bg-transparent text-sm font-black w-full outline-none" 
+                        value={newSchedule.serviceType} 
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setNewSchedule(prev => ({ ...prev, serviceType: val }));
+                        }}
+                      />
                     </div>
                  </div>
 
@@ -462,7 +494,16 @@ const Dashboard = () => {
                  <div className="space-y-1.5">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Customer Phone</p>
                     <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3 focus-within:border-blue-500 transition-colors">
-                      <input type="tel" placeholder="010-0000-0000" className="bg-transparent text-sm font-black w-full outline-none" value={newSchedule.phone} onChange={e=>setNewSchedule({...newSchedule, phone: e.target.value})}/>
+                      <input 
+                        type="tel" 
+                        placeholder="010-0000-0000" 
+                        className="bg-transparent text-sm font-black w-full outline-none" 
+                        value={newSchedule.phone} 
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setNewSchedule(prev => ({ ...prev, phone: val }));
+                        }}
+                      />
                     </div>
                  </div>
 
