@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 
 /**
- * [AI 마스터 프롬프트 설정 - 저해상도 실사 질감 유도 로직]
+ * [AI 마스터 프롬프트 설정]
  */
 const SYSTEM_PROMPT_TITLES = `
 당신은 대한민국 최고의 자동차 디테일링 전문 마케터입니다.
@@ -53,7 +53,7 @@ const Creator = ({ userStatus }) => {
   // --- 상태 관리 ---
   const [step, setStep] = useState('keyword'); 
   const [loading, setLoading] = useState(false);
-  const [loadingMsgIndex, setLoadingMsgIndex] = useState(0); // 로딩 메시지 순환용
+  const [loadingMsgIndex, setLoadingMsgIndex] = useState(0); 
   const [selectedTopics, setSelectedTopics] = useState([]);
   const [isWeatherEnabled, setIsWeatherEnabled] = useState(true);
   const [weather, setWeather] = useState({ status: 'clear', desc: '맑음', temp: 0, loading: true });
@@ -67,17 +67,16 @@ const Creator = ({ userStatus }) => {
   const [isCopied, setIsCopied] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
 
-  // 로딩 메시지 리스트 (사장님이 요청하신 컨셉)
+  // [수정] 감성적인 로딩 메시지 (브랜드 반복 제거)
   const loadingMessages = [
-    "GLUNEX AI가 마케팅 원고를 예쁘게 작성하고 있어요",
-    "GLUNEX AI는 클릭을 부르는 글쓰기 기능이 있어요",
-    "GLUNEX AI는 클릭 한 번으로 보증서를 발행할 수 있어요",
-    "GLUNEX AI는 매장의 매출 데이터를 실시간 분석해요",
-    "GLUNEX AI와 함께 사장님의 소중한 고객을 관리하세요",
-    "지금 이 순간에도 최고의 홍보 문구를 고민 중입니다"
+    "오늘의 날씨를 분석하여 가장 효과적인 키워드를 선정하고 있습니다",
+    "고객의 마음을 움직이는 전문적인 문장들을 다듬는 중입니다",
+    "실제 시공 현장의 생생함을 담은 이미지를 생성하고 있어요",
+    "디테일링 전문가의 관점으로 정성스럽게 글을 집필하고 있습니다",
+    "클릭을 부르는 매력적인 헤드라인을 설계하는 중입니다",
+    "거의 다 되었습니다. 잠시만 기다려주세요"
   ];
 
-  // 로딩 메시지 순환 타이머
   useEffect(() => {
     let timer;
     if (loading) {
@@ -139,7 +138,6 @@ const Creator = ({ userStatus }) => {
     return JSON.parse(resData.candidates[0].content.parts[0].text);
   };
 
-  // [업데이트] 비용 최적화(0.015달러 타겟)를 위한 해상도 조정
   const callFalAI = async (prompt) => {
     const apiKey = import.meta.env.VITE_FAL_API_KEY;
     if (!apiKey || apiKey === "undefined") return null;
@@ -152,7 +150,7 @@ const Creator = ({ userStatus }) => {
         },
         body: JSON.stringify({
           prompt: prompt,
-          // [핵심] 가로 896px로 조정하여 비용 절감 및 현실적 질감 구현
+          // [핵심] 비용 최적화 해상도 (약 0.015달러 수준)
           image_size: { width: 896, height: 672 } 
         })
       });
@@ -203,10 +201,10 @@ const Creator = ({ userStatus }) => {
             <img src="${url}" class="w-full h-auto block" alt="detail" />
             <div class="p-4 bg-white text-center border-t border-slate-50 flex items-center justify-center gap-2">
               <div class="w-1.5 h-1.5 rounded-full bg-blue-600/30 animate-pulse"></div>
-              <span class="text-[9px] font-black text-slate-300 uppercase tracking-[0.2em] italic">Snapshot by GLUNEX AI</span>
+              <span class="text-[9px] font-black text-slate-300 uppercase tracking-[0.2em] italic">Captured by On-Site Snap</span>
             </div>
           </div>
-        ` : `<div class="p-8 text-center text-slate-300 text-xs italic">이미지 준비 중...</div>`;
+        ` : `<div class="p-8 text-center text-slate-300 text-xs italic">이미지를 불러오지 못했습니다.</div>`;
         finalHtml = finalHtml.replace(`[[image_${i + 1}]]`, replacement);
       });
 
@@ -252,7 +250,7 @@ const Creator = ({ userStatus }) => {
         </div>
       )}
 
-      {/* 헤더 */}
+      {/* 헤더 [업데이트: V1.1 배지 복구] */}
       <header className="px-6 py-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur-md z-30">
         <div className="flex items-center gap-4">
           <button onClick={() => {
@@ -266,6 +264,7 @@ const Creator = ({ userStatus }) => {
           <div className="text-left">
             <h1 className="text-xl font-black text-slate-900 tracking-tighter uppercase italic leading-none flex items-center gap-2">
               GLUNEX <span className="text-blue-600">AI</span>
+              <span className="bg-blue-600 text-white text-[9px] px-2 py-0.5 rounded-full not-italic tracking-normal">V1.1</span>
             </h1>
             <p className="text-[9px] text-slate-400 font-bold uppercase tracking-[0.15em] mt-1.5 italic">Hyper-Realism Agent</p>
           </div>
@@ -279,7 +278,7 @@ const Creator = ({ userStatus }) => {
       <main className="flex-1 overflow-y-auto p-6 space-y-8 pb-44 relative">
         
         {loading ? (
-          /* [업데이트] 감성 로딩 시스템 */
+          /* [업데이트] 감성 로딩 시스템 (도트 제거 및 멘트 최적화) */
           <div className="flex flex-col h-full items-center justify-center animate-fade-in py-24 text-center">
             <div className="relative mb-14 animate-floating">
               <div className="w-28 h-28 bg-blue-600/5 rounded-full flex items-center justify-center relative">
@@ -289,16 +288,16 @@ const Creator = ({ userStatus }) => {
             </div>
             
             <div className="space-y-4 max-w-[280px]">
-               <h3 className="text-lg font-black text-slate-900 tracking-tight">잠시만 기다려주세요</h3>
-               <div className="h-10 overflow-hidden relative">
+               <h3 className="text-lg font-black text-slate-900 tracking-tight italic uppercase">Wait for Magic</h3>
+               <div className="h-12 overflow-hidden relative">
                   <p key={loadingMsgIndex} className="text-[14px] text-slate-500 font-bold leading-snug animate-text-fade absolute w-full left-0">
                     {loadingMessages[loadingMsgIndex]}
                   </p>
                </div>
-               <div className="flex justify-center gap-1.5 pt-2">
-                  {loadingMessages.map((_, i) => (
-                    <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${loadingMsgIndex === i ? 'bg-blue-600 w-4' : 'bg-slate-200'}`} />
-                  ))}
+               <div className="pt-4">
+                 <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-3 py-1 rounded-full border border-blue-100 animate-pulse">
+                   AI Generating...
+                 </span>
                </div>
             </div>
           </div>
@@ -479,7 +478,7 @@ const Creator = ({ userStatus }) => {
         {step === 'keyword' && (
           <button onClick={handleGenerateTitles} disabled={selectedTopics.length === 0} 
             className={`w-full py-5 rounded-[2.5rem] font-black text-lg flex items-center justify-center gap-5 transition-all active:scale-95 shadow-2xl ${
-              selectedTopics.length > 0 ? 'bg-slate-900 text-white shadow-slate-900/50' : 'bg-slate-100 text-slate-300 border border-slate-200 cursor-not-allowed'
+              selectedTopics.length > 0 ? 'bg-slate-900 text-white shadow-slate-900/50 hover:bg-black' : 'bg-slate-100 text-slate-300 border border-slate-200 cursor-not-allowed'
             }`}
           >
             <Sparkles size={22} className="animate-pulse text-amber-400" /> 제목 생성하기 <ArrowRight size={20} />
@@ -487,10 +486,10 @@ const Creator = ({ userStatus }) => {
         )}
         {step === 'result' && (
            <div className="flex gap-4">
-              <button onClick={handleCopy} className="flex-[2.5] py-5 bg-slate-900 text-white rounded-[2.5rem] font-black text-lg shadow-2xl active:scale-95 flex items-center justify-center gap-4 transition-all">
+              <button onClick={handleCopy} className="flex-[2.5] py-5 bg-slate-900 text-white rounded-[2.5rem] font-black text-lg shadow-2xl active:scale-95 flex items-center justify-center gap-4 transition-all hover:bg-black">
                  {isCopied ? <CheckCircle2 size={22} className="text-green-400"/> : <Copy size={22}/>} {isCopied ? '복사 완료' : '전체 내용 복사'}
               </button>
-              <button onClick={() => setStep('keyword')} className="flex-1 py-5 bg-white border-2 border-slate-900 text-slate-900 rounded-[2.5rem] font-black text-[15px] active:scale-95 transition-all">초기화</button>
+              <button onClick={() => setStep('keyword')} className="flex-1 py-5 bg-white border-2 border-slate-900 text-slate-900 rounded-[2.5rem] font-black text-[15px] active:scale-95 transition-all hover:bg-slate-50">초기화</button>
            </div>
         )}
       </footer>
