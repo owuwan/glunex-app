@@ -41,7 +41,7 @@ const Dashboard = () => {
     const initAuth = async () => {
       // Rule 3: Auth before Queries
       if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        // 커스텀 토큰 처리 생략 (환경변수 기반 처리)
+        // 커스텀 토큰 처리 (환경변수 주입 시 자동 처리)
       } else {
         await signInAnonymously(auth);
       }
@@ -95,6 +95,7 @@ const Dashboard = () => {
       snap.forEach(doc => {
         const data = doc.data();
         const date = new Date(data.issuedAt);
+        // 숫자 변환 시 콤마 제거 로직 포함
         const price = Number(String(data.price).replace(/[^0-9]/g, '')) || 0;
         if (date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()) monthTotal += price;
         if (date.toDateString() === now.toDateString()) todayTotal += price;
@@ -110,7 +111,6 @@ const Dashboard = () => {
 
   const fetchRealWeather = async (region) => {
     try {
-      // VITE_WEATHER_API_KEY가 없을 경우를 대비한 처리
       const API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
       if (!API_KEY) throw new Error("API Key Missing");
       
@@ -126,31 +126,41 @@ const Dashboard = () => {
     }
   };
 
+  // 금액 콤마 포맷터
+  const handlePriceInput = (e) => {
+    const rawValue = e.target.value.replace(/[^0-9]/g, "");
+    const formattedValue = rawValue.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    setNewSchedule({ ...newSchedule, price: formattedValue });
+  };
+
   const handleAddSchedule = async () => {
-    if (!newSchedule.time || !newSchedule.carModel || !newSchedule.serviceType) return alert("필수 항목을 입력해주세요.");
+    // 유효성 검사 강화
+    if (!newSchedule.time.trim()) return alert("예약 시간을 선택해주세요.");
+    if (!newSchedule.carModel.trim()) return alert("차종을 입력해주세요.");
+    if (!newSchedule.serviceType.trim()) return alert("시공 품목을 입력해주세요.");
     if (!user) return;
 
     try {
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'schedules'), {
         ...newSchedule,
+        // 숫자로 저장할 때 콤마 제거
+        price: newSchedule.price.replace(/,/g, ''),
         userId: user.uid,
         createdAt: new Date().toISOString()
       });
+      
       setShowAddModal(false);
-      // 등록 후 폼 초기화
       setNewSchedule({ 
         time: '', carModel: '', serviceType: '', price: '', phone: '', 
-        date: selectedDateStr // 현재 보고있던 날짜 유지
+        date: selectedDateStr 
       });
     } catch (e) { alert("일정 저장에 실패했습니다."); }
   };
 
-  // 오늘의 일정 필터링
   const todaySchedules = schedules
     .filter(s => s.date === new Date().toISOString().split('T')[0])
     .sort((a, b) => a.time.localeCompare(b.time));
 
-  // --- 달력 렌더링 로직 ---
   const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
   const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
@@ -159,7 +169,6 @@ const Dashboard = () => {
   return (
     <div className="flex flex-col h-full w-full bg-[#F8F9FB] text-slate-800 font-sans overflow-hidden max-w-md mx-auto shadow-2xl relative select-none">
       
-      {/* 백그라운드 효과 */}
       <div className="absolute inset-0 z-0 pointer-events-none">
          <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[40%] bg-blue-100/40 rounded-full blur-[80px]" />
          <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[40%] bg-slate-200/50 rounded-full blur-[80px]" />
@@ -175,7 +184,6 @@ const Dashboard = () => {
           <h2 className="text-xl font-black text-slate-900 tracking-tight">{loadingUser ? '...' : userName}</h2>
         </div>
 
-        {/* 헤더 중앙 정보 (날씨/마케팅대상) */}
         <div className="flex items-center gap-2 bg-white/70 backdrop-blur-md px-3 py-2 rounded-full border border-slate-200 shadow-sm mx-2">
            <div className="flex items-center gap-1.5 border-r border-slate-200 pr-2">
               {weather.loading ? (
@@ -201,12 +209,11 @@ const Dashboard = () => {
         </button>
       </div>
 
-      {/* 메인 뷰 스위처 */}
+      {/* 메인 뷰 */}
       <div className="flex-1 flex flex-col px-5 pb-6 gap-4 z-10 min-h-0 overflow-y-auto scrollbar-hide">
         
         {view === 'main' ? (
           <div className="flex flex-col gap-4 animate-fade-in">
-            {/* 상단 2분할 카드 영역 */}
             <div className="flex gap-3 h-[180px] shrink-0">
               {/* 매출 카드 */}
               <button 
@@ -233,7 +240,7 @@ const Dashboard = () => {
                 </div>
               </button>
 
-              {/* 스케줄 카드 (요청대로 화이트로 변경) */}
+              {/* 스케줄 카드 */}
               <button 
                 onClick={() => setView('calendar')}
                 className="flex-[1.1] bg-white rounded-[2.5rem] p-6 border border-slate-200 shadow-sm relative overflow-hidden flex flex-col group active:scale-[0.98] transition-all text-left"
@@ -269,7 +276,7 @@ const Dashboard = () => {
               </button>
             </div>
 
-            {/* 메인 서비스 버튼들 */}
+            {/* 메인 서비스 */}
             <div className="flex flex-col gap-3">
               <button onClick={() => navigate('/creator')} className="bg-gradient-to-r from-indigo-50 to-white rounded-3xl border border-indigo-100 p-6 flex items-center justify-between group active:scale-[0.98] transition-all shadow-sm">
                  <div className="flex flex-col items-start text-left">
@@ -306,9 +313,8 @@ const Dashboard = () => {
             </div>
           </div>
         ) : (
-          /* 캘린더 전용 뷰 */
+          /* 캘린더 뷰 */
           <div className="flex flex-col gap-6 animate-fade-in pb-20">
-             {/* 캘린더 컨트롤 */}
              <div className="flex items-center justify-between px-1">
                 <div className="flex items-center gap-3">
                    <button onClick={() => setView('main')} className="p-2 bg-white rounded-xl border border-slate-200 shadow-sm"><ChevronLeft size={20} /></button>
@@ -321,7 +327,6 @@ const Dashboard = () => {
                 </div>
              </div>
 
-             {/* 달력 그리드 */}
              <div className="bg-white rounded-[2.5rem] p-6 border border-slate-200 shadow-xl">
                 <div className="grid grid-cols-7 mb-4">
                   {['일','월','화','수','목','금','토'].map((d, i) => (
@@ -358,7 +363,6 @@ const Dashboard = () => {
                 </div>
              </div>
 
-             {/* 선택한 날짜 리스트 */}
              <div className="space-y-4 px-1">
                 <div className="flex justify-between items-end">
                    <div>
@@ -405,7 +409,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* 예약 등록 모달 (최상위 위치로 이동하여 지연 없이 표시) */}
+      {/* 예약 등록 모달 */}
       {showAddModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in" onClick={() => setShowAddModal(false)}>
            <div className="bg-white w-full max-w-sm rounded-[3rem] shadow-2xl relative flex flex-col p-8 overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -445,7 +449,13 @@ const Dashboard = () => {
                  <div className="space-y-1.5">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Amount (KRW)</p>
                     <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3 focus-within:border-blue-500 transition-colors">
-                      <input type="number" placeholder="금액 입력" className="bg-transparent text-sm font-black w-full outline-none" value={newSchedule.price} onChange={e=>setNewSchedule({...newSchedule, price: e.target.value})}/>
+                      <input 
+                        type="text" 
+                        placeholder="금액 입력" 
+                        className="bg-transparent text-sm font-black w-full outline-none" 
+                        value={newSchedule.price} 
+                        onChange={handlePriceInput} 
+                      />
                     </div>
                  </div>
 
