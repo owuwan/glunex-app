@@ -7,7 +7,7 @@ import {
   Target, ListOrdered, FileText, MousePointer2,
   Camera, Wand2, Info, Eye, Smartphone, ChevronRight,
   Star, ShieldCheck, Palette, ZapOff, X, FileSearch, CheckCircle,
-  Download, AlertTriangle
+  Download, AlertTriangle, SmartphoneIcon
 } from 'lucide-react';
 
 /**
@@ -155,9 +155,9 @@ const Creator = ({ userStatus }) => {
   };
 
   /**
-   * [비용 최적화 $0.02 세팅] 
-   * Flux Pro v1.1은 1MP 미만 시 비용이 대폭 절감됩니다. 
-   * 832x624 = 519,168 pixels (0.5MP) -> 장당 약 $0.02 타겟
+   * [비용 확실한 최적화 $0.02 고정] 
+   * 768x576 = 442,368 pixels (0.44MP) 
+   * 0.5MP 이하로 확실히 분류되어 장당 $0.02 비용 소진됩니다.
    */
   const callFalAI = async (prompt) => {
     const apiKey = import.meta.env.VITE_FAL_API_KEY;
@@ -168,7 +168,7 @@ const Creator = ({ userStatus }) => {
         headers: { "Authorization": `Key ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: prompt,
-          image_size: { width: 832, height: 624 } // $0.02를 위한 0.5MP 고정
+          image_size: { width: 768, height: 576 } // 0.5MP 미만으로 하향 조정
         })
       });
       const data = await response.json();
@@ -296,7 +296,7 @@ const Creator = ({ userStatus }) => {
         </div>
       )}
 
-      <header className="px-6 py-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur-md z-30">
+      <header className="px-6 py-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur-md z-30 shadow-sm">
         <div className="flex items-center gap-4">
           <button onClick={() => {
               if(step === 'keyword') navigate('/dashboard');
@@ -441,7 +441,7 @@ const Creator = ({ userStatus }) => {
               ].map(tab => (
                 <button key={tab.id} onClick={() => setActiveTab(tab.id)} 
                   className={`flex-1 py-3 rounded-xl text-[12px] font-black flex items-center justify-center gap-2 transition-all duration-300 ${
-                    activeTab === tab.id ? 'bg-slate-900 text-white shadow-lg scale-[1.02] z-10' : 'text-slate-50'
+                    activeTab === tab.id ? 'bg-slate-900 text-white shadow-lg scale-[1.02] z-10' : 'text-slate-500'
                   }`}
                 >
                   {tab.icon} {tab.name}
@@ -449,12 +449,15 @@ const Creator = ({ userStatus }) => {
               ))}
             </div>
 
-            {/* [신규] 모바일 사진 저장 안내 배너 */}
-            <div className="mx-1 bg-amber-50 border border-amber-200 p-4 rounded-2xl flex items-center gap-3 shadow-sm animate-pulse">
-                <div className="bg-amber-100 p-2 rounded-full text-amber-600"><AlertTriangle size={18} /></div>
+            {/* [신규] 모바일 사진 저장 안내 배너 (가시성 대폭 강화) */}
+            <div className="mx-1 bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-200 p-5 rounded-[2rem] flex items-center gap-4 shadow-md animate-fade-in-up">
+                <div className="bg-amber-500 p-3 rounded-2xl text-white shadow-lg shadow-amber-200"><SmartphoneIcon size={24} /></div>
                 <div>
-                   <p className="text-[11px] font-black text-amber-900 leading-tight">모바일 유저 필수 안내</p>
-                   <p className="text-[10px] text-amber-700 mt-1 font-medium leading-relaxed">사진을 꾹 눌러 저장하신 후 블로그 앱에서 업로드해 주세요!</p>
+                   <p className="text-[13px] font-black text-amber-900 leading-tight">모바일 필독: 사진 저장 가이드</p>
+                   <p className="text-[11px] text-amber-700 mt-1.5 font-bold leading-relaxed">
+                     사진을 <span className="underline decoration-2 decoration-amber-400 underline-offset-2">꾹 눌러 '이미지 저장'</span> 하신 후,<br/>
+                     블로그 앱 글쓰기에서 직접 첨부해 주세요!
+                   </p>
                 </div>
             </div>
 
