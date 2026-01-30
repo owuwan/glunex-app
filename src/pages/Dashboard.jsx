@@ -14,7 +14,7 @@ const Dashboard = () => {
   const appId = typeof __app_id !== 'undefined' ? __app_id : 'glunex-app';
   
   // --- 상태 관리 ---
-  const [view, setView] = useState('main'); // 'main' | 'calendar'
+  const [view, setView] = useState('main'); 
   const [userName, setUserName] = useState('파트너');
   const [user, setUser] = useState(null);
   const [loadingUser, setLoadingUser] = useState(true);
@@ -39,9 +39,8 @@ const Dashboard = () => {
   // --- 초기화 및 인증 ---
   useEffect(() => {
     const initAuth = async () => {
-      // Rule 3: Auth before Queries
       if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        // 커스텀 토큰 처리 (환경변수 주입 시 자동 처리)
+        // 커스텀 토큰 처리 (환경변수 기반)
       } else {
         await signInAnonymously(auth);
       }
@@ -59,7 +58,6 @@ const Dashboard = () => {
   useEffect(() => {
     if (!user) return;
 
-    // 1. 유저 정보 및 날씨 로딩
     const loadUserData = async () => {
       try {
         const userDoc = await getDoc(doc(db, "users", user.uid));
@@ -75,7 +73,6 @@ const Dashboard = () => {
     };
     loadUserData();
 
-    // 2. 스케줄 실시간 리스너 (Rule 1)
     const schedulesRef = collection(db, 'artifacts', appId, 'public', 'data', 'schedules');
     const unsubSchedules = onSnapshot(schedulesRef, (snapshot) => {
       const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -95,8 +92,7 @@ const Dashboard = () => {
       snap.forEach(doc => {
         const data = doc.data();
         const date = new Date(data.issuedAt);
-        // 숫자 변환 시 콤마 제거 로직 포함
-        const price = Number(String(data.price).replace(/[^0-9]/g, '')) || 0;
+        const price = Number(String(data.price || "0").replace(/[^0-9]/g, '')) || 0;
         if (date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()) monthTotal += price;
         if (date.toDateString() === now.toDateString()) todayTotal += price;
         
@@ -112,7 +108,7 @@ const Dashboard = () => {
   const fetchRealWeather = async (region) => {
     try {
       const API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
-      if (!API_KEY) throw new Error("API Key Missing");
+      if (!API_KEY) return;
       
       const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${region}&appid=${API_KEY}&units=metric&lang=kr`);
       const data = await res.json();
@@ -134,33 +130,40 @@ const Dashboard = () => {
   };
 
   const handleAddSchedule = async () => {
-    // 유효성 검사 강화
-    if (!newSchedule.time.trim()) return alert("예약 시간을 선택해주세요.");
-    if (!newSchedule.carModel.trim()) return alert("차종을 입력해주세요.");
-    if (!newSchedule.serviceType.trim()) return alert("시공 품목을 입력해주세요.");
+    // 유효성 검사 수정 (빈 문자열 및 공백 체크 강화)
+    if (!newSchedule.time || newSchedule.time === "") return alert("예약 시간을 선택해주세요.");
+    if (!newSchedule.carModel || newSchedule.carModel.trim() === "") return alert("차종을 입력해주세요.");
+    if (!newSchedule.serviceType || newSchedule.serviceType.trim() === "") return alert("시공 품목을 입력해주세요.");
     if (!user) return;
 
     try {
-      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'schedules'), {
+      const scheduleToSave = {
         ...newSchedule,
-        // 숫자로 저장할 때 콤마 제거
-        price: newSchedule.price.replace(/,/g, ''),
+        price: (newSchedule.price || "").replace(/,/g, ''), // 콤마 제거 후 숫자 문자열로 저장
         userId: user.uid,
         createdAt: new Date().toISOString()
-      });
+      };
+
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'schedules'), scheduleToSave);
       
       setShowAddModal(false);
+      // 등록 후 폼 완전 초기화
       setNewSchedule({ 
         time: '', carModel: '', serviceType: '', price: '', phone: '', 
         date: selectedDateStr 
       });
-    } catch (e) { alert("일정 저장에 실패했습니다."); }
+    } catch (e) { 
+      console.error(e);
+      alert("일정 저장에 실패했습니다."); 
+    }
   };
 
+  // 오늘의 일정 필터링
   const todaySchedules = schedules
     .filter(s => s.date === new Date().toISOString().split('T')[0])
-    .sort((a, b) => a.time.localeCompare(b.time));
+    .sort((a, b) => (a.time || "").localeCompare(b.time || ""));
 
+  // --- 달력 렌더링 로직 ---
   const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
   const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
@@ -209,13 +212,11 @@ const Dashboard = () => {
         </button>
       </div>
 
-      {/* 메인 뷰 */}
       <div className="flex-1 flex flex-col px-5 pb-6 gap-4 z-10 min-h-0 overflow-y-auto scrollbar-hide">
         
         {view === 'main' ? (
           <div className="flex flex-col gap-4 animate-fade-in">
             <div className="flex gap-3 h-[180px] shrink-0">
-              {/* 매출 카드 */}
               <button 
                 onClick={() => navigate('/sales')}
                 className="flex-[1.4] bg-white rounded-[2.5rem] p-6 border border-slate-200 shadow-sm relative overflow-hidden group active:scale-[0.98] transition-all flex flex-col justify-between text-left"
@@ -240,7 +241,6 @@ const Dashboard = () => {
                 </div>
               </button>
 
-              {/* 스케줄 카드 */}
               <button 
                 onClick={() => setView('calendar')}
                 className="flex-[1.1] bg-white rounded-[2.5rem] p-6 border border-slate-200 shadow-sm relative overflow-hidden flex flex-col group active:scale-[0.98] transition-all text-left"
@@ -376,7 +376,7 @@ const Dashboard = () => {
                 
                 <div className="space-y-3">
                    {schedules.filter(s => s.date === selectedDateStr).length > 0 ? (
-                      schedules.filter(s => s.date === selectedDateStr).sort((a,b)=>a.time.localeCompare(b.time)).map(s => (
+                      schedules.filter(s => s.date === selectedDateStr).sort((a,b)=> (a.time || "").localeCompare(b.time || "")).map(s => (
                         <div key={s.id} className="bg-white p-5 rounded-[2rem] flex justify-between items-center border border-slate-100 shadow-sm animate-fade-in-up">
                            <div className="flex items-center gap-4">
                               <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 font-black text-xs border border-blue-100">{s.time}</div>
@@ -386,7 +386,7 @@ const Dashboard = () => {
                               </div>
                            </div>
                            <div className="text-right">
-                              <p className="text-sm font-black text-slate-900">{Number(s.price).toLocaleString()}원</p>
+                              <p className="text-sm font-black text-slate-900">{Number(s.price || 0).toLocaleString()}원</p>
                               <p className="text-[10px] text-slate-400 font-medium">{s.phone}</p>
                            </div>
                         </div>
