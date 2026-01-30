@@ -145,7 +145,6 @@ const Creator = ({ userStatus }) => {
         headers: { "Authorization": `Key ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: prompt,
-          // [핵심] 비용 최적화 해상도 (약 0.015달러 수준)
           image_size: { width: 896, height: 672 } 
         })
       });
@@ -207,17 +206,39 @@ const Creator = ({ userStatus }) => {
     finally { setLoading(false); }
   };
 
+  /**
+   * [수정] 모바일 호환성 강화된 복사 로직
+   * HTML(이미지 포함)과 일반 텍스트를 함께 복사하여 모바일 블로그/메모장 호환성을 확보합니다.
+   */
   const handleCopy = async () => {
-    const text = activeTab === 'blog' ? generatedData.blog_html : (activeTab === 'insta' ? generatedData.insta_text : generatedData.short_form);
+    if (!generatedData) return;
+
     try {
       if (activeTab === 'blog') {
-        const blob = new Blob([text], { type: "text/html" });
-        await navigator.clipboard.write([new ClipboardItem({ "text/html": blob })]);
-      } else { await navigator.clipboard.writeText(text); }
+        const htmlContent = `<div>${generatedData.blog_html}</div>`;
+        const plainText = generatedData.blog_html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+        
+        const blobHtml = new Blob([htmlContent], { type: "text/html" });
+        const blobText = new Blob([plainText], { type: "text/plain" });
+        
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/html": blobHtml,
+            "text/plain": blobText
+          })
+        ]);
+      } else {
+        const text = activeTab === 'insta' ? generatedData.insta_text : generatedData.short_form;
+        await navigator.clipboard.writeText(text);
+      }
+      
       setIsCopied(true);
       showToast("내용이 복사되었습니다!");
       setTimeout(() => setIsCopied(false), 2000);
-    } catch (err) { alert("복사 실패"); }
+    } catch (err) {
+      console.error("Copy failed:", err);
+      alert("복사 중 오류가 발생했습니다. 브라우저 설정을 확인해주세요.");
+    }
   };
 
   return (
@@ -226,9 +247,11 @@ const Creator = ({ userStatus }) => {
         @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css');
         * { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif !important; }
         @keyframes fadeInUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeInDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes floating { 0% { transform: translateY(0); } 50% { transform: translateY(-8px); } 100% { transform: translateY(0); } }
         @keyframes textFade { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in-up { animation: fadeInUp 0.5s ease-out forwards; }
+        .animate-fade-in-down { animation: fadeInDown 0.4s ease-out forwards; }
         .animate-floating { animation: floating 3s ease-in-out infinite; }
         .animate-text-fade { animation: textFade 0.6s ease-out forwards; }
         .blog-preview h2 { font-size: 1.25rem; font-weight: 900; color: #1e293b; margin-top: 2rem; margin-bottom: 0.8rem; border-left: 4px solid #2563eb; padding-left: 0.8rem; letter-spacing: -0.02em; }
@@ -237,15 +260,16 @@ const Creator = ({ userStatus }) => {
         .scrollbar-hide::-webkit-scrollbar { display: none; }
       `}</style>
 
+      {/* [수정] 토스트 알림 위치 센터링 최적화 */}
       {toastMsg && (
-        <div className="fixed top-12 left-1/2 -translate-x-1/2 z-[9999] animate-bounce w-full max-w-[260px]">
-          <div className="bg-slate-900 text-white px-5 py-3.5 rounded-2xl text-[13px] font-bold shadow-2xl flex items-center justify-center gap-2 border border-slate-700 backdrop-blur-md">
+        <div className="fixed top-12 inset-x-0 z-[9999] flex justify-center px-4 animate-fade-in-down">
+          <div className="bg-slate-900 text-white px-5 py-3.5 rounded-2xl text-[13px] font-bold shadow-2xl flex items-center justify-center gap-2 border border-slate-700 backdrop-blur-md max-w-[260px] w-full">
             <CheckCircle2 size={16} className="text-green-400" /> {toastMsg}
           </div>
         </div>
       )}
 
-      {/* 헤더 [V1.1 배지 깔끔하게 고정] */}
+      {/* 헤더 */}
       <header className="px-6 py-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur-md z-30">
         <div className="flex items-center gap-4">
           <button onClick={() => {
@@ -273,7 +297,6 @@ const Creator = ({ userStatus }) => {
       <main className="flex-1 overflow-y-auto p-6 space-y-6 pb-44 scrollbar-hide">
         
         {loading ? (
-          /* [로딩 화면] 감성 극대화 */
           <div className="flex flex-col h-full items-center justify-center animate-fade-in py-24 text-center">
             <div className="relative mb-14 animate-floating">
               <div className="w-24 h-24 bg-blue-600/5 rounded-full flex items-center justify-center relative shadow-inner">
@@ -295,7 +318,6 @@ const Creator = ({ userStatus }) => {
             </div>
           </div>
         ) : step === 'keyword' ? (
-          /* [단계 1] 키워드 선택 */
           <>
             <section className="animate-fade-in-up">
               <div className={`p-8 rounded-[3rem] border-2 transition-all duration-700 shadow-xl ${isWeatherEnabled ? 'bg-blue-600 border-blue-400 text-white' : 'bg-white border-slate-200 text-slate-900'}`}>
@@ -342,7 +364,6 @@ const Creator = ({ userStatus }) => {
             </section>
           </>
         ) : step === 'title' ? (
-          /* [단계 2] 제목 선택 */
           <section className="space-y-6 animate-fade-in-up text-left">
             <div className="px-1">
               <div className="bg-blue-600 text-white text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest mb-2 inline-block">Step 02. Select Headline</div>
@@ -360,7 +381,6 @@ const Creator = ({ userStatus }) => {
             <button onClick={handleGenerateTitles} className="w-full py-4 text-slate-400 text-xs font-bold flex items-center justify-center gap-2"><RefreshCw size={14} /> 다른 제목 추천받기</button>
           </section>
         ) : step === 'index' ? (
-          /* [단계 3] 목차 기획 */
           <section className="space-y-8 animate-fade-in-up">
             <div className="px-1">
               <div className="bg-blue-600 text-white text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest mb-2 inline-block">Step 03. Plan Structure</div>
@@ -386,9 +406,7 @@ const Creator = ({ userStatus }) => {
             </div>
           </section>
         ) : (
-          /* [최종 단계] 완성된 포스팅 결과 페이지 (사장님 요청사항 적극 반영) */
           <section className="space-y-6 animate-fade-in-up pb-24">
-            {/* 상단 탭 내비게이션 [심플 앱 스타일] */}
             <div className="flex bg-slate-200/50 p-1.5 rounded-2xl border border-slate-100 shadow-inner mx-1">
               {[
                 { id: 'blog', name: '블로그', icon: <Layout size={14}/> },
@@ -405,10 +423,8 @@ const Creator = ({ userStatus }) => {
               ))}
             </div>
 
-            {/* 메인 결과 카드 [화이트 도큐먼트 스타일] */}
             <div className="bg-white p-7 rounded-[3rem] border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.05)] min-h-[650px] relative overflow-hidden text-left animate-fade-in-up">
               
-              {/* 상단 툴바 [복사 버튼 통합] */}
               <div className="flex justify-between items-center mb-10 pb-5 border-b border-slate-50">
                  <div className="flex items-center gap-2.5">
                     <div className="p-2 bg-blue-50 rounded-xl text-blue-600"><FileSearch size={18} /></div>
@@ -423,11 +439,9 @@ const Creator = ({ userStatus }) => {
                  </button>
               </div>
 
-              {/* 본문 콘텐츠 영역 */}
               <div className="content-container px-1">
                 {activeTab === 'blog' ? (
                   <article className="blog-preview">
-                    {/* 제목 섹션 - 딱 한 번만 강조 */}
                     <div className="mb-12">
                        <div className="flex items-center gap-2 mb-4">
                           <Camera size={14} className="text-blue-500" />
@@ -437,7 +451,6 @@ const Creator = ({ userStatus }) => {
                           {selectedTitle}
                        </h2>
                     </div>
-                    {/* 본문 및 이미지 */}
                     <div className="space-y-10" dangerouslySetInnerHTML={{ __html: generatedData.blog_html }} />
                   </article>
                 ) : (
@@ -452,13 +465,11 @@ const Creator = ({ userStatus }) => {
                 )}
               </div>
               
-              {/* 푸터 카피라이트 */}
               <div className="mt-24 pt-10 border-t border-slate-50 text-center opacity-30">
                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.6em]">GLUNEX AI Marketing Platform</p>
               </div>
             </div>
             
-            {/* 초기화 버튼 [심플하게 하단 배치] */}
             <button onClick={() => { setStep('keyword'); setGeneratedData(null); setTitles([]); setIndexList([]); }} className="w-full py-6 text-slate-300 text-[11px] font-black flex items-center justify-center gap-4 uppercase tracking-[0.3em] bg-white border border-slate-100 rounded-[2rem] active:scale-95 transition-all shadow-sm">
               <RefreshCw size={16} /> Create New Post
             </button>
@@ -466,7 +477,6 @@ const Creator = ({ userStatus }) => {
         )}
       </main>
 
-      {/* 하단 플로팅 액션 바 [기존 UI와 통일] */}
       <footer className="fixed bottom-0 left-0 right-0 p-8 bg-white/85 backdrop-blur-2xl border-t border-slate-100 max-w-md mx-auto z-40 shadow-[0_-15px_40px_rgba(0,0,0,0.04)]">
         {step === 'keyword' && (
           <button onClick={handleGenerateTitles} disabled={selectedTopics.length === 0} 
