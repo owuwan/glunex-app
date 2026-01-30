@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 
 /**
- * [AI 마스터 프롬프트 설정 - Flux Pro v1.1 및 100대 시나리오 고증 로직]
+ * [AI 마스터 프롬프트 설정 - 저해상도 실사 질감 유도 로직]
  */
 const SYSTEM_PROMPT_TITLES = `
 당신은 대한민국 최고의 자동차 디테일링 전문 마케터입니다.
@@ -24,24 +24,18 @@ const SYSTEM_PROMPT_INDEX = `
 `;
 
 const SYSTEM_PROMPT_CONTENT = `
-당신은 대한민국 자동차 외장관리 전문가입니다. 선정된 5개 목차를 바탕으로 블로그 본문과 Flux Pro v1.1 전용 고해상도 이미지 프롬프트를 생성하세요.
+당신은 대한민국 자동차 외장관리 전문가입니다. 선정된 5개 목차를 바탕으로 블로그 본문과 실사 이미지 프롬프트를 생성하세요.
 
 [1단계: 본문 작성 지침]
-- 각 목차별 본문 내용은 공백 제외 450~550자 사이로 아주 상세하게 작성하세요. (전체 최소 2,250자 이상 필수)
-- 상호명(GLUNEX 등) 언급 절대 금지. 전문적인 용어와 실제 공정 설명을 상세히 기술하세요.
+- 각 목차별 본문 내용은 공백 제외 450~550자 사이로 상세하게 작성하세요. (전체 최소 2,250자 이상)
+- 상호명(GLUNEX 등) 언급 절대 금지. 전문적인 용어와 실제 공정 설명을 기술하세요.
 - 각 섹션 끝에 [[image_1]] ~ [[image_5]] 태그를 순서대로 하나씩 배치하세요.
-- HTML 태그(h2, p, br, strong)를 사용하여 가독성을 높이세요.
+- HTML 태그(h2, p, br, strong)를 사용하세요.
 
-[2단계: 100대 시나리오 기반 이미지 프롬프트 생성 지침]
-- 모든 프롬프트(p1~p5)는 반드시 다음 '네이버 검색 기반 실사 고증' 형식을 엄격히 따르세요:
-  "Authentic real-life photo, Authentic real-work photo, Work-in-progress (WIP) of [상황 키워드] referencing professional work images from www.naver.com. [구체적인 물리적 묘사]. Raw handheld shot, iPhone 15 Pro, no UI elements, no text, realistic, harsh overhead fluorescent lighting, blurred license plate."
-- [필수 물리적/도구 고증 가이드]:
-  1. 철분제거: "Thin, watery, translucent dark-purple streaks bleeding. NO thick paint, NO jelly, NO opaque slime."
-  2. 유리막코팅: "Hand holding a black rectangular coating block wrapped in a blue suede cloth. NO sponges, NO thick blobs."
-  3. 세차: "Lambswool wash mitt with fine white bubbles. NO thick foam clumps."
-  4. 썬팅/PPF: "Yellow squeegee/head pushing water out from film."
-  5. 블랙박스/배선: "Technician wiring through A-pillar, showing fuse box or black Tesa absorbent tape."
-  6. 배경: "Korean detailing shop with grid LED ceiling lights" 또는 "Green urethane floor of a Korean apartment parking lot."
+[2단계: 이미지 프롬프트 생성 지침]
+- 모든 프롬프트(p1~p5)는 반드시 다음 형식을 준수하세요:
+  "Authentic real-life photo, Authentic real-work photo of [상황] referencing images from portal search. [물리적 묘사]. Shot on iPhone 15 Pro, unpolished, natural lighting, blurred license plate."
+- [중요]: 너무 선명하지 않게, 실제 작업자가 현장에서 대충 찍은 듯한 'raw handheld shot' 느낌을 강조하세요.
 
 [출력 형식]
 JSON으로만 응답:
@@ -56,10 +50,10 @@ JSON으로만 응답:
 const Creator = ({ userStatus }) => {
   const navigate = useNavigate();
   
-  // --- 상태 관리 (기존 482라인의 모든 상태 복구) ---
+  // --- 상태 관리 ---
   const [step, setStep] = useState('keyword'); 
   const [loading, setLoading] = useState(false);
-  const [loadingMsg, setLoadingMsg] = useState("");
+  const [loadingMsgIndex, setLoadingMsgIndex] = useState(0); // 로딩 메시지 순환용
   const [selectedTopics, setSelectedTopics] = useState([]);
   const [isWeatherEnabled, setIsWeatherEnabled] = useState(true);
   const [weather, setWeather] = useState({ status: 'clear', desc: '맑음', temp: 0, loading: true });
@@ -73,7 +67,27 @@ const Creator = ({ userStatus }) => {
   const [isCopied, setIsCopied] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
 
-  // 실시간 날씨 연동 (기본 유지)
+  // 로딩 메시지 리스트 (사장님이 요청하신 컨셉)
+  const loadingMessages = [
+    "GLUNEX AI가 마케팅 원고를 예쁘게 작성하고 있어요",
+    "GLUNEX AI는 클릭을 부르는 글쓰기 기능이 있어요",
+    "GLUNEX AI는 클릭 한 번으로 보증서를 발행할 수 있어요",
+    "GLUNEX AI는 매장의 매출 데이터를 실시간 분석해요",
+    "GLUNEX AI와 함께 사장님의 소중한 고객을 관리하세요",
+    "지금 이 순간에도 최고의 홍보 문구를 고민 중입니다"
+  ];
+
+  // 로딩 메시지 순환 타이머
+  useEffect(() => {
+    let timer;
+    if (loading) {
+      timer = setInterval(() => {
+        setLoadingMsgIndex((prev) => (prev + 1) % loadingMessages.length);
+      }, 3000);
+    }
+    return () => clearInterval(timer);
+  }, [loading]);
+
   useEffect(() => {
     const fetchWeather = async () => {
       try {
@@ -125,7 +139,7 @@ const Creator = ({ userStatus }) => {
     return JSON.parse(resData.candidates[0].content.parts[0].text);
   };
 
-  // [업데이트] Flux Pro v1.1 전용 이미지 생성 함수
+  // [업데이트] 비용 최적화(0.015달러 타겟)를 위한 해상도 조정
   const callFalAI = async (prompt) => {
     const apiKey = import.meta.env.VITE_FAL_API_KEY;
     if (!apiKey || apiKey === "undefined") return null;
@@ -138,7 +152,8 @@ const Creator = ({ userStatus }) => {
         },
         body: JSON.stringify({
           prompt: prompt,
-          image_size: "landscape_4_3"
+          // [핵심] 가로 896px로 조정하여 비용 절감 및 현실적 질감 구현
+          image_size: { width: 896, height: 672 } 
         })
       });
       const data = await response.json();
@@ -149,7 +164,6 @@ const Creator = ({ userStatus }) => {
   const handleGenerateTitles = async () => {
     if (selectedTopics.length === 0) return alert("시공 항목을 하나 이상 선택해주세요.");
     setLoading(true);
-    setLoadingMsg("대한민국 상위 1%의 클릭을 유도하는\n트렌디한 헤드라인을 설계 중입니다...");
     try {
       const selectedNames = categories.filter(c => selectedTopics.includes(c.id)).map(c => c.name).join(', ');
       const data = await callGemini(`시공: ${selectedNames}, 날씨: ${weather.desc}`, SYSTEM_PROMPT_TITLES);
@@ -162,7 +176,6 @@ const Creator = ({ userStatus }) => {
   const handleGenerateIndex = async (title) => {
     setSelectedTitle(title);
     setLoading(true);
-    setLoadingMsg("검색 엔진(SEO) 최적화와 독자의 가독성을 고려하여\n체계적인 목차를 구성 중입니다...");
     try {
       const data = await callGemini(`제목: ${title}`, SYSTEM_PROMPT_INDEX);
       setIndexList(data.index);
@@ -173,7 +186,6 @@ const Creator = ({ userStatus }) => {
 
   const handleGenerateFullContent = async () => {
     setLoading(true);
-    setLoadingMsg("Flux Pro v1.1 엔진과 100대 시나리오를 통해\n네이버 실제 시공 사진을 초고화질로 현상 중입니다...");
     try {
       const data = await callGemini(`제목: ${selectedTitle}, 목차: ${indexList.join(', ')}`, SYSTEM_PROMPT_CONTENT);
       const images = await Promise.all([
@@ -190,11 +202,11 @@ const Creator = ({ userStatus }) => {
           <div class="my-10 rounded-3xl overflow-hidden border border-slate-100 shadow-2xl animate-fade-in-up bg-slate-50">
             <img src="${url}" class="w-full h-auto block" alt="detail" />
             <div class="p-4 bg-white text-center border-t border-slate-50 flex items-center justify-center gap-2">
-              <div class="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></div>
-              <span class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] italic">Shot on iPhone 15 Pro | High Fidelity Reality</span>
+              <div class="w-1.5 h-1.5 rounded-full bg-blue-600/30 animate-pulse"></div>
+              <span class="text-[9px] font-black text-slate-300 uppercase tracking-[0.2em] italic">Snapshot by GLUNEX AI</span>
             </div>
           </div>
-        ` : `<div class="p-8 text-center text-slate-300 text-xs italic">이미지 생성 대기 중...</div>`;
+        ` : `<div class="p-8 text-center text-slate-300 text-xs italic">이미지 준비 중...</div>`;
         finalHtml = finalHtml.replace(`[[image_${i + 1}]]`, replacement);
       });
 
@@ -212,7 +224,7 @@ const Creator = ({ userStatus }) => {
         await navigator.clipboard.write([new ClipboardItem({ "text/html": blob })]);
       } else { await navigator.clipboard.writeText(text); }
       setIsCopied(true);
-      showToast("원고가 클립보드에 복사되었습니다!");
+      showToast("내용이 복사되었습니다!");
       setTimeout(() => setIsCopied(false), 2000);
     } catch (err) { alert("복사 실패"); }
   };
@@ -222,11 +234,12 @@ const Creator = ({ userStatus }) => {
       <style>{`
         @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css');
         * { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif !important; }
-        @keyframes fadeInUp {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes floating { 0% { transform: translateY(0); } 50% { transform: translateY(-10px); } 100% { transform: translateY(0); } }
+        @keyframes textFade { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in-up { animation: fadeInUp 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+        .animate-floating { animation: floating 3s ease-in-out infinite; }
+        .animate-text-fade { animation: textFade 0.5s ease-out forwards; }
         .blog-body h2 { font-size: 1.4rem; font-weight: 800; color: #0f172a; margin-top: 2.5rem; margin-bottom: 1rem; border-left: 5px solid #2563eb; padding-left: 1rem; letter-spacing: -0.02em; }
         .blog-body p { font-size: 1rem; line-height: 1.9; color: #334155; margin-bottom: 1.5rem; text-align: justify; word-break: keep-all; }
       `}</style>
@@ -239,26 +252,22 @@ const Creator = ({ userStatus }) => {
         </div>
       )}
 
-      {/* 헤더 (기존 UI 유지) */}
+      {/* 헤더 */}
       <header className="px-6 py-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur-md z-30">
         <div className="flex items-center gap-4">
-          <button 
-            onClick={() => {
+          <button onClick={() => {
               if(step === 'keyword') navigate('/dashboard');
               else if(step === 'title') setStep('keyword');
               else if(step === 'index') setStep('title');
               else setStep('index');
-            }} 
-            className="p-2 hover:bg-slate-50 rounded-xl active:scale-90 transition-all border border-transparent shadow-sm"
-          >
+            }} className="p-2 hover:bg-slate-50 rounded-xl active:scale-90 transition-all border border-transparent shadow-sm">
             <ArrowLeft size={22} className="text-slate-500" />
           </button>
           <div className="text-left">
             <h1 className="text-xl font-black text-slate-900 tracking-tighter uppercase italic leading-none flex items-center gap-2">
               GLUNEX <span className="text-blue-600">AI</span>
-              <span className="bg-blue-600 text-white text-[9px] px-2 py-0.5 rounded-full not-italic tracking-normal">PRO 1.1</span>
             </h1>
-            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-[0.15em] mt-1.5">Naver Search Grounded Engine</p>
+            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-[0.15em] mt-1.5 italic">Hyper-Realism Agent</p>
           </div>
         </div>
         <div className="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-full border border-slate-100 shadow-inner">
@@ -267,15 +276,31 @@ const Creator = ({ userStatus }) => {
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-6 space-y-8 pb-44">
+      <main className="flex-1 overflow-y-auto p-6 space-y-8 pb-44 relative">
         
         {loading ? (
+          /* [업데이트] 감성 로딩 시스템 */
           <div className="flex flex-col h-full items-center justify-center animate-fade-in py-24 text-center">
-            <div className="relative mb-12">
-              <div className="w-24 h-24 border-[6px] border-slate-100 border-t-blue-600 rounded-full animate-spin"></div>
-              <Sparkles className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-blue-600 animate-pulse" size={32} />
+            <div className="relative mb-14 animate-floating">
+              <div className="w-28 h-28 bg-blue-600/5 rounded-full flex items-center justify-center relative">
+                 <div className="w-20 h-20 border-[6px] border-slate-100 border-t-blue-600 rounded-full animate-spin"></div>
+                 <Sparkles className="absolute text-blue-600 animate-pulse" size={40} />
+              </div>
             </div>
-            <p className="text-[16px] text-slate-800 font-bold leading-relaxed whitespace-pre-line px-8">{loadingMsg}</p>
+            
+            <div className="space-y-4 max-w-[280px]">
+               <h3 className="text-lg font-black text-slate-900 tracking-tight">잠시만 기다려주세요</h3>
+               <div className="h-10 overflow-hidden relative">
+                  <p key={loadingMsgIndex} className="text-[14px] text-slate-500 font-bold leading-snug animate-text-fade absolute w-full left-0">
+                    {loadingMessages[loadingMsgIndex]}
+                  </p>
+               </div>
+               <div className="flex justify-center gap-1.5 pt-2">
+                  {loadingMessages.map((_, i) => (
+                    <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${loadingMsgIndex === i ? 'bg-blue-600 w-4' : 'bg-slate-200'}`} />
+                  ))}
+               </div>
+            </div>
           </div>
         ) : step === 'keyword' ? (
           <>
@@ -296,7 +321,7 @@ const Creator = ({ userStatus }) => {
                   </button>
                 </div>
                 <p className="text-[14px] font-semibold opacity-95 leading-relaxed tracking-tight border-t border-white/10 pt-6">
-                   {isWeatherEnabled ? `현재 '${weather.desc}' 날씨를 정밀 분석하여 고객의 니즈를 관통하는 마케팅 원고를 생성합니다.` : "모든 상황에 최적화된 범용 마케팅 원고를 설계합니다."}
+                   {isWeatherEnabled ? `현재 '${weather.desc}' 날씨를 분석하여 방문율이 가장 높은 맞춤형 마케팅 원고를 설계합니다.` : "모든 상황에 적합한 보편적인 마케팅 원고를 생성합니다."}
                 </p>
               </div>
             </section>
@@ -310,9 +335,7 @@ const Creator = ({ userStatus }) => {
               </div>
               <div className="grid grid-cols-3 gap-3.5">
                 {categories.map((cat) => (
-                  <button 
-                    key={cat.id} 
-                    onClick={() => setSelectedTopics(p => p.includes(cat.id) ? p.filter(t => t !== cat.id) : [...p, cat.id])}
+                  <button key={cat.id} onClick={() => setSelectedTopics(p => p.includes(cat.id) ? p.filter(t => t !== cat.id) : [...p, cat.id])}
                     className={`relative py-7 px-2 rounded-[2rem] border-2 transition-all duration-300 text-center ${
                       selectedTopics.includes(cat.id)
                         ? 'bg-slate-900 border-slate-900 text-white shadow-2xl scale-[1.05] font-black z-10'
@@ -336,7 +359,7 @@ const Creator = ({ userStatus }) => {
               <div>
                 <div className="flex items-center gap-2 mb-3">
                    <div className="bg-blue-600 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase shadow-lg tracking-widest flex items-center gap-1.5">
-                      <Sparkles size={12} fill="currentColor" /> Ai Curated Headlines
+                      <Sparkles size={12} fill="currentColor" /> AI Best Headlines
                    </div>
                 </div>
                 <h2 className="text-2xl font-black text-slate-900 tracking-tighter leading-tight italic">제목을 선택하세요</h2>
@@ -358,9 +381,9 @@ const Creator = ({ userStatus }) => {
         ) : step === 'index' ? (
           <section className="space-y-10 animate-fade-in-up">
             <div className="px-2">
-              <span className="text-[11px] font-black text-blue-600 bg-blue-50 px-4 py-1.5 rounded-full uppercase mb-4 inline-block tracking-[0.2em]">Article Roadmap</span>
+              <span className="text-[11px] font-black text-blue-600 bg-blue-50 px-4 py-1.5 rounded-full uppercase mb-4 inline-block tracking-[0.2em]">Story Board</span>
               <h2 className="text-2xl font-black text-slate-900 tracking-tighter leading-tight italic">설계된 글의 흐름입니다</h2>
-              <p className="text-[12px] text-slate-400 font-bold border-l-4 border-blue-600 pl-5 leading-relaxed mt-4 uppercase tracking-tighter">Flux Pro v1.1 Hyper-Reality Visualization Ready.</p>
+              <p className="text-[12px] text-slate-400 font-bold border-l-4 border-blue-600 pl-5 leading-relaxed mt-4 uppercase tracking-tighter">Content structure is optimized for SEO.</p>
             </div>
             
             <div className="bg-slate-50 rounded-[3rem] border border-slate-100 p-8 space-y-5 shadow-inner relative overflow-hidden">
@@ -392,9 +415,7 @@ const Creator = ({ userStatus }) => {
                 { id: 'insta', name: '인스타그램', icon: <Instagram size={16}/> },
                 { id: 'short', name: '숏폼대본', icon: <Video size={16}/> }
               ].map(tab => (
-                <button 
-                  key={tab.id} 
-                  onClick={() => setActiveTab(tab.id)} 
+                <button key={tab.id} onClick={() => setActiveTab(tab.id)} 
                   className={`flex-1 py-3.5 rounded-2xl text-[13px] font-black flex items-center justify-center gap-2.5 transition-all duration-500 ${
                     activeTab === tab.id ? 'bg-slate-900 text-white shadow-2xl scale-[1.03] z-10' : 'text-slate-500'
                   }`}
@@ -417,7 +438,7 @@ const Creator = ({ userStatus }) => {
                     <div className="mb-14 pb-8 border-b border-slate-100">
                         <div className="flex items-center gap-2.5 mb-4">
                            <Camera size={16} className="text-slate-400" />
-                           <span className="text-slate-400 font-black text-[10px] uppercase tracking-[0.2em]">Naver Search Grounded | Flux Pro v1.1</span>
+                           <span className="text-slate-400 font-black text-[10px] uppercase tracking-[0.2em]">Real-Life Documentation</span>
                         </div>
                         <h2 className="text-[26px] font-black text-slate-900 leading-[1.4] tracking-tighter italic border-l-[8px] border-blue-600 pl-8 !mt-0">
                            {selectedTitle}
@@ -429,7 +450,7 @@ const Creator = ({ userStatus }) => {
                   <div className="pt-8 animate-fade-in-up">
                     <div className="bg-blue-50 text-blue-600 p-5 rounded-3xl mb-10 border border-blue-100 flex items-center gap-4">
                        <Sparkles size={22} className="animate-pulse" />
-                       <p className="text-[12px] font-black uppercase tracking-[0.15em]">Social Impact Content Script</p>
+                       <p className="text-[12px] font-black uppercase tracking-[0.15em]">Social Impact Content</p>
                     </div>
                     <div className="bg-slate-50 p-10 rounded-[3rem] border border-slate-100 shadow-inner relative overflow-hidden">
                        <div className="absolute top-0 left-10 w-1.5 h-12 bg-blue-600 rounded-b-full shadow-lg"></div>
@@ -442,7 +463,7 @@ const Creator = ({ userStatus }) => {
               </div>
               
               <div className="mt-24 pt-10 border-t border-slate-50 text-center opacity-40">
-                 <p className="text-[11px] text-slate-400 font-black uppercase tracking-[0.6em]">GLUNEX AI Engine v6.1 Pro</p>
+                 <p className="text-[11px] text-slate-400 font-black uppercase tracking-[0.6em]">GLUNEX AI Agent v6.5</p>
               </div>
             </div>
             
@@ -453,27 +474,23 @@ const Creator = ({ userStatus }) => {
         )}
       </main>
 
-      {/* 하단 고정 액션 바 (기존 UI 유지) */}
+      {/* 하단 버튼 */}
       <footer className="fixed bottom-0 left-0 right-0 p-8 bg-white/85 backdrop-blur-3xl border-t border-slate-100 max-w-md mx-auto z-40 shadow-[0_-20px_50px_rgba(0,0,0,0.06)]">
         {step === 'keyword' && (
-          <button 
-            onClick={handleGenerateTitles} 
-            disabled={selectedTopics.length === 0} 
+          <button onClick={handleGenerateTitles} disabled={selectedTopics.length === 0} 
             className={`w-full py-5 rounded-[2.5rem] font-black text-lg flex items-center justify-center gap-5 transition-all active:scale-95 shadow-2xl ${
-              selectedTopics.length > 0 ? 'bg-slate-900 text-white shadow-slate-900/50 hover:bg-black' : 'bg-slate-100 text-slate-300 border border-slate-200 shadow-none cursor-not-allowed'
+              selectedTopics.length > 0 ? 'bg-slate-900 text-white shadow-slate-900/50' : 'bg-slate-100 text-slate-300 border border-slate-200 cursor-not-allowed'
             }`}
           >
-            <Sparkles size={22} className="animate-pulse text-amber-400" /> 
-            제목 생성하기 
-            <ArrowRight size={20} />
+            <Sparkles size={22} className="animate-pulse text-amber-400" /> 제목 생성하기 <ArrowRight size={20} />
           </button>
         )}
         {step === 'result' && (
            <div className="flex gap-4">
-              <button onClick={handleCopy} className="flex-[2.5] py-5 bg-slate-900 text-white rounded-[2.5rem] font-black text-lg shadow-2xl active:scale-95 flex items-center justify-center gap-4 transition-all hover:bg-black">
+              <button onClick={handleCopy} className="flex-[2.5] py-5 bg-slate-900 text-white rounded-[2.5rem] font-black text-lg shadow-2xl active:scale-95 flex items-center justify-center gap-4 transition-all">
                  {isCopied ? <CheckCircle2 size={22} className="text-green-400"/> : <Copy size={22}/>} {isCopied ? '복사 완료' : '전체 내용 복사'}
               </button>
-              <button onClick={() => setStep('keyword')} className="flex-1 py-5 bg-white border-2 border-slate-900 text-slate-900 rounded-[2.5rem] font-black text-[15px] active:scale-95 transition-all hover:bg-slate-50">초기화</button>
+              <button onClick={() => setStep('keyword')} className="flex-1 py-5 bg-white border-2 border-slate-900 text-slate-900 rounded-[2.5rem] font-black text-[15px] active:scale-95 transition-all">초기화</button>
            </div>
         )}
       </footer>
