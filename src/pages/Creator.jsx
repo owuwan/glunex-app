@@ -71,10 +71,10 @@ const Creator = ({ userStatus }) => {
   const [isCopied, setIsCopied] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
 
-  // [수정] 복사할 콘텐츠 영역(DOM)을 직접 참조하기 위한 Ref 생성
-  const contentRef = useRef(null);
+  // [수정] 복사 전용 가상 DOM Ref
+  const copyBufferRef = useRef(null);
 
-  // 상황별 로딩 메시지
+  // 상황별 로딩 메시지 (줄바꿈 적용)
   const loadingMessages = {
     title: [
       "고객의 시선을 사로잡는\n최적의 자동차 시공 제목을 설계 중입니다",
@@ -87,10 +87,10 @@ const Creator = ({ userStatus }) => {
       "사장님의 전문성을 돋보이게 할\n스토리보드를 완성하고 있습니다"
     ],
     content: [
-      "실제 시공 현장의 생생함을 담은 이미지를\n저해상도 실사 질감으로 현상하고 있습니다",
+      "실제 시공 현장의 생생함을 담은 이미지를\n현실적인 실사 질감으로 현상하고 있습니다",
       "디테일링 전문가의 관점에서\n정성스럽게 전문 원고를 집필 중입니다",
-      "이미지와 글의 완벽한 조화를 위해\n마지막 검수를 진행하고 있습니다",
-      "네이버 블로그 알고리즘에 최적화된\n포스팅을 곧 완성합니다"
+      "이미지와 글의 완벽한 복사 호환을 위해\n데이터를 최적화하고 있습니다",
+      "네이버 블로그 알고리즘에 맞춘\n맞춤형 포스팅을 곧 완성합니다"
     ]
   };
 
@@ -213,12 +213,12 @@ const Creator = ({ userStatus }) => {
 
       let finalHtml = data.blog_html;
       images.forEach((url, i) => {
-        // [수정] 복사 시 이미지 인식률을 높이기 위해 구글 이미지 방식의 표준 태그 적용
+        // [수정] 복사 시 '사진'으로 100% 인식시키기 위해 블로그 에디터 표준 형식 사용
         const replacement = url ? `
-          <div style="margin: 40px 0; text-align: center;">
-            <img src="${url}" style="width: 100%; border-radius: 12px; display: inline-block; vertical-align: middle;" alt="시공사진" />
-          </div>
-        ` : `<div style="padding: 20px; color: #ccc;">[이미지 처리 중]</div>`;
+          <p style="text-align: center; margin: 30px 0;">
+            <img src="${url}" width="100%" style="display: block; border-radius: 12px;" alt="자동차 시공 사진" />
+          </p>
+        ` : `<p>[이미지 처리 대기 중]</p>`;
         finalHtml = finalHtml.replace(`[[image_${i + 1}]]`, replacement);
       });
 
@@ -229,66 +229,51 @@ const Creator = ({ userStatus }) => {
   };
 
   /**
-   * [수정 완료] 모바일 및 네이버 블로그 앱 호환성 강화 복사 로직
-   * Blob 생성 방식이 아닌, 실제 DOM 요소를 선택(Select)하여 복사(execCommand)하는 방식으로 변경.
-   * 이 방식은 렌더링된 이미지를 포함한 리치 텍스트를 가장 확실하게 클립보드로 전달합니다.
+   * [최종 수정] 모바일/네이버 블로그 앱 이미지 복사 끝판왕 로직
+   * 구글 이미지 복사와 동일한 "Native HTML Selection" 방식을 사용하여 
+   * 모바일 에디터가 '미디어 데이터'를 강제로 긁어가게 만듭니다.
    */
   const handleCopy = async () => {
     if (!generatedData) return;
 
     try {
-      // 1. 블로그 탭일 경우 (이미지 포함 복사)
-      if (activeTab === 'blog' && contentRef.current) {
-        // 현재 선택 영역 초기화
+      if (activeTab === 'blog' && copyBufferRef.current) {
+        // 1. 복사 전용 버퍼를 일시적으로 화면에 표시 (복사 성능 극대화)
+        const buffer = copyBufferRef.current;
+        buffer.style.display = 'block';
+        
+        // 2. 버퍼 내부의 모든 내용(순수 HTML + 이미지)을 선택
         const selection = window.getSelection();
         const range = document.createRange();
-        
-        // 블로그 본문 DOM을 선택 영역으로 지정 (이미지 포함)
-        range.selectNodeContents(contentRef.current);
+        range.selectNodeContents(buffer);
         selection.removeAllRanges();
         selection.addRange(range);
         
-        // 브라우저 내장 복사 명령 실행 (Rich Text 복사 트리거)
-        // 이 방식이 모바일에서 이미지를 포함해 복사하는 가장 강력한 방법입니다.
+        // 3. 브라우저 내장 복사 명령 실행 (OS 레벨의 리치 텍스트 복사)
         const successful = document.execCommand('copy');
         
-        // 선택 영역 해제 (UX)
+        // 4. 선택 해제 및 버퍼 숨김
         selection.removeAllRanges();
+        buffer.style.display = 'none';
         
         if (successful) {
           setIsCopied(true);
           showToast("이미지와 원고가 복사되었습니다!");
           setTimeout(() => setIsCopied(false), 2000);
         } else {
-          throw new Error("Copy command failed");
+          throw new Error("Copy failed");
         }
-      } 
-      // 2. 인스타/숏폼 탭일 경우 (단순 텍스트 복사)
-      else {
+      } else {
+        // 인스타/숏폼용 텍스트 전용 복사
         const text = activeTab === 'insta' ? generatedData.insta_text : generatedData.short_form;
         await navigator.clipboard.writeText(text);
-        
         setIsCopied(true);
         showToast("텍스트가 복사되었습니다!");
         setTimeout(() => setIsCopied(false), 2000);
       }
-      
     } catch (err) {
-      console.error("Copy failed:", err);
-      // 최후의 수단: 텍스트만이라도 복사
-      const fallbackText = activeTab === 'blog' 
-        ? generatedData.blog_html.replace(/<[^>]*>/g, '\n') // 태그 제거 후 텍스트만
-        : (activeTab === 'insta' ? generatedData.insta_text : generatedData.short_form);
-      
-      const textArea = document.createElement("textarea");
-      textArea.value = fallbackText;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      
-      setIsCopied(true);
-      showToast("텍스트만 복사되었습니다. (이미지 호환 불가)");
+      console.error(err);
+      alert("복사 기능이 현재 브라우저를 지원하지 않습니다.");
     }
   };
 
@@ -299,7 +284,7 @@ const Creator = ({ userStatus }) => {
         * { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif !important; }
         @keyframes fadeInUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes fadeInDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes floating { 0% { transform: translateY(0); } 50% { transform: translateY(-8px); } 100% { transform: translateY(0); } }
+        @keyframes floating { 0% { transform: translateY(0); } 50% { transform: translateY(-10px); } 100% { transform: translateY(0); } }
         @keyframes textFade { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in-up { animation: fadeInUp 0.5s ease-out forwards; }
         .animate-fade-in-down { animation: fadeInDown 0.4s ease-out forwards; }
@@ -308,11 +293,9 @@ const Creator = ({ userStatus }) => {
         .blog-preview h2 { font-size: 1.25rem; font-weight: 900; color: #1e293b; margin-top: 2.5rem; margin-bottom: 0.8rem; border-left: 4px solid #2563eb; padding-left: 0.8rem; letter-spacing: -0.02em; }
         .blog-preview p { font-size: 1rem; line-height: 1.9; color: #475569; margin-bottom: 1.2rem; text-align: justify; word-break: keep-all; }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
-        /* [추가] 복사 영역 드래그 선택 허용 (중요) - select-none이 적용된 상위 요소 무시 */
-        .user-select-text { user-select: text !important; -webkit-user-select: text !important; }
       `}</style>
 
-      {/* 토스트 알림 (중앙 정렬 완벽 수정) */}
+      {/* 토스트 알림 */}
       {toastMsg && (
         <div className="fixed top-12 inset-x-0 z-[9999] flex justify-center px-4 animate-fade-in-down pointer-events-none">
           <div className="bg-slate-900 text-white px-5 py-3.5 rounded-2xl text-[13px] font-bold shadow-2xl flex items-center justify-center gap-2 border border-slate-700 backdrop-blur-md max-w-[260px] w-full">
@@ -360,21 +343,17 @@ const Creator = ({ userStatus }) => {
             
             <div className="space-y-6 px-4 w-full">
                <h3 className="text-base font-black text-slate-900 tracking-tight uppercase italic opacity-60">
-                 {loadingType === 'title' ? 'Keyword Design' : loadingType === 'index' ? 'Process Planning' : 'Expert Writing'}
+                 Processing Data...
                </h3>
-               {/* 높이 제한 해제하여 여러 줄 대응 */}
-               <div className="min-h-[6rem] flex items-center justify-center">
-                  <p key={loadingMsgIndex} className="text-[17px] text-slate-700 font-bold leading-[1.6] animate-text-fade whitespace-pre-line" style={{ wordBreak: 'keep-all' }}>
+               {/* [수정] 줄바꿈 가독성 컨테이너 */}
+               <div className="min-h-[7rem] flex items-center justify-center">
+                  <p key={loadingMsgIndex} className="text-[16px] text-slate-700 font-bold leading-[1.6] animate-text-fade whitespace-pre-line" style={{ wordBreak: 'keep-all' }}>
                     {loadingMessages[loadingType][loadingMsgIndex]}
                   </p>
-               </div>
-               <div className="pt-2 flex justify-center gap-1.5">
-                 {[0, 1, 2].map(i => <div key={i} className="w-1.5 h-1.5 bg-blue-600/20 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}
                </div>
             </div>
           </div>
         ) : step === 'keyword' ? (
-          /* [단계 1] 키워드 선택 */
           <>
             <section className="animate-fade-in-up">
               <div className={`p-8 rounded-[3rem] border-2 transition-all duration-700 shadow-xl ${isWeatherEnabled ? 'bg-blue-600 border-blue-400 text-white' : 'bg-white border-slate-200 text-slate-900'}`}>
@@ -421,7 +400,6 @@ const Creator = ({ userStatus }) => {
             </section>
           </>
         ) : step === 'title' ? (
-          /* [단계 2] 제목 선택 */
           <section className="space-y-6 animate-fade-in-up text-left">
             <div className="px-1">
               <div className="bg-blue-600 text-white text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest mb-2 inline-block">Step 02. Select Headline</div>
@@ -439,7 +417,6 @@ const Creator = ({ userStatus }) => {
             <button onClick={handleGenerateTitles} className="w-full py-4 text-slate-400 text-xs font-bold flex items-center justify-center gap-2"><RefreshCw size={14} /> 다른 제목 추천받기</button>
           </section>
         ) : step === 'index' ? (
-          /* [단계 3] 목차 확인 */
           <section className="space-y-8 animate-fade-in-up">
             <div className="px-1">
               <div className="bg-blue-600 text-white text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest mb-2 inline-block">Step 03. Plan Structure</div>
@@ -475,7 +452,7 @@ const Creator = ({ userStatus }) => {
               ].map(tab => (
                 <button key={tab.id} onClick={() => setActiveTab(tab.id)} 
                   className={`flex-1 py-3 rounded-xl text-[12px] font-black flex items-center justify-center gap-2 transition-all duration-300 ${
-                    activeTab === tab.id ? 'bg-slate-900 text-white shadow-lg scale-[1.02] z-10' : 'text-slate-500'
+                    activeTab === tab.id ? 'bg-slate-900 text-white shadow-lg scale-[1.02] z-10' : 'text-slate-50'
                   }`}
                 >
                   {tab.icon} {tab.name}
@@ -499,8 +476,7 @@ const Creator = ({ userStatus }) => {
                  </button>
               </div>
 
-              {/* [수정] contentRef 추가 및 드래그 허용 클래스 추가 */}
-              <div className="content-container px-1 user-select-text" ref={contentRef}>
+              <div className="content-container px-1">
                 {activeTab === 'blog' ? (
                   <article className="blog-preview">
                     <div className="mb-12">
@@ -526,6 +502,16 @@ const Creator = ({ userStatus }) => {
                 )}
               </div>
               
+              {/* [신규] 복사 전용 숨겨진 버퍼 (블로그 복사 최적화) */}
+              <div 
+                ref={copyBufferRef}
+                style={{ 
+                  position: 'absolute', top: '-9999px', left: '-9999px',
+                  width: '600px', pointerEvents: 'none', userSelect: 'all'
+                }}
+                dangerouslySetInnerHTML={{ __html: generatedData ? `<h2>${selectedTitle}</h2>` + generatedData.blog_html : '' }}
+              />
+
               <div className="mt-24 pt-10 border-t border-slate-50 text-center opacity-30">
                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.6em]">GLUNEX AI Marketing Platform</p>
               </div>
