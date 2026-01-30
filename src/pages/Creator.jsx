@@ -7,11 +7,11 @@ import {
   Target, ListOrdered, FileText, MousePointer2,
   Camera, Wand2, Info, Eye, Smartphone, ChevronRight,
   Star, ShieldCheck, Palette, ZapOff, X, FileSearch, CheckCircle,
-  Download, AlertTriangle, SmartphoneIcon
+  Download, AlertTriangle, SmartphoneIcon, Film, Type
 } from 'lucide-react';
 
 /**
- * [AI 마스터 프롬프트 설정 - 자동차 시공 전문성 및 장비 고증 강화]
+ * [AI 마스터 프롬프트 설정 - 장비 고증 강화 버전]
  */
 const SYSTEM_PROMPT_TITLES = `
 당신은 대한민국 최고의 '자동차 외장관리(Automotive Detailing)' 전문 마케터입니다.
@@ -270,7 +270,7 @@ const Creator = ({ userStatus }) => {
         * { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif !important; }
         @keyframes fadeInUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes fadeInDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes floating { 0% { transform: translateY(0); } 50% { transform: translateY(-10px); } 100% { transform: translateY(0); } }
+        @keyframes floating { 0% { transform: translateY(0); } 50% { transform: translateY(-8px); } 100% { transform: translateY(0); } }
         @keyframes textFade { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in-up { animation: fadeInUp 0.5s ease-out forwards; }
         .animate-fade-in-down { animation: fadeInDown 0.4s ease-out forwards; }
@@ -313,8 +313,8 @@ const Creator = ({ userStatus }) => {
         </div>
       </header>
 
-      {/* [수정] pb-44 제거하여 푸터가 없을 때 여백이 남지 않도록 함. 하단 고정바 높이만큼만 pb 적용 */}
-      <main className={`flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide ${(step === 'keyword' || step === 'result') ? 'pb-44' : 'pb-10'}`}>
+      {/* [수정] 메인 컨테이너 패딩 조절 - 푸터 노출 여부에 따라 가변적용 */}
+      <main className={`flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide ${(step === 'keyword' || step === 'result') && !loading ? 'pb-44' : 'pb-10'}`}>
         
         {loading ? (
           <div className="flex flex-col h-full items-center justify-center animate-fade-in py-24 text-center">
@@ -425,7 +425,7 @@ const Creator = ({ userStatus }) => {
             </div>
           </section>
         ) : (
-          /* [결과 페이지] 최종 포스팅 */
+          /* [결과 페이지] 리뉴얼된 SNS UI */
           <section className="space-y-6 animate-fade-in-up pb-10">
             <div className="flex bg-slate-200/50 p-1.5 rounded-2xl border border-slate-100 shadow-inner mx-1">
               {[
@@ -456,7 +456,6 @@ const Creator = ({ userStatus }) => {
             </div>
 
             <div className="bg-white p-7 rounded-[3rem] border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.05)] min-h-[600px] relative overflow-hidden text-left animate-fade-in-up">
-              
               <div className="content-container px-1 pt-4">
                 {activeTab === 'blog' ? (
                   <article className="blog-preview">
@@ -471,13 +470,43 @@ const Creator = ({ userStatus }) => {
                     </div>
                     <div className="space-y-10" dangerouslySetInnerHTML={{ __html: generatedData.blog_html }} />
                   </article>
-                ) : (
-                  <div className="animate-fade-in-up py-4">
-                    <div className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100 shadow-inner relative overflow-hidden">
-                       <div className="absolute top-0 left-8 w-1.5 h-10 bg-blue-600 rounded-b-full shadow-sm"></div>
+                ) : activeTab === 'insta' ? (
+                  /* 인스타그램 UI */
+                  <div className="animate-fade-in-up py-4 space-y-6">
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-600 flex items-center justify-center text-white shadow-lg">
+                            <Instagram size={20} />
+                        </div>
+                        <div>
+                            <p className="text-sm font-black text-slate-900">Instagram Posting Guide</p>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Social Marketing</p>
+                        </div>
+                    </div>
+                    <div className="bg-slate-50 p-7 rounded-[2.5rem] border border-slate-100 shadow-inner relative group transition-all">
+                       <div className="absolute top-0 right-10 w-8 h-1 bg-gradient-to-r from-purple-500 to-pink-500 rounded-b-full"></div>
                        <pre className="whitespace-pre-wrap text-[15px] text-slate-700 leading-relaxed font-bold tracking-tight italic">
-                          {activeTab === 'insta' ? generatedData.insta_text : generatedData.short_form}
+                          {generatedData.insta_text}
                        </pre>
+                    </div>
+                  </div>
+                ) : (
+                  /* 숏폼 UI */
+                  <div className="animate-fade-in-up py-4 space-y-6">
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center text-white shadow-lg">
+                            <Film size={20} />
+                        </div>
+                        <div>
+                            <p className="text-sm font-black text-slate-900">Short-form Video Script</p>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Reels / Shorts</p>
+                        </div>
+                    </div>
+                    <div className="bg-slate-900 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden transition-all">
+                       <div className="relative z-10">
+                          <pre className="whitespace-pre-wrap text-[15px] text-white leading-relaxed font-bold tracking-tight italic opacity-90">
+                             {generatedData.short_form}
+                          </pre>
+                       </div>
                     </div>
                   </div>
                 )}
@@ -489,20 +518,18 @@ const Creator = ({ userStatus }) => {
                   position: 'absolute', top: '-9999px', left: '-9999px',
                   width: '600px', pointerEvents: 'none', userSelect: 'all'
                 }}
-                dangerouslySetInnerHTML={{ __html: generatedData ? `<h2>${selectedTitle}</h2>` + generatedData.blog_html : '' }}
+                dangerouslySetInnerHTML={{ __html: generatedData ? `<h2>${selectedTitle}</h2>` + (activeTab === 'blog' ? generatedData.blog_html : activeTab === 'insta' ? generatedData.insta_text : generatedData.short_form) : '' }}
               />
 
               <div className="mt-14 pt-8 border-t border-slate-50 text-center opacity-30">
                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.6em]">GLUNEX AI Marketing Platform</p>
               </div>
             </div>
-            
-            {/* [삭제] Create New Post 버튼 제거됨 */}
           </section>
         )}
       </main>
 
-      {/* 하단 고정 액션 바 [수정: keyword와 result 단계에서만, 그리고 loading이 아닐 때만 렌더링] */}
+      {/* 하단 고정 푸터 [keyword와 result 단계에서만 렌더링, loading 중 제외] */}
       {(step === 'keyword' || step === 'result') && !loading && (
         <footer className="fixed bottom-0 left-0 right-0 p-8 bg-white/85 backdrop-blur-2xl border-t border-slate-100 max-w-md mx-auto z-40 shadow-[0_-15px_40px_rgba(0,0,0,0.04)]">
           {step === 'keyword' && (
