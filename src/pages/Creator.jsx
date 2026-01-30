@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 
 /**
- * [AI 마스터 프롬프트 설정 - 자동차 시공 전문성 극대화]
+ * [AI 마스터 프롬프트 설정 - 자동차 시공 전문성 및 장비 고증 강화]
  */
 const SYSTEM_PROMPT_TITLES = `
 당신은 대한민국 최고의 '자동차 외장관리(Automotive Detailing)' 전문 마케터입니다.
@@ -38,14 +38,16 @@ const SYSTEM_PROMPT_CONTENT = `
 - 각 섹션 끝에 [[image_1]] ~ [[image_5]] 태그를 배치하세요.
 - HTML 태그(h2, p, br, strong)를 사용하세요.
 
-[2단계: 이미지 프롬프트 생성 지침 (100대 시나리오 고증 로직 유지)]
+[2단계: 이미지 프롬프트 생성 지침 (장비 고증 로직 대폭 강화)]
 - 모든 프롬프트(p1~p5)는 반드시 다음 형식을 준수하세요:
-  "Authentic real-life photo, Authentic real-work photo, Work-in-progress (WIP) of [상황 키워드] referencing professional work images from www.naver.com. [구체적인 물리적 묘사]. Raw handheld shot, iPhone 15 Pro, no UI elements, no text, realistic, harsh overhead fluorescent lighting, blurred license plate."
-- [고증 가이드]: 
-  1. 철분제거: "Thin, watery, translucent dark-purple streaks. NO thick paint."
-  2. 유리막: "Black block with blue suede cloth. NO sponges."
-  3. 세차: "Lambswool wash mitt with bubbles."
-  4. 배경: "Korean detailing shop with grid LED lights."
+  "Authentic real-life photo, Authentic real-work photo, Work-in-progress (WIP) of [상황 키워드] referencing professional work images from www.naver.com. [구체적인 물리적/장비 묘사]. Raw handheld shot, iPhone 15 Pro, no UI elements, no text, realistic, harsh overhead fluorescent lighting, blurred license plate."
+- [장비 및 도구 필수 고증]: 
+  1. 철분제거: "Thin, watery, translucent dark-purple streaks bleeding. NO thick paint."
+  2. 유리막/코팅: "Hand holding a black rectangular coating block wrapped in a blue suede cloth, applying thin liquid."
+  3. 광택/폴리싱: "Technician using a Dual-action polisher machine with a yellow foam pad, visible compound splashes on paint swirl marks."
+  4. 썬팅/PPF: "Professional plastic squeegee pushing out soapy water from under the film, handheld heat gun nearby."
+  5. 실내크리닝: "Handheld steam cleaner nozzle emitting white steam, vacuum extractor nozzle on carpet, soft detailing brushes for air vents."
+  6. 배경: "Modern Korean detailing shop with high-intensity grid LED ceiling lights."
 
 [출력 형식]
 JSON 응답: { "blog_html": "...", "insta_text": "...", "short_form": "...", "image_prompts": { "p1": "...", "p2": "...", "p3": "...", "p4": "...", "p5": "..." } }
@@ -153,10 +155,6 @@ const Creator = ({ userStatus }) => {
     return JSON.parse(resData.candidates[0].content.parts[0].text);
   };
 
-  /**
-   * [이미지 엔진: fal-ai/flux-2] 
-   * 장당 $0.012 비용 소진 모델
-   */
   const callFalAI = async (prompt) => {
     const apiKey = import.meta.env.VITE_FAL_API_KEY;
     if (!apiKey || apiKey === "undefined") return null;
@@ -166,7 +164,7 @@ const Creator = ({ userStatus }) => {
         headers: { "Authorization": `Key ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: prompt,
-          image_size: "landscape_4_3" 
+          image_size: { width: 768, height: 576 } 
         })
       });
       const data = await response.json();
@@ -236,15 +234,12 @@ const Creator = ({ userStatus }) => {
       if (activeTab === 'blog' && copyBufferRef.current) {
         const buffer = copyBufferRef.current;
         buffer.style.display = 'block';
-        
         const selection = window.getSelection();
         const range = document.createRange();
         range.selectNodeContents(buffer);
         selection.removeAllRanges();
         selection.addRange(range);
-        
         const successful = document.execCommand('copy');
-        
         selection.removeAllRanges();
         buffer.style.display = 'none';
         
@@ -318,7 +313,8 @@ const Creator = ({ userStatus }) => {
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-6 space-y-6 pb-44 scrollbar-hide">
+      {/* [수정] pb-44 제거하여 푸터가 없을 때 여백이 남지 않도록 함. 하단 고정바 높이만큼만 pb 적용 */}
+      <main className={`flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide ${(step === 'keyword' || step === 'result') ? 'pb-44' : 'pb-10'}`}>
         
         {loading ? (
           <div className="flex flex-col h-full items-center justify-center animate-fade-in py-24 text-center">
@@ -461,8 +457,6 @@ const Creator = ({ userStatus }) => {
 
             <div className="bg-white p-7 rounded-[3rem] border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.05)] min-h-[600px] relative overflow-hidden text-left animate-fade-in-up">
               
-              {/* [개선] 내부 툴바 제거 (중복 복사 버튼 및 텍스트 삭제) */}
-
               <div className="content-container px-1 pt-4">
                 {activeTab === 'blog' ? (
                   <article className="blog-preview">
@@ -503,32 +497,33 @@ const Creator = ({ userStatus }) => {
               </div>
             </div>
             
-            <button onClick={() => { setStep('keyword'); setGeneratedData(null); setTitles([]); setIndexList([]); }} className="w-full py-6 text-slate-300 text-[11px] font-black flex items-center justify-center gap-4 uppercase tracking-[0.3em] bg-white border border-slate-100 rounded-[2rem] active:scale-95 transition-all shadow-sm">
-              <RefreshCw size={16} /> Create New Post
-            </button>
+            {/* [삭제] Create New Post 버튼 제거됨 */}
           </section>
         )}
       </main>
 
-      <footer className="fixed bottom-0 left-0 right-0 p-8 bg-white/85 backdrop-blur-2xl border-t border-slate-100 max-w-md mx-auto z-40 shadow-[0_-15px_40px_rgba(0,0,0,0.04)]">
-        {step === 'keyword' && (
-          <button onClick={handleGenerateTitles} disabled={selectedTopics.length === 0} 
-            className={`w-full py-5 rounded-[2.5rem] font-black text-lg flex items-center justify-center gap-5 transition-all active:scale-95 shadow-2xl ${
-              selectedTopics.length > 0 ? 'bg-slate-900 text-white shadow-slate-900/50' : 'bg-slate-100 text-slate-300 border border-slate-200 cursor-not-allowed'
-            }`}
-          >
-            <Sparkles size={22} className="text-amber-400 animate-pulse" /> 마케팅 제목 생성 <ArrowRight size={20} />
-          </button>
-        )}
-        {step === 'result' && (
-           <div className="flex gap-4">
-              <button onClick={handleCopy} className={`flex-[3] py-5 bg-slate-900 text-white rounded-[2.5rem] font-black text-lg shadow-2xl active:scale-95 flex items-center justify-center gap-4 transition-all ${isCopied ? 'bg-green-600' : ''}`}>
-                 {isCopied ? <CheckCircle2 size={22}/> : <Copy size={22}/>} {isCopied ? '복사 완료' : '전체 내용 복사'}
-              </button>
-              <button onClick={() => setStep('keyword')} className="flex-1 py-5 bg-white border-2 border-slate-100 text-slate-400 rounded-[2.5rem] font-black text-[15px] active:scale-95 transition-all">초기화</button>
-           </div>
-        )}
-      </footer>
+      {/* 하단 고정 액션 바 [수정: keyword와 result 단계에서만, 그리고 loading이 아닐 때만 렌더링] */}
+      {(step === 'keyword' || step === 'result') && !loading && (
+        <footer className="fixed bottom-0 left-0 right-0 p-8 bg-white/85 backdrop-blur-2xl border-t border-slate-100 max-w-md mx-auto z-40 shadow-[0_-15px_40px_rgba(0,0,0,0.04)]">
+          {step === 'keyword' && (
+            <button onClick={handleGenerateTitles} disabled={selectedTopics.length === 0} 
+              className={`w-full py-5 rounded-[2.5rem] font-black text-lg flex items-center justify-center gap-5 transition-all active:scale-95 shadow-2xl ${
+                selectedTopics.length > 0 ? 'bg-slate-900 text-white shadow-slate-900/50' : 'bg-slate-100 text-slate-300 border border-slate-200 cursor-not-allowed'
+              }`}
+            >
+              <Sparkles size={22} className="text-amber-400 animate-pulse" /> 마케팅 제목 생성 <ArrowRight size={20} />
+            </button>
+          )}
+          {step === 'result' && (
+             <div className="flex gap-4">
+                <button onClick={handleCopy} className={`flex-[3] py-5 bg-slate-900 text-white rounded-[2.5rem] font-black text-lg shadow-2xl active:scale-95 flex items-center justify-center gap-4 transition-all ${isCopied ? 'bg-green-600' : ''}`}>
+                   {isCopied ? <CheckCircle2 size={22}/> : <Copy size={22}/>} {isCopied ? '복사 완료' : '전체 내용 복사'}
+                </button>
+                <button onClick={() => setStep('keyword')} className="flex-1 py-5 bg-white border-2 border-slate-100 text-slate-400 rounded-[2.5rem] font-black text-[15px] active:scale-95 transition-all">초기화</button>
+             </div>
+          )}
+        </footer>
+      )}
     </div>
   );
 };
