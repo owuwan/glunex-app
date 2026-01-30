@@ -3,12 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Wallet, TrendingUp, Calendar, CheckCircle2, 
   Clock, Sparkles, MessageSquare, Edit3, 
-  ChevronRight, Info, X, Loader2
+  ChevronRight, Info, X, Loader2, ArrowUpRight
 } from 'lucide-react';
-// 공통 설정파일에서 auth, db를 가져옵니다.
 import { auth, db } from '../firebase';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { collection, query, where, onSnapshot, getDocs } from 'firebase/firestore';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 
 const Sales = () => {
   const navigate = useNavigate();
@@ -20,19 +19,18 @@ const Sales = () => {
   const [showMarketingModal, setShowMarketingModal] = useState(false);
   
   const [stats, setStats] = useState({
-    confirmed: 0, // 보증서 발행 완료 (실제 매출)
-    completed: 0, // 예약 시간 지남 (정산 대기)
-    expected: 0,  // 예약 대기 (미래 매출)
+    confirmed: 0,
+    completed: 0,
+    expected: 0,
     total: 0
   });
 
   const [chartData, setChartData] = useState([]);
 
-  // --- (Rule 3) 인증 로직 ---
+  // --- 인증 로직 ---
   useEffect(() => {
     const initAuth = async () => {
       try {
-        // 이미 로그인되어 있지 않은 경우에만 익명 로그인
         if (!auth.currentUser) {
           await signInAnonymously(auth);
         }
@@ -58,27 +56,21 @@ const Sales = () => {
     const currentH = now.getHours();
     const currentM = now.getMinutes();
 
-    // 1. 보증서 데이터 (확정 매출)
     const qWarranties = query(collection(db, "warranties"), where("userId", "==", user.uid));
-    
-    // 2. 스케줄 데이터 (완료/예상 매출)
     const schedulesRef = collection(db, 'artifacts', appId, 'public', 'data', 'schedules');
 
-    // 리스너 통합 관리
     const unsubW = onSnapshot(qWarranties, (wSnap) => {
       const unsubS = onSnapshot(schedulesRef, (sSnap) => {
         let confirmedSum = 0;
         let completedSum = 0;
         let expectedSum = 0;
 
-        // 확정 매출 합산
         wSnap.docs.forEach(doc => {
           const data = doc.data();
           const price = Number(String(data.price || "0").replace(/[^0-9]/g, '')) || 0;
           confirmedSum += price;
         });
 
-        // 스케줄 기반 매출 분석 (JS 메모리 필터링 - Rule 2)
         sSnap.docs.forEach(doc => {
           const data = doc.data();
           if (data.userId !== user.uid) return;
@@ -90,9 +82,9 @@ const Sales = () => {
           const isTodayPastTime = data.date === todayStr && (sH < currentH || (sH === currentH && sM < currentM));
 
           if (isPastDate || isTodayPastTime) {
-            completedSum += price; // 작업은 끝났으나 보증서 미발행 상태
+            completedSum += price;
           } else {
-            expectedSum += price; // 예약 대기중
+            expectedSum += price;
           }
         });
 
@@ -103,13 +95,13 @@ const Sales = () => {
           total: confirmedSum + completedSum + expectedSum
         });
 
-        // 그래프 데이터 생성 (요일별 요약)
+        // 주식 차트 스타일을 위한 최근 7일 모의 트렌드 데이터
         const days = ['월', '화', '수', '목', '금', '토', '일'];
-        setChartData(days.map(name => ({
+        setChartData(days.map((name, i) => ({
           name,
-          confirmed: Math.floor(Math.random() * 40 + 20),
-          completed: Math.floor(Math.random() * 20 + 10),
-          expected: Math.floor(Math.random() * 30 + 5),
+          confirmed: 30 + Math.sin(i) * 10 + Math.random() * 20,
+          completed: 20 + Math.cos(i) * 5 + Math.random() * 15,
+          expected: 15 + Math.random() * 25,
         })));
 
       }, (err) => console.error("Schedule Listener Error:", err));
@@ -119,6 +111,23 @@ const Sales = () => {
 
     return () => unsubW();
   }, [user, appId]);
+
+  // 주식 그래프용 Path 생성 함수
+  const generatePath = (data, key, height = 150, width = 350) => {
+    if (data.length === 0) return "";
+    const points = data.map((d, i) => {
+      const x = (i / (data.length - 1)) * width;
+      const y = height - (d[key] / 100) * height;
+      return `${x},${y}`;
+    });
+    return `M ${points.join(' L ')}`;
+  };
+
+  const generateAreaPath = (data, key, height = 150, width = 350) => {
+    if (data.length === 0) return "";
+    const linePath = generatePath(data, key, height, width);
+    return `${linePath} L ${width},${height} L 0,${height} Z`;
+  };
 
   if (loading) return (
     <div className="h-full flex items-center justify-center bg-white">
@@ -134,170 +143,187 @@ const Sales = () => {
         <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-50 rounded-full transition-colors active:scale-90">
           <ArrowLeft size={24} />
         </button>
-        <h1 className="text-xl font-black text-slate-900 tracking-tight">통합 매출 현황</h1>
+        <h1 className="text-xl font-black text-slate-900 tracking-tight italic uppercase">Revenue <span className="text-blue-600">Analytics</span></h1>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-6 space-y-6 pb-32 scrollbar-hide">
+      <main className="flex-1 overflow-y-auto p-6 space-y-6 pb-36 scrollbar-hide">
         
-        {/* 매출 대시보드 카드 */}
+        {/* 요약 카드 */}
         <section className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full blur-3xl -mr-16 -mt-16"></div>
+          <div className="absolute top-0 right-0 w-40 h-40 bg-blue-500/20 rounded-full blur-[60px] -mr-20 -mt-20"></div>
           <div className="relative z-10 text-left">
-            <p className="text-blue-400 text-[10px] font-black uppercase tracking-[0.2em] mb-2 text-left">Current Monthly Revenue</p>
+            <div className="flex items-center gap-2 mb-2">
+                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
+                <p className="text-blue-400 text-[10px] font-black uppercase tracking-[0.2em]">Live Performance Index</p>
+            </div>
             <div className="flex items-baseline gap-2 mb-8 text-left">
               <span className="text-4xl font-black tracking-tighter">{(stats.confirmed + stats.completed).toLocaleString()}</span>
-              <span className="text-lg font-bold opacity-60">원</span>
+              <span className="text-lg font-bold opacity-40">원</span>
             </div>
             
             <div className="grid grid-cols-3 gap-4 border-t border-white/10 pt-6">
               <div className="text-left">
-                <p className="text-slate-500 text-[9px] font-bold mb-1">확정 매출</p>
+                <p className="text-slate-500 text-[9px] font-bold mb-1 uppercase">Confirmed</p>
                 <p className="text-sm font-black text-blue-400">{stats.confirmed.toLocaleString()}</p>
               </div>
               <div className="text-left">
-                <p className="text-slate-500 text-[9px] font-bold mb-1">정산 대기</p>
+                <p className="text-slate-500 text-[9px] font-bold mb-1 uppercase">Pending</p>
                 <p className="text-sm font-black text-green-400">{stats.completed.toLocaleString()}</p>
               </div>
               <div className="text-left">
-                <p className="text-slate-500 text-[9px] font-bold mb-1">예약(예상)</p>
+                <p className="text-slate-500 text-[9px] font-bold mb-1 uppercase">Expected</p>
                 <p className="text-sm font-black text-amber-400">{stats.expected.toLocaleString()}</p>
               </div>
             </div>
           </div>
         </section>
 
-        {/* 트리플 레이어 매출 그래프 */}
-        <section className="bg-white rounded-[2.5rem] p-6 border border-slate-200 shadow-sm space-y-6">
-          <div className="flex justify-between items-center px-2">
-            <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-              <TrendingUp size={18} className="text-blue-600" /> 실적 분석 그래프
+        {/* 주식 차트 스타일 그래프 */}
+        <section className="bg-white rounded-[2.5rem] p-7 border border-slate-200 shadow-[0_10px_30px_rgba(0,0,0,0.03)] space-y-6">
+          <div className="flex justify-between items-center">
+            <h3 className="text-base font-black text-slate-900 flex items-center gap-2 italic">
+              <TrendingUp size={18} className="text-blue-600" /> Market Trend
             </h3>
-            <div className="flex gap-2">
+            <div className="flex gap-2 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100">
               <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"/><span className="text-[8px] font-bold text-slate-400">확정</span></div>
               <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-green-500"/><span className="text-[8px] font-bold text-slate-400">완료</span></div>
               <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-amber-500"/><span className="text-[8px] font-bold text-slate-400">예상</span></div>
             </div>
           </div>
 
-          <div className="h-40 w-full flex items-end justify-between px-2 gap-2">
-            {chartData.map((d, i) => (
-              <div key={i} className="flex-1 flex flex-col items-center gap-2 h-full justify-end group">
-                <div className="w-full flex flex-col-reverse gap-0.5 max-w-[12px] h-full justify-start">
-                   <div style={{ height: `${d.expected}%` }} className="w-full bg-amber-500/80 rounded-t-sm transition-all duration-700"></div>
-                   <div style={{ height: `${d.completed}%` }} className="w-full bg-green-500 transition-all duration-700"></div>
-                   <div style={{ height: `${d.confirmed}%` }} className="w-full bg-blue-500 transition-all duration-700"></div>
-                </div>
-                <span className="text-[10px] font-black text-slate-300 group-hover:text-slate-900">{d.name}</span>
-              </div>
-            ))}
+          <div className="relative h-44 w-full">
+            <svg className="w-full h-full overflow-visible" viewBox="0 0 350 150" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="gradBlue" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.3" />
+                  <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
+                </linearGradient>
+                <linearGradient id="gradGreen" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#22c55e" stopOpacity="0.2" />
+                  <stop offset="100%" stopColor="#22c55e" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              
+              {/* 가이드 라인 */}
+              <line x1="0" y1="0" x2="350" y2="0" stroke="#f1f5f9" strokeWidth="1" />
+              <line x1="0" y1="50" x2="350" y2="50" stroke="#f1f5f9" strokeWidth="1" />
+              <line x1="0" y1="100" x2="350" y2="100" stroke="#f1f5f9" strokeWidth="1" />
+
+              {/* 확정 매출 Area */}
+              <path d={generateAreaPath(chartData, 'confirmed')} fill="url(#gradBlue)" />
+              <path d={generatePath(chartData, 'confirmed')} fill="none" stroke="#3b82f6" strokeWidth="3" strokeLinecap="round" />
+              
+              {/* 완료 매출 Area */}
+              <path d={generateAreaPath(chartData, 'completed')} fill="url(#gradGreen)" />
+              <path d={generatePath(chartData, 'completed')} fill="none" stroke="#22c55e" strokeWidth="2" strokeDasharray="4 4" />
+              
+              {/* 예상 매출 Line */}
+              <path d={generatePath(chartData, 'expected')} fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            
+            <div className="flex justify-between mt-4 px-1">
+               {chartData.map((d, i) => (
+                 <span key={i} className="text-[10px] font-black text-slate-300">{d.name}</span>
+               ))}
+            </div>
           </div>
         </section>
 
-        {/* 유형별 상세 분석 */}
-        <section className="space-y-3">
-           <div className="bg-blue-50/50 p-6 rounded-3xl border border-blue-100 flex items-center justify-between">
-              <div className="flex items-center gap-4 text-left">
-                 <div className="p-3 bg-blue-600 rounded-2xl text-white shadow-lg shadow-blue-100"><CheckCircle2 size={20} /></div>
-                 <div>
-                    <p className="text-xs font-black text-blue-900 mb-0.5">확정 매출액</p>
-                    <p className="text-[10px] text-blue-600 font-medium">발행 보증서 기반 실매출</p>
-                 </div>
-              </div>
-              <p className="text-lg font-black text-slate-900">{stats.confirmed.toLocaleString()}원</p>
-           </div>
-
-           <div className="bg-green-50/50 p-6 rounded-3xl border border-green-100 flex items-center justify-between">
-              <div className="flex items-center gap-4 text-left">
-                 <div className="p-3 bg-green-600 rounded-2xl text-white shadow-lg shadow-green-100"><Clock size={20} /></div>
-                 <div>
-                    <p className="text-xs font-black text-green-900 mb-0.5">시공 완료 미정산액</p>
-                    <p className="text-[10px] text-green-600 font-medium">시간 지난 예약건 합계</p>
-                 </div>
-              </div>
-              <p className="text-lg font-black text-slate-900">{stats.completed.toLocaleString()}원</p>
-           </div>
-
-           <div className="bg-amber-50/50 p-6 rounded-3xl border border-amber-100 flex items-center justify-between">
-              <div className="flex items-center gap-4 text-left">
-                 <div className="p-3 bg-amber-500 rounded-2xl text-white shadow-lg shadow-amber-100"><Calendar size={20} /></div>
-                 <div>
-                    <p className="text-xs font-black text-amber-900 mb-0.5">예약 대기 매출</p>
-                    <p className="text-[10px] text-amber-600 font-medium">시공 예정 잠재 매출액</p>
-                 </div>
-              </div>
-              <p className="text-lg font-black text-slate-900">{stats.expected.toLocaleString()}원</p>
-           </div>
+        {/* 상세 분석 섹션 */}
+        <section className="grid grid-cols-1 gap-3">
+           {[
+             { title: 'Confirmed Revenue', label: '보증서 발행 실매출', value: stats.confirmed, color: 'blue', icon: <CheckCircle2 size={20}/> },
+             { title: 'Work Completed', label: '미정산 시공 완료액', value: stats.completed, color: 'green', icon: <Clock size={20}/> },
+             { title: 'Future Pipeline', label: '예약 대기 잠재 매출', value: stats.expected, color: 'amber', icon: <Calendar size={20}/> }
+           ].map((item, idx) => (
+             <div key={idx} className={`bg-white p-6 rounded-3xl border border-slate-200 flex items-center justify-between shadow-sm`}>
+                <div className="flex items-center gap-4 text-left">
+                   <div className={`p-3 rounded-2xl text-white shadow-lg ${item.color === 'blue' ? 'bg-blue-600' : item.color === 'green' ? 'bg-green-600' : 'bg-amber-500'}`}>
+                      {item.icon}
+                   </div>
+                   <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{item.title}</p>
+                      <p className="text-xs font-bold text-slate-800">{item.label}</p>
+                   </div>
+                </div>
+                <p className="text-lg font-black text-slate-900">{item.value.toLocaleString()}원</p>
+             </div>
+           ))}
         </section>
 
-        <div className="p-4 bg-slate-100 rounded-2xl flex items-start gap-3 opacity-60 text-left">
-           <Info size={16} className="text-slate-500 shrink-0 mt-0.5" />
-           <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
-              * 보증서 발행 금액은 확정 매출로 집계되며, 스케줄러 데이터는 현장 상황에 따라 변동될 수 있습니다.
-           </p>
-        </div>
       </main>
 
       {/* 하단 플로팅 액션 */}
       <footer className="fixed bottom-0 left-0 right-0 p-8 bg-white/80 backdrop-blur-2xl border-t border-slate-100 max-w-md mx-auto z-40">
         <button 
           onClick={() => setShowMarketingModal(true)}
-          className="w-full py-5 bg-slate-900 text-white rounded-[2rem] font-black text-lg flex items-center justify-center gap-3 shadow-2xl active:scale-95 transition-all shadow-slate-900/40"
+          className="w-full py-5 bg-slate-900 text-white rounded-[2.5rem] font-black text-lg flex items-center justify-center gap-3 shadow-2xl active:scale-95 transition-all shadow-slate-900/40"
         >
-          <Sparkles size={20} className="text-amber-400" /> 부족한 매출 채우러 가기
+          <Sparkles size={20} className="text-amber-400" /> 수익 극대화 마케팅 시작하기
         </button>
       </footer>
 
-      {/* 마케팅 브릿지 모달 */}
+      {/* 마케팅 브릿지 모달 (중앙 배치) */}
       {showMarketingModal && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in" onClick={() => setShowMarketingModal(false)}>
-           <div className="bg-white w-full max-w-sm rounded-[3rem] shadow-2xl relative flex flex-col p-8 pb-12 overflow-hidden animate-fade-in-up" onClick={e => e.stopPropagation()}>
-              <div className="w-12 h-1.5 bg-slate-100 rounded-full mx-auto mb-8"></div>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/70 backdrop-blur-md animate-fade-in" onClick={() => setShowMarketingModal(false)}>
+           <div className="bg-white w-full max-w-sm rounded-[3rem] shadow-2xl relative flex flex-col p-8 pb-10 overflow-hidden animate-scale-in" onClick={e => e.stopPropagation()}>
               
               <div className="flex justify-between items-start mb-10 text-left">
                  <div>
-                    <h3 className="text-2xl font-black text-slate-900 tracking-tight leading-tight">성장을 위한<br/>전략을 선택하세요</h3>
-                    <p className="text-xs text-slate-400 font-bold mt-2">상황에 맞는 최적의 도구로 연결합니다.</p>
+                    <h3 className="text-[26px] font-black text-slate-900 tracking-tighter leading-[1.2]">수익 성장을 위한<br/>맞춤 전략 실행</h3>
+                    <div className="w-10 h-1 bg-blue-600 rounded-full mt-4"></div>
                  </div>
-                 <button onClick={() => setShowMarketingModal(false)} className="p-2 bg-slate-50 rounded-full text-slate-300"><X size={24}/></button>
+                 <button onClick={() => setShowMarketingModal(false)} className="p-2 bg-slate-50 rounded-full text-slate-300 hover:text-slate-900 transition-colors"><X size={24}/></button>
               </div>
 
               <div className="space-y-4">
+                 {/* 단골 케어 */}
                  <button 
                     onClick={() => navigate('/marketing')}
-                    className="w-full p-6 bg-blue-600 rounded-[2.5rem] flex items-center justify-between group active:scale-95 transition-all shadow-xl shadow-blue-100"
+                    className="w-full p-7 bg-blue-600 rounded-[2.5rem] flex items-center justify-between group active:scale-[0.98] transition-all shadow-xl shadow-blue-100"
                  >
                     <div className="flex items-center gap-5">
-                       <div className="p-3 bg-white/20 rounded-2xl text-white"><MessageSquare size={24} /></div>
+                       <div className="p-3 bg-white/20 rounded-2xl text-white"><MessageSquare size={26} /></div>
                        <div className="text-left">
-                          <p className="text-[10px] font-black text-blue-100 uppercase tracking-widest mb-1">Target CRM</p>
-                          <p className="text-lg font-black text-white">기존 고객 연락하기</p>
+                          <p className="text-[10px] font-black text-blue-100 uppercase tracking-widest mb-1">Loyalty CRM</p>
+                          <p className="text-lg font-black text-white leading-none">기존 고객 연락하기</p>
                        </div>
                     </div>
-                    <ChevronRight className="text-white opacity-40 group-hover:opacity-100" />
+                    <ArrowUpRight className="text-white opacity-40 group-hover:opacity-100 group-hover:translate-x-1 group-hover:-translate-y-1 transition-all" />
                  </button>
 
+                 {/* 신규 유입 */}
                  <button 
                     onClick={() => navigate('/creator')}
-                    className="w-full p-6 bg-slate-900 rounded-[2.5rem] flex items-center justify-between group active:scale-95 transition-all shadow-xl shadow-slate-200"
+                    className="w-full p-7 bg-slate-900 rounded-[2.5rem] flex items-center justify-between group active:scale-[0.98] transition-all shadow-xl shadow-slate-300"
                  >
                     <div className="flex items-center gap-5">
-                       <div className="p-3 bg-white/10 rounded-2xl text-white"><Edit3 size={24} /></div>
+                       <div className="p-3 bg-white/10 rounded-2xl text-white"><Edit3 size={26} /></div>
                        <div className="text-left">
-                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">AI Marketing</p>
-                          <p className="text-lg font-black text-white">새로운 홍보글 쓰기</p>
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Viral Marketing</p>
+                          <p className="text-lg font-black text-white leading-none">새로운 홍보글 쓰기</p>
                        </div>
                     </div>
-                    <ChevronRight className="text-white opacity-40 group-hover:opacity-100" />
+                    <ArrowUpRight className="text-white opacity-40 group-hover:opacity-100 group-hover:translate-x-1 group-hover:-translate-y-1 transition-all" />
                  </button>
               </div>
+
+              <p className="mt-8 text-[10px] text-center text-slate-400 font-bold uppercase tracking-[0.4em]">Optimized Growth Loop</p>
            </div>
         </div>
       )}
 
       <style>{`
-        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        .animate-fade-in-up { animation: fadeInUp 0.4s ease-out forwards; }
-        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        @keyframes scaleIn {
+          from { opacity: 0; transform: scale(0.9); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        .animate-scale-in {
+          animation: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+        }
       `}</style>
     </div>
   );
