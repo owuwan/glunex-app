@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   User, Crown, MessageSquare, ChevronRight, CloudRain, Sun, 
@@ -35,11 +35,7 @@ const Dashboard = () => {
   });
 
   // 커스텀 시간 선택 상태
-  const [timeParts, setTimeParts] = useState({
-    ampm: '', // 오전, 오후
-    hour: '', // 1~12
-    minute: '' // 00~55 (5분 단위)
-  });
+  const [timeParts, setTimeParts] = useState({ ampm: '', hour: '', minute: '' });
 
   // 캘린더 월 관리
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -47,8 +43,9 @@ const Dashboard = () => {
   // --- 초기화 및 인증 ---
   useEffect(() => {
     const initAuth = async () => {
+      // Rule 3: Auth before Queries
       if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        // 커스텀 토큰 처리
+        // Custom token handling if needed
       } else {
         await signInAnonymously(auth);
       }
@@ -72,7 +69,18 @@ const Dashboard = () => {
         if (userDoc.exists()) {
           const data = userDoc.data();
           setUserName(data.storeName || '글루넥스 파트너');
-          fetchRealWeather(data.address?.split(' ')[0] || 'Seoul');
+          
+          // [수정] 날씨 API용 지역명 처리 (한글 필터링 및 영어 강제 고정)
+          let regionName = 'Seoul'; // Default
+          if (data.address) {
+             const firstPart = data.address.split(' ')[0];
+             // 한글이 포함되어 있는지 체크하는 정규식
+             const hasKorean = /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(firstPart);
+             if (!hasKorean) {
+                regionName = firstPart;
+             }
+          }
+          fetchRealWeather(regionName);
         } else {
           fetchRealWeather('Seoul');
         }
@@ -81,6 +89,7 @@ const Dashboard = () => {
     };
     loadUserData();
 
+    // Rule 1: Using strict path /artifacts/{appId}/public/data/{collectionName}
     const schedulesRef = collection(db, 'artifacts', appId, 'public', 'data', 'schedules');
     const unsubSchedules = onSnapshot(schedulesRef, (snapshot) => {
       const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -92,6 +101,7 @@ const Dashboard = () => {
 
   const calculateSalesData = async (uid) => {
     try {
+      // Rule 2: Simple query, avoid complex indexes
       const q = query(collection(db, "warranties"), where("userId", "==", uid));
       const snap = await getDocs(q);
       const now = new Date();
@@ -118,6 +128,7 @@ const Dashboard = () => {
       const API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
       if (!API_KEY) return;
       
+      // [중요] 지역명은 반드시 영어로 전달되어야 함
       const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${region}&appid=${API_KEY}&units=metric&lang=kr`);
       const data = await res.json();
       if (data.cod === 200) {
@@ -130,7 +141,6 @@ const Dashboard = () => {
     }
   };
 
-  // 금액 콤마 포맷터
   const handlePriceInput = (e) => {
     const rawValue = e.target.value.replace(/[^0-9]/g, "");
     const formattedValue = rawValue.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -141,13 +151,11 @@ const Dashboard = () => {
     const { ampm, hour, minute } = timeParts;
     const { carModel, serviceType, price, phone, date } = newSchedule;
     
-    // 시간 유효성 검사
     if (!ampm || !hour || !minute) return alert("예약 시간을 모두 선택해주세요.");
     if (!carModel || carModel.trim() === "") return alert("차종을 입력해주세요.");
     if (!serviceType || serviceType.trim() === "") return alert("시공 품목을 입력해주세요.");
     if (!user) return;
 
-    // 24시간 형식으로 변환 (정렬용)
     let h = parseInt(hour);
     if (ampm === '오후' && h < 12) h += 12;
     if (ampm === '오전' && h === 12) h = 0;
@@ -155,8 +163,8 @@ const Dashboard = () => {
 
     try {
       const scheduleToSave = {
-        time: formattedTime, // 24H 포맷
-        displayTime: `${ampm} ${hour}:${minute}`, // 뷰 전용 포맷
+        time: formattedTime,
+        displayTime: `${ampm} ${hour}:${minute}`,
         carModel,
         serviceType,
         price: (price || "").replace(/,/g, ''),
@@ -169,7 +177,6 @@ const Dashboard = () => {
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'schedules'), scheduleToSave);
       
       setShowAddModal(false);
-      // 등록 후 폼 및 시간 선택기 초기화
       setNewSchedule({ 
         time: '', carModel: '', serviceType: '', price: '', phone: '', 
         date: selectedDateStr 
@@ -181,7 +188,6 @@ const Dashboard = () => {
     }
   };
 
-  // 24시간 포맷을 보기 좋게 변환
   const formatTimeDisplay = (time24) => {
     if (!time24) return "";
     const [h, m] = time24.split(':');
@@ -200,7 +206,6 @@ const Dashboard = () => {
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const padding = Array.from({ length: firstDayOfMonth }, (_, i) => i);
 
-  // 시간 선택 옵션들
   const ampmOptions = ['오전', '오후'];
   const hourOptions = Array.from({ length: 12 }, (_, i) => String(i + 1));
   const minuteOptions = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'));
@@ -215,15 +220,16 @@ const Dashboard = () => {
 
       {/* 헤더 */}
       <div className="relative px-6 pt-10 pb-4 z-10 flex justify-between items-center shrink-0">
-        <div className="flex-1">
+        <div className="flex-1 overflow-hidden">
           <div className="flex items-center gap-2 mb-1">
             <span className="w-1.5 h-1.5 bg-[#D4AF37] rounded-full" />
             <span className="text-[10px] font-bold text-slate-500 tracking-widest uppercase">GLUNEX PARTNER</span>
           </div>
-          <h2 className="text-xl font-black text-slate-900 tracking-tight">{loadingUser ? '...' : userName}</h2>
+          <h2 className="text-xl font-black text-slate-900 tracking-tight truncate pr-2">{loadingUser ? '...' : userName}</h2>
         </div>
 
-        <div className="flex items-center gap-2 bg-white/70 backdrop-blur-md px-3 py-2 rounded-full border border-slate-200 shadow-sm mx-2">
+        {/* [수정] 날씨/타겟 정보 - 영어 지역명 로직 적용 */}
+        <div className="flex items-center gap-2 bg-white/70 backdrop-blur-md px-3 py-2 rounded-full border border-slate-200 shadow-sm mx-2 shrink-0">
            <div className="flex items-center gap-1.5 border-r border-slate-200 pr-2">
               {weather.loading ? (
                 <Loader2 size={12} className="animate-spin text-slate-300" />
@@ -242,7 +248,7 @@ const Dashboard = () => {
 
         <button 
           onClick={() => navigate('/mypage')}
-          className="p-2.5 bg-white rounded-full border border-slate-200 shadow-sm active:scale-95 transition-all"
+          className="p-2.5 bg-white rounded-full border border-slate-200 shadow-sm active:scale-95 transition-all shrink-0"
         >
           <User size={18} className="text-slate-600" />
         </button>
@@ -277,25 +283,33 @@ const Dashboard = () => {
                 </div>
               </button>
 
+              {/* [수정] 오늘의 스케줄 카드 - 2건 제한 및 요약 표시 로직 추가 */}
               <button 
                 onClick={() => setView('calendar')}
                 className="flex-[1.1] bg-white rounded-[2.5rem] p-6 border border-slate-200 shadow-sm relative overflow-hidden flex flex-col group active:scale-[0.98] transition-all text-left"
               >
                  <div className="absolute top-0 right-0 w-20 h-20 bg-blue-50 rounded-full blur-2xl -mr-10 -mt-10 group-hover:bg-blue-100 transition-colors" />
                  <div className="relative z-10 h-full flex flex-col">
-                    <div className="flex items-center gap-1.5 mb-4">
+                    <div className="flex items-center gap-1.5 mb-3">
                        <div className="p-1.5 bg-blue-600 rounded-xl text-white shadow-lg"><Calendar size={14} /></div>
                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Today</span>
                     </div>
                     
-                    <div className="flex-1 space-y-3 overflow-hidden">
+                    <div className="flex-1 space-y-2 overflow-hidden">
                        {todaySchedules.length > 0 ? (
-                         todaySchedules.slice(0, 2).map((s, idx) => (
-                           <div key={idx} className="flex flex-col gap-0.5 border-l-2 border-blue-600 pl-2">
-                              <p className="text-[11px] font-black text-slate-800 leading-none">{formatTimeDisplay(s.time)} | {s.carModel}</p>
-                              <p className="text-[9px] text-slate-400 font-bold truncate">{s.serviceType}</p>
-                           </div>
-                         ))
+                         <>
+                           {todaySchedules.slice(0, 2).map((s, idx) => (
+                             <div key={idx} className="flex flex-col gap-0.5 border-l-2 border-blue-600 pl-2">
+                                <p className="text-[10px] font-black text-slate-800 leading-none truncate">{formatTimeDisplay(s.time).split(' ')[1]} | {s.carModel}</p>
+                                <p className="text-[8px] text-slate-400 font-bold truncate">{s.serviceType}</p>
+                             </div>
+                           ))}
+                           {todaySchedules.length > 2 && (
+                             <div className="mt-2 flex items-center gap-1 bg-blue-50 px-2 py-1 rounded-lg border border-blue-100 animate-pulse">
+                                <span className="text-[9px] font-black text-blue-600">외 {todaySchedules.length - 2}건의 일정 더 있음</span>
+                             </div>
+                           )}
+                         </>
                        ) : (
                          <div className="h-full flex flex-col items-center justify-center opacity-30">
                             <Clock size={16} className="text-slate-400 mb-1" />
@@ -448,7 +462,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* 예약 등록 모달 (수정됨: 드롭다운 시간 선택) */}
+      {/* 예약 등록 모달 */}
       {showAddModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in" onClick={() => setShowAddModal(false)}>
            <div className="bg-white w-full max-w-sm rounded-[3rem] shadow-2xl relative flex flex-col p-8 overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -463,7 +477,6 @@ const Dashboard = () => {
               </div>
 
               <div className="space-y-4 relative z-10 overflow-y-auto max-h-[70vh] pr-1 scrollbar-hide">
-                 {/* 커스텀 시간 선택 드롭다운 영역 */}
                  <div className="space-y-1.5">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Reservation Time</p>
                     <div className="grid grid-cols-3 gap-2">
