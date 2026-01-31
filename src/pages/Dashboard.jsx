@@ -9,27 +9,33 @@ import {
 } from 'lucide-react';
 
 // [수정 핵심] 외부 파일 의존성 제거 및 직접 초기화
-// initializeApp 뿐만 아니라 getApps, getApp을 가져와 중복 실행을 방지합니다.
+// initializeApp, getApps, getApp을 모두 가져와 안전하게 초기화합니다.
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged, signInWithCustomToken, signInAnonymously } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { getFirestore, doc, getDoc, collection, query, where, getDocs, addDoc, onSnapshot } from 'firebase/firestore';
 
 // --- Firebase 초기화 (Safe Singleton Pattern) ---
-// 1. 환경 변수에서 설정을 가져옵니다.
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "glunex-app.firebaseapp.com",
-  projectId: "glunex-app",
-  storageBucket: "glunex-app.appspot.com",
+// 환경 변수에서 설정을 가져오거나, 없을 경우를 대비해 기본 구조를 잡습니다.
+// 로컬 실행 시 .env 파일이 없다면 아래 "YOUR_..." 부분에 실제 키를 넣어야 할 수도 있습니다.
+const firebaseConfig = {
+  apiKey: import.meta.env?.VITE_FIREBASE_API_KEY || "YOUR_API_KEY",
+  authDomain: import.meta.env?.VITE_FIREBASE_AUTH_DOMAIN || "glunex-app.firebaseapp.com",
+  projectId: import.meta.env?.VITE_FIREBASE_PROJECT_ID || "glunex-app",
+  storageBucket: import.meta.env?.VITE_FIREBASE_STORAGE_BUCKET || "glunex-app.appspot.com",
+  messagingSenderId: import.meta.env?.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env?.VITE_FIREBASE_APP_ID
 };
 
-// 2. 앱이 이미 초기화되었는지 확인합니다 (중복 실행 에러 방지).
+// [중복 실행 방지 로직]
+// 앱이 이미 초기화되어 있다면(getApps().length > 0) 기존 앱을 가져오고,
+// 없다면 새로 초기화합니다. 이 방식은 'Duplicate App' 에러를 확실히 방지합니다.
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  // 로컬 환경에서는 __app_id가 없으므로 기본값 사용
   const appId = typeof __app_id !== 'undefined' ? __app_id : 'glunex-app';
   
   // --- [1] 상태 관리 ---
@@ -71,8 +77,8 @@ const Dashboard = () => {
 
   // --- [2] 인증 로직 (Rule 3) ---
   useEffect(() => {
+    // 캔버스 환경용 토큰 처리 (실제 앱에서는 무시됨)
     const initAuth = async () => {
-        // 이미 로그인된 사용자가 없고, 토큰이 제공된 경우에만 로그인 시도
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token && !auth.currentUser) {
             try {
                 await signInWithCustomToken(auth, __initial_auth_token);
@@ -87,7 +93,6 @@ const Dashboard = () => {
       if (u) {
         setUser(u);
       } else {
-        // 로컬 환경 등에서는 로그인 페이지로 이동
         navigate('/login');
       }
       setAuthChecked(true);
@@ -153,7 +158,7 @@ const Dashboard = () => {
   // --- [4] 기능 함수들 ---
   const fetchWeather = async (region) => {
     // 안전한 API 키 처리
-    const API_KEY = "YOUR_OPENWEATHER_API_KEY"; 
+    const API_KEY = import.meta.env?.VITE_WEATHER_API_KEY || "YOUR_OPENWEATHER_API_KEY";
     
     if (!API_KEY || API_KEY.includes("YOUR_")) {
         setWeather(prev => ({ ...prev, loading: false }));
