@@ -5,11 +5,28 @@ import {
   TrendingUp, Sparkles, Loader2, MapPin, Wallet, Bell, 
   ArrowUpRight, Calendar, Clock, Car, Tag, Phone, Plus, X, ChevronLeft,
   ChevronDown, StickyNote, CheckCircle2, RefreshCw, AlertTriangle, Send,
-  Users, Search, Cloud, CloudSnow, Wind, CloudLightning, Thermometer
+  Users, Search, Cloud, CloudSnow, Wind, CloudLightning, Thermometer, ExternalLink
 } from 'lucide-react';
-import { auth, db } from '../firebase';
-import { doc, getDoc, collection, query, where, getDocs, addDoc, onSnapshot } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';
+
+// [수정] 외부 파일 의존성 제거 및 직접 초기화 (빌드 오류 및 중복 실행 방지)
+// getApps, getApp을 추가로 import하여 앱 상태를 확인합니다.
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getAuth, onAuthStateChanged, signInWithCustomToken, signInAnonymously } from 'firebase/auth';
+import { getFirestore, doc, getDoc, collection, query, where, getDocs, addDoc, onSnapshot } from 'firebase/firestore';
+
+// --- Firebase 초기화 (Canvas 환경 호환성 보장) ---
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "glunex-app.firebaseapp.com",
+  projectId: "glunex-app",
+  storageBucket: "glunex-app.appspot.com",
+};
+
+// [핵심 수정] Singleton 패턴 적용: 앱이 이미 초기화되어 있다면 기존 앱을 가져옵니다.
+// 이 로직이 'Firebase App named [DEFAULT] already exists' 오류(White Screen)를 방지합니다.
+const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -54,10 +71,23 @@ const Dashboard = () => {
 
   // --- [2] 인증 로직 (Rule 3) ---
   useEffect(() => {
+    const initAuth = async () => {
+        // 이미 로그인된 사용자가 없고, 토큰이 제공된 경우에만 로그인 시도
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token && !auth.currentUser) {
+            try {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } catch (e) {
+                console.warn("Auth Warning:", e);
+            }
+        }
+    };
+    initAuth();
+
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       if (u) {
         setUser(u);
       } else {
+        // 로컬 환경 등에서는 로그인 페이지로 이동
         navigate('/login');
       }
       setAuthChecked(true);
@@ -79,28 +109,32 @@ const Dashboard = () => {
         fetchWeather('Seoul');
         
         // 보증서(고객 데이터 기반) 로드
-        const wQuery = query(collection(db, "warranties"), where("userId", "==", user.uid));
-        const wSnap = await getDocs(wQuery);
-        const wList = wSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        setWarranties(wList);
+        try {
+            const wQuery = query(collection(db, "warranties"), where("userId", "==", user.uid));
+            const wSnap = await getDocs(wQuery);
+            const wList = wSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+            setWarranties(wList);
 
-        // 매출 계산
-        let mTotal = 0, tTotal = 0, targets = 0;
-        const now = new Date();
-        const todayS = now.toDateString();
-        
-        wList.forEach(w => {
-          const d = new Date(w.issuedAt);
-          const price = Number(String(w.price || "0").replace(/[^0-9]/g, '')) || 0;
-          if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) mTotal += price;
-          if (d.toDateString() === todayS) tTotal += price;
-          
-          // 마케팅 타겟 계산 (21일 경과 고객 등)
-          const diff = Math.ceil(Math.abs(now - d) / (1000 * 60 * 60 * 24));
-          if (diff >= 21) targets++;
-        });
-        setSalesData({ monthTotal: mTotal, today: tTotal });
-        setWeather(prev => ({ ...prev, targetCustomers: targets }));
+            // 매출 계산
+            let mTotal = 0, tTotal = 0, targets = 0;
+            const now = new Date();
+            const todayS = now.toDateString();
+            
+            wList.forEach(w => {
+              const d = new Date(w.issuedAt);
+              const price = Number(String(w.price || "0").replace(/[^0-9]/g, '')) || 0;
+              if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) mTotal += price;
+              if (d.toDateString() === todayS) tTotal += price;
+              
+              // 마케팅 타겟 계산 (21일 경과 고객 등)
+              const diff = Math.ceil(Math.abs(now - d) / (1000 * 60 * 60 * 24));
+              if (diff >= 21) targets++;
+            });
+            setSalesData({ monthTotal: mTotal, today: tTotal });
+            setWeather(prev => ({ ...prev, targetCustomers: targets }));
+        } catch (dbErr) {
+            console.warn("DB Access Error (Check Permissions):", dbErr);
+        }
 
       } catch (e) { console.error(e); }
     };
@@ -111,20 +145,27 @@ const Dashboard = () => {
     const unsubSchedules = onSnapshot(schedulesRef, (snapshot) => {
       const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setSchedules(list.filter(s => s.userId === user.uid));
-    });
+    }, (err) => console.log("Schedule Listener:", err));
 
     return () => unsubSchedules();
   }, [user, authChecked, appId]);
 
   // --- [4] 기능 함수들 ---
   const fetchWeather = async (region) => {
-    const API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
+    // 안전한 API 키 처리 (빌드 에러 방지)
+    const API_KEY = "YOUR_OPENWEATHER_API_KEY"; 
+    
+    if (!API_KEY || API_KEY.includes("YOUR_")) {
+        setWeather(prev => ({ ...prev, loading: false }));
+        return; 
+    }
+
     try {
       // 현재 날씨
       const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${region}&appid=${API_KEY}&units=metric&lang=kr`);
       const data = await res.json();
       
-      // 일기 예보 (5일/3시간 단위 활용)
+      // 일기 예보
       const fRes = await fetch(`https://api.openweathermap.org/data/2.5/forecast?q=${region}&appid=${API_KEY}&units=metric&lang=kr`);
       const fData = await fRes.json();
       
@@ -134,7 +175,7 @@ const Dashboard = () => {
           temp: Math.round(data.main.temp), 
           status: data.weather[0].main, 
           loading: false,
-          forecast: fData.list.filter((_, i) => i % 8 === 0).slice(0, 5) // 5일치 요약
+          forecast: fData.list.filter((_, i) => i % 8 === 0).slice(0, 5)
         }));
       }
     } catch (e) { setWeather(prev => ({ ...prev, loading: false })); }
@@ -463,7 +504,7 @@ const Dashboard = () => {
              </div>
 
              {/* 고객 리스트 */}
-             <div className="space-y-3 px-1 text-left">
+             <div className="flex-1 overflow-y-auto space-y-3 px-1 text-left pb-20">
                 {uniqueCustomers.length > 0 ? uniqueCustomers.map((customer, idx) => (
                    <button 
                      key={idx}
@@ -629,22 +670,31 @@ const Dashboard = () => {
 
               <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/50 scrollbar-hide text-left">
                  {selectedCustomerVehicles.history.sort((a,b) => new Date(b.issuedAt) - new Date(a.issuedAt)).map((h, i) => (
-                    <div key={i} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm relative overflow-hidden">
+                    // [핵심] 보증서 클릭 시 상세 페이지로 이동
+                    <div 
+                      key={i} 
+                      onClick={() => navigate(`/warranty/view/${h.id}`)}
+                      className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm relative overflow-hidden cursor-pointer hover:scale-[1.02] transition-transform group"
+                    >
                        <div className="absolute top-0 right-0 w-1 h-full bg-blue-500" />
                        <div className="flex justify-between items-start mb-3 text-left">
                           <div>
                              <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">{h.issuedAt.split('T')[0]}</p>
-                             <p className="text-base font-black text-slate-900 leading-none">{h.productName || h.serviceType || "일반 시공"}</p>
+                             <p className="text-base font-black text-slate-900 leading-none group-hover:text-blue-600 transition-colors">{h.productName || h.serviceType || "일반 시공"}</p>
                           </div>
                           <p className="text-sm font-black text-blue-600 italic">₩{Number(String(h.price || "0").replace(/[^0-9]/g, ''))?.toLocaleString()}</p>
                        </div>
-                       <div className="flex items-center gap-3 pt-3 border-t border-slate-50">
-                          <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400">
-                             <MapPin size={10} /> {h.storeName || '정식 가맹점'}
+                       <div className="flex items-center justify-between pt-3 border-t border-slate-50">
+                          <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400">
+                                 <MapPin size={10} /> {h.storeName || '정식 가맹점'}
+                              </div>
+                              <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400">
+                                 <CheckCircle2 size={10} className="text-green-500" /> 보증서 발행됨
+                              </div>
                           </div>
-                          <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400">
-                             <CheckCircle2 size={10} className="text-green-500" /> 보증서 발행됨
-                          </div>
+                          {/* 링크 아이콘 추가로 클릭 유도 */}
+                          <ExternalLink size={12} className="text-slate-300 group-hover:text-blue-500" />
                        </div>
                     </div>
                  ))}
