@@ -321,7 +321,7 @@ const Dashboard = () => {
               </button>
             </div>
 
-            {/* 서비스 버튼 그룹 (우리매장 고객리스트 추가) */}
+            {/* 서비스 버튼 그룹 (우리매장 고객리스트 수정됨) */}
             <div className="flex flex-col gap-3">
               <button onClick={() => navigate('/creator')} className="bg-white rounded-[1.5rem] border border-slate-200 p-5 flex items-center justify-between shadow-sm active:scale-[0.98] transition-all group">
                  <div className="flex flex-col items-start text-left">
@@ -356,16 +356,16 @@ const Dashboard = () => {
                  <ArrowUpRight size={18} className="text-slate-300 group-hover:text-blue-500" />
               </button>
 
-              {/* [신규] 우리매장 고객리스트 버튼 */}
-              <button onClick={() => setView('customerList')} className="bg-slate-900 rounded-[1.5rem] p-5 flex items-center justify-between shadow-lg active:scale-[0.98] transition-all group">
+              {/* [신규] 우리매장 고객리스트 버튼 (디자인 통일 수정 완료) */}
+              <button onClick={() => setView('customerList')} className="bg-white rounded-[1.5rem] border border-slate-200 p-5 flex items-center justify-between shadow-sm active:scale-[0.98] transition-all group">
                  <div className="flex flex-col items-start text-left">
                     <div className="flex items-center gap-2 mb-1">
-                       <div className="p-1.5 rounded-xl bg-white/10 text-white shadow-inner"><Users size={14} /></div>
-                       <span className="text-sm font-black text-white tracking-tight">우리매장 고객리스트</span>
+                       <div className="p-1.5 rounded-xl bg-slate-800 text-white shadow-md shadow-slate-200 group-hover:rotate-12 transition-transform"><Users size={14} /></div>
+                       <span className="text-sm font-black text-slate-800 tracking-tight">우리매장 고객리스트</span>
                     </div>
-                    <span className="text-[11px] text-white/40 font-medium tracking-tight">전체 차량 시공 내역 및 고객 관리 히스토리</span>
+                    <span className="text-[11px] text-slate-500 font-medium tracking-tight">전체 차량 시공 내역 및 고객 관리 히스토리</span>
                  </div>
-                 <ArrowUpRight size={18} className="text-white/20 group-hover:text-white transition-colors" />
+                 <ArrowUpRight size={18} className="text-slate-300 group-hover:text-slate-800 transition-colors" />
               </button>
             </div>
           </div>
