@@ -441,9 +441,10 @@ const Dashboard = () => {
                 <button onClick={() => setView('main')} className="flex items-center gap-2 text-slate-400 hover:text-slate-900 active:scale-90 transition-all font-bold text-sm tracking-tight">
                    <ChevronLeft size={20}/> 뒤로가기
                 </button>
+                {/* [수정] Customer CRM -> 총 고객 수 표시 */}
                 <div className="bg-blue-50 px-3 py-1 rounded-full border border-blue-100 flex items-center gap-1.5">
                    <Users size={12} className="text-blue-600" />
-                   <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Customer CRM</span>
+                   <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">총 고객 {uniqueCustomers.length}명</span>
                 </div>
              </div>
 
