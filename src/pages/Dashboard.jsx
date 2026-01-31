@@ -37,6 +37,9 @@ const Dashboard = () => {
   const [timeParts, setTimeParts] = useState({ ampm: '', hour: '', minute: '' });
   const [currentDate, setCurrentDate] = useState(new Date());
 
+  // 현재 월 계산 (예: 1월, 2월)
+  const currentMonth = new Date().getMonth() + 1;
+
   // --- (Rule 3) 초기화 및 인증 ---
   useEffect(() => {
     const initAuth = async () => {
@@ -64,7 +67,7 @@ const Dashboard = () => {
           const data = userDoc.data();
           setUserName(data.storeName || '글루넥스 파트너');
           
-          // 날씨 API용 지역명 처리 (영어 강제 고정 로직 유지)
+          // 날씨 API용 지역명 처리 (영어 강제 고정)
           let regionName = 'Seoul';
           if (data.address) {
              const firstPart = data.address.split(' ')[0];
@@ -185,7 +188,7 @@ const Dashboard = () => {
     return `${ampm} ${hour12}:${m}`;
   };
 
-  // [수정] 오늘 날짜 필터링 강화 및 유저 ID 체크 (Rule 2)
+  // 오늘 날짜 필터링 로직
   const todayStr = new Date().toISOString().split('T')[0];
   const todaySchedules = schedules
     .filter(s => s.date === todayStr && s.userId === user?.uid)
@@ -201,7 +204,7 @@ const Dashboard = () => {
   const minuteOptions = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'));
 
   return (
-    <div className="flex flex-col h-full w-full bg-[#F8F9FB] text-slate-800 font-sans overflow-hidden max-w-md mx-auto shadow-2xl relative select-none">
+    <div className="flex flex-col h-full w-full bg-[#F8F9FB] text-slate-800 font-sans overflow-hidden max-w-md mx-auto shadow-2xl relative select-none text-left">
       
       <div className="absolute inset-0 z-0 pointer-events-none">
          <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[40%] bg-blue-100/40 rounded-full blur-[80px]" />
@@ -248,7 +251,7 @@ const Dashboard = () => {
         {view === 'main' ? (
           <div className="flex flex-col gap-4 animate-fade-in">
             <div className="flex gap-3 h-[180px] shrink-0">
-              {/* [수정] 매출 현황 버튼 이동 기능 점검 */}
+              {/* [수정] 매출 버튼 텍스트 - 당월 표기 적용 */}
               <button 
                 onClick={() => navigate('/sales')} 
                 className="flex-[1.4] bg-white rounded-[2.5rem] p-6 border border-slate-200 shadow-sm relative overflow-hidden group active:scale-[0.98] transition-all flex flex-col justify-between text-left cursor-pointer"
@@ -256,7 +259,7 @@ const Dashboard = () => {
                 <div className="relative z-10 w-full text-left">
                   <div className="flex items-center gap-1.5 mb-1 text-slate-400">
                     <Wallet size={12} />
-                    <span className="text-[9px] font-black uppercase tracking-widest">Revenue</span>
+                    <span className="text-[9px] font-black uppercase tracking-widest">{currentMonth}월 실적 리포트</span>
                   </div>
                   <div className="flex items-baseline gap-1">
                     <span className="text-2xl font-black text-slate-900 tracking-tighter">{salesData.monthTotal.toLocaleString()}</span>
