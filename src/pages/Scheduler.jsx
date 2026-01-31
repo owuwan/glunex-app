@@ -21,7 +21,8 @@ const Scheduler = () => {
   const appId = typeof __app_id !== 'undefined' ? __app_id : 'glunex-app';
 
   // --- 상태 관리 ---
-  const [user, setUser] = useState(null);
+  // 초기값을 현재 auth 상태로 설정하여 깜빡임 방지
+  const [user, setUser] = useState(auth.currentUser);
   const [loading, setLoading] = useState(true);
   const [schedules, setSchedules] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -47,17 +48,26 @@ const Scheduler = () => {
 
     const initAuth = async () => {
       try {
+        // 이미 유저 정보가 있다면 추가 인증 시도 안 함
+        if (auth.currentUser) {
+          if (isMounted) {
+            setUser(auth.currentUser);
+            setLoading(false);
+          }
+          return;
+        }
+
         // 1. 커스텀 토큰 우선 처리
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
           await signInWithCustomToken(auth, __initial_auth_token);
         } 
-        // 2. 이미 로그인된 유저가 없다면 익명 로그인 시도
-        else if (!auth.currentUser) {
+        // 2. 익명 로그인 시도
+        else {
           await signInAnonymously(auth);
         }
       } catch (err) {
-        console.error("인증 시도 중 제한된 작업 오류 발생:", err);
-        // 에러가 나더라도 로딩은 풀어줘야 화면이 보임
+        // [Error] auth/admin-restricted-operation 등이 발생해도 로딩은 해제해야 함
+        console.warn("인증 프로세스 제한됨 (정상 동작 가능):", err.code);
         if (isMounted) setLoading(false);
       }
     };
@@ -67,15 +77,14 @@ const Scheduler = () => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       if (isMounted) {
         setUser(u);
-        // 유저 정보가 확인되면 일단 로딩 해제 시도
-        if (u) setLoading(false);
+        setLoading(false); // 유저 여부와 상관없이 상태가 결정되면 로딩 해제
       }
     });
 
-    // 무한 로딩 방지용 타이머 (5초 후 강제 로딩 해제)
+    // 무한 로딩 방지용 강제 해제 타이머 (보수적 접근)
     const safetyTimer = setTimeout(() => {
       if (isMounted) setLoading(false);
-    }, 5000);
+    }, 3000);
 
     return () => {
       isMounted = false;
@@ -84,7 +93,7 @@ const Scheduler = () => {
     };
   }, []);
 
-  // --- [Rule 1 & 2] 데이터 페칭 (에러 핸들링 포함) ---
+  // --- [Rule 1 & 2] 데이터 페칭 (인증 가드 적용) ---
   useEffect(() => {
     // 유저 인증이 완료되기 전에는 Firestore 접근 금지 (Rule 3)
     if (!user) return;
@@ -99,15 +108,14 @@ const Scheduler = () => {
       // Rule 2: 쿼리 대신 메모리 내에서 유저별 필터링
       const mySchedules = list.filter(s => s.userId === user.uid);
       setSchedules(mySchedules);
-      setLoading(false);
+      if (loading) setLoading(false);
     }, (err) => {
-      console.error("Firestore 실시간 리스너 권한 에러:", err);
-      // 에러 시에도 로딩은 해제
+      console.error("Firestore 데이터 로딩 실패 (권한 부족):", err);
       setLoading(false);
     });
 
     return () => unsub();
-  }, [user, appId]);
+  }, [user, appId, loading]);
 
   // 금액/전화번호 포매팅
   const handlePriceInput = (e) => {
@@ -129,7 +137,7 @@ const Scheduler = () => {
     
     if (!ampm || !hour || !minute) return alert("예약 시간을 선택해주세요.");
     if (!carModel.trim() || !serviceType.trim()) return alert("필수 항목을 입력해주세요.");
-    if (!user) return alert("인증 정보가 없습니다. 잠시 후 다시 시도해 주세요.");
+    if (!user) return alert("현재 서비스 이용 권한이 없습니다. 페이지를 새로고침 해주세요.");
     
     let h = parseInt(hour);
     if (ampm === '오후' && h < 12) h += 12;
@@ -172,7 +180,7 @@ const Scheduler = () => {
     return (
       <div className="h-full flex flex-col items-center justify-center bg-white">
         <Loader2 className="animate-spin text-blue-600 mb-4" size={32} />
-        <p className="text-sm font-bold text-slate-400 tracking-tight">계정 정보를 확인하는 중입니다...</p>
+        <p className="text-sm font-bold text-slate-400 tracking-tight">시스템 연결 중입니다...</p>
       </div>
     );
   }
@@ -250,7 +258,7 @@ const Scheduler = () => {
               {schedules.filter(s => s.date === selectedDateStr).length > 0 ? (
                 schedules.filter(s => s.date === selectedDateStr).sort((a,b)=> (a.time || "").localeCompare(b.time || "")).map(s => (
                   <div key={s.id} className="bg-white p-5 rounded-[2rem] flex justify-between items-center border border-slate-100 shadow-sm animate-fade-in-up">
-                     <div className="flex items-center gap-4 text-left">
+                     <div className="flex items-center gap-4">
                         <div className="w-14 h-14 rounded-2xl bg-blue-50 flex flex-col items-center justify-center text-blue-600 font-black border border-blue-100">
                            <span className="text-[9px] uppercase">{s.time < '12:00' ? 'AM' : 'PM'}</span>
                            <span className="text-xs">
