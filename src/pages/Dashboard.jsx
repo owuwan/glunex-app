@@ -19,18 +19,29 @@ const Dashboard = () => {
   const [schedules, setSchedules] = useState([]);
   const currentMonth = new Date().getMonth() + 1;
 
+  // --- [Rule 3] 인증 로직 강화 ---
   useEffect(() => {
     let isMounted = true;
-    // 불필요한 signInAnonymously를 제거하고 기존 세션 대기
+    
+    // 이미 로그인 정보가 있는 경우 즉시 세팅
+    if (auth.currentUser) {
+      setUser(auth.currentUser);
+      setLoadingUser(false);
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       if (isMounted) {
         setUser(u);
         setLoadingUser(false);
       }
     });
-    return () => { isMounted = false; unsubscribe(); };
+
+    const safetyTimer = setTimeout(() => { if (isMounted) setLoadingUser(false); }, 3000);
+
+    return () => { isMounted = false; unsubscribe(); clearTimeout(safetyTimer); };
   }, []);
 
+  // --- 데이터 페칭 (인증 가드) ---
   useEffect(() => {
     if (!user) return;
     const loadUserData = async () => {
@@ -39,18 +50,20 @@ const Dashboard = () => {
         if (userDoc.exists()) {
           const data = userDoc.data();
           setUserName(data.storeName || '글루넥스 파트너');
-          fetchRealWeather('Seoul');
         }
+        fetchRealWeather('Seoul');
         await calculateSalesData(user.uid);
       } catch (e) { console.error(e); }
     };
     loadUserData();
 
+    // Rule 1: 지정 경로 사용
     const schedulesRef = collection(db, 'artifacts', appId, 'public', 'data', 'schedules');
     const unsubSchedules = onSnapshot(schedulesRef, (snapshot) => {
       const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setSchedules(list);
-    });
+    }, (err) => console.warn("Dashboard Listener Error:", err));
+
     return () => unsubSchedules();
   }, [user, appId]);
 
@@ -93,7 +106,7 @@ const Dashboard = () => {
       </div>
 
       <header className="relative px-6 pt-10 pb-4 z-10 flex justify-between items-center shrink-0">
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden text-left">
           <div className="flex items-center gap-2 mb-1">
             <span className="w-1.5 h-1.5 bg-[#D4AF37] rounded-full" />
             <span className="text-[10px] font-bold text-slate-500 uppercase">GLUNEX PARTNER</span>
@@ -121,7 +134,7 @@ const Dashboard = () => {
             <div className="flex gap-3 h-[180px] shrink-0">
               <button onClick={() => navigate('/sales')} className="flex-[1.4] bg-white rounded-[2.5rem] p-6 border border-slate-200 shadow-sm flex flex-col justify-between text-left">
                 <div className="w-full">
-                  <div className="flex items-center gap-1.5 mb-1 text-slate-400"><Wallet size={12} /><span className="text-[9px] font-black uppercase">{currentMonth}월 실적 리포트</span></div>
+                  <div className="flex items-center gap-1.5 mb-1 text-slate-400"><Wallet size={12} /><span className="text-[9px] font-black uppercase tracking-tighter">{currentMonth}월 실적 리포트</span></div>
                   <div className="flex items-baseline gap-1"><span className="text-2xl font-black text-slate-900 tracking-tighter">{salesData.monthTotal.toLocaleString()}</span><span className="text-xs font-bold text-slate-400">원</span></div>
                 </div>
                 <div className="w-full h-px bg-slate-100 my-2" />
@@ -131,21 +144,22 @@ const Dashboard = () => {
                 </div>
               </button>
 
-              <button onClick={() => navigate('/scheduler')} className="flex-[1.1] bg-white rounded-[2.5rem] p-6 border border-slate-200 shadow-sm flex flex-col justify-between text-left">
+              <button onClick={() => navigate('/scheduler')} className="flex-[1.1] bg-white rounded-[2.5rem] p-6 border border-slate-200 shadow-sm flex flex-col justify-between text-left relative overflow-hidden">
+                 <div className="absolute top-0 right-0 w-20 h-20 bg-blue-50 rounded-full blur-2xl -mr-10 -mt-10" />
                  <div className="relative z-10 h-full flex flex-col justify-between">
                     <div>
-                        <div className="flex items-center gap-1.5 mb-3"><div className="p-1.5 bg-blue-600 rounded-xl text-white shadow-lg"><Calendar size={14} /></div><span className="text-[10px] font-black text-slate-400 uppercase">Today</span></div>
+                        <div className="flex items-center gap-1.5 mb-3"><div className="p-1.5 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-600/20"><Calendar size={14} /></div><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Today</span></div>
                         <div className="space-y-2.5 overflow-hidden">
                         {todaySchedules.length > 0 ? todaySchedules.slice(0, 2).map((s, idx) => (
                             <div key={idx} className="flex flex-col gap-0.5 border-l-2 border-blue-600 pl-2">
                                 <p className="text-[10px] font-black text-slate-800 leading-none truncate">{s.displayTime?.split(' ')[1] || s.time} | {s.carModel}</p>
                                 <p className="text-[8px] text-slate-400 font-bold truncate">{s.serviceType}</p>
                             </div>
-                        )) : <div className="py-4 opacity-30"><Clock size={16} className="mb-1" /><p className="text-[9px] font-bold">Empty</p></div>}
+                        )) : <div className="py-4 opacity-30 flex flex-col items-center"><Clock size={16} className="mb-1" /><p className="text-[9px] font-bold uppercase">Empty</p></div>}
                         </div>
                     </div>
                     <div className="mt-2">
-                        {todaySchedules.length >= 3 && <div className="bg-blue-50 px-2 py-1 rounded-lg mb-2"><span className="text-[9px] font-black text-blue-600">오늘 총 {todaySchedules.length}건</span></div>}
+                        {todaySchedules.length >= 3 && <div className="bg-blue-50 px-2 py-1 rounded-lg mb-2"><span className="text-[9px] font-black text-blue-600">총 {todaySchedules.length}건 시공</span></div>}
                         <div className="flex items-center justify-between text-[10px] font-black text-slate-300"><span>Calendar</span><ChevronRight size={12} /></div>
                     </div>
                  </div>
@@ -153,16 +167,16 @@ const Dashboard = () => {
             </div>
 
             <div className="flex flex-col gap-3">
-              <button onClick={() => navigate('/creator')} className="bg-white rounded-3xl border border-slate-200 p-6 flex items-center justify-between shadow-sm text-left">
-                 <div className="flex flex-col items-start"><div className="flex items-center gap-2 mb-1"><div className="p-1.5 rounded-xl bg-indigo-600 text-white shadow-md shadow-indigo-200"><Sparkles size={14} className="fill-white" /></div><span className="text-base font-black text-indigo-900">AI 마케팅 에이전트</span></div><span className="text-xs text-slate-500 font-medium">네이버 블로그/인스타 포스팅 10초 완성</span></div>
+              <button onClick={() => navigate('/creator')} className="bg-white rounded-3xl border border-slate-200 p-6 flex items-center justify-between shadow-sm text-left active:scale-[0.98] transition-all">
+                 <div className="flex flex-col items-start"><div className="flex items-center gap-2 mb-1"><div className="p-1.5 rounded-xl bg-indigo-600 text-white shadow-md shadow-indigo-100"><Sparkles size={14} className="fill-white" /></div><span className="text-base font-black text-indigo-900">AI 마케팅 에이전트</span></div><span className="text-xs text-slate-500 font-medium tracking-tight">블로그/인스타 포스팅 10초 완성</span></div>
                  <ArrowUpRight size={18} className="text-slate-300" />
               </button>
-              <button onClick={() => navigate('/create')} className="bg-white rounded-3xl border border-slate-200 p-6 flex items-center justify-between shadow-sm text-left">
-                 <div className="flex flex-col items-start"><div className="flex items-center gap-2 mb-1"><div className="p-1.5 rounded-xl bg-amber-400 text-white shadow-md shadow-amber-100"><Crown size={14} className="fill-white" /></div><span className="text-base font-black text-slate-800">보증서 발행</span></div><span className="text-xs text-slate-500 font-medium">보험수리 대응 공식 시공 보증서 발급</span></div>
+              <button onClick={() => navigate('/create')} className="bg-white rounded-3xl border border-slate-200 p-6 flex items-center justify-between shadow-sm text-left active:scale-[0.98] transition-all">
+                 <div className="flex flex-col items-start"><div className="flex items-center gap-2 mb-1"><div className="p-1.5 rounded-xl bg-amber-400 text-white shadow-md shadow-amber-100"><Crown size={14} className="fill-white" /></div><span className="text-base font-black text-slate-800">보증서 발행</span></div><span className="text-xs text-slate-500 font-medium tracking-tight">보험수리 대응 공식 시공 보증서 발급</span></div>
                  <ArrowUpRight size={18} className="text-slate-300" />
               </button>
-              <button onClick={() => navigate('/marketing')} className="bg-white rounded-3xl border border-slate-200 p-6 flex items-center justify-between shadow-sm text-left">
-                 <div className="flex flex-col items-start"><div className="flex items-center gap-2 mb-1"><div className="p-1.5 rounded-xl bg-blue-500 text-white shadow-md shadow-blue-100"><MessageSquare size={14} className="fill-white" /></div><span className="text-base font-black text-slate-800">단골 마케팅 센터</span></div><span className="text-xs text-slate-500 font-medium">재방문 유도 알림톡 및 고객 관리</span></div>
+              <button onClick={() => navigate('/marketing')} className="bg-white rounded-3xl border border-slate-200 p-6 flex items-center justify-between shadow-sm text-left active:scale-[0.98] transition-all">
+                 <div className="flex flex-col items-start"><div className="flex items-center gap-2 mb-1"><div className="p-1.5 rounded-xl bg-blue-500 text-white shadow-md shadow-blue-100"><MessageSquare size={14} className="fill-white" /></div><span className="text-base font-black text-slate-800">단골 마케팅 센터</span></div><span className="text-xs text-slate-500 font-medium tracking-tight">재방문 유도 알림톡 및 고객 관리</span></div>
                  <ArrowUpRight size={18} className="text-slate-300" />
               </button>
             </div>
