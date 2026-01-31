@@ -4,7 +4,7 @@ import {
   User, Crown, MessageSquare, ChevronRight, CloudRain, Sun, 
   TrendingUp, Sparkles, Loader2, MapPin, Wallet, Bell, 
   ArrowUpRight, Calendar, Clock, Car, Tag, Phone, Plus, X, ChevronLeft,
-  ChevronDown
+  ChevronDown, StickyNote, CheckCircle2
 } from 'lucide-react';
 import { auth, db } from '../firebase';
 import { doc, getDoc, collection, query, where, getDocs, addDoc, onSnapshot } from 'firebase/firestore';
@@ -15,7 +15,7 @@ const Dashboard = () => {
   const appId = typeof __app_id !== 'undefined' ? __app_id : 'glunex-app';
   
   // --- 상태 관리 ---
-  const [view, setView] = useState('main'); 
+  const [view, setView] = useState('main'); // 'main' | 'calendar'
   const [userName, setUserName] = useState('파트너');
   const [user, setUser] = useState(null);
   const [loadingUser, setLoadingUser] = useState(true);
@@ -29,16 +29,34 @@ const Dashboard = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedDateStr, setSelectedDateStr] = useState(new Date().toISOString().split('T')[0]);
   
-  // 예약 등록 폼 상태
+  // [신규] 성공 알림 토스트 상태
+  const [toastMsg, setToastMsg] = useState("");
+
+  // 예약 등록 폼 상태 (memo 필드 포함)
   const [newSchedule, setNewSchedule] = useState({
-    time: '', carModel: '', serviceType: '', price: '', phone: '', date: new Date().toISOString().split('T')[0]
+    time: '',
+    carModel: '',
+    serviceType: '',
+    price: '',
+    phone: '',
+    memo: '',
+    date: new Date().toISOString().split('T')[0]
   });
 
+  // 커스텀 시간 선택 상태
   const [timeParts, setTimeParts] = useState({ ampm: '', hour: '', minute: '' });
+
+  // 캘린더 월 관리
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  // 현재 월 계산 (예: 1월, 2월)
+  // 현재 월 계산 (표기용)
   const currentMonth = new Date().getMonth() + 1;
+
+  // --- 알림 함수 ---
+  const showToast = (msg) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(""), 3000);
+  };
 
   // --- (Rule 3) 초기화 및 인증 ---
   useEffect(() => {
@@ -67,7 +85,7 @@ const Dashboard = () => {
           const data = userDoc.data();
           setUserName(data.storeName || '글루넥스 파트너');
           
-          // 날씨 API용 지역명 처리 (영어 강제 고정)
+          // [유지] 날씨 API용 지역명 처리 (영어 강제 고정)
           let regionName = 'Seoul';
           if (data.address) {
              const firstPart = data.address.split(' ')[0];
@@ -134,15 +152,29 @@ const Dashboard = () => {
     }
   };
 
+  // 금액 콤마 포맷터
   const handlePriceInput = (e) => {
     const rawValue = e.target.value.replace(/[^0-9]/g, "");
     const formattedValue = rawValue.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     setNewSchedule(prev => ({ ...prev, price: formattedValue }));
   };
 
+  // [신규] 전화번호 하이픈 자동 생성 로직
+  const handlePhoneInput = (e) => {
+    let val = e.target.value.replace(/[^0-9]/g, "");
+    if (val.length > 3 && val.length <= 7) {
+      val = val.replace(/(\d{3})(\d{1,4})/, "$1-$2");
+    } else if (val.length > 7) {
+      val = val.replace(/(\d{3})(\d{4})(\d{1,4})/, "$1-$2-$3");
+    }
+    // 최대 길이 제한 (010-1234-5678)
+    if (val.length > 13) val = val.substring(0, 13);
+    setNewSchedule(prev => ({ ...prev, phone: val }));
+  };
+
   const handleAddSchedule = async () => {
     const { ampm, hour, minute } = timeParts;
-    const { carModel, serviceType, price, phone, date } = newSchedule;
+    const { carModel, serviceType, price, phone, memo, date } = newSchedule;
     
     if (!ampm || !hour || !minute) return alert("예약 시간을 모두 선택해주세요.");
     if (!carModel || carModel.trim() === "") return alert("차종을 입력해주세요.");
@@ -162,17 +194,23 @@ const Dashboard = () => {
         serviceType,
         price: (price || "").replace(/,/g, ''),
         phone: phone || "",
+        memo: memo || "", // 추가 메모 저장
         date: date || selectedDateStr,
         userId: user.uid,
         createdAt: new Date().toISOString()
       });
       
       setShowAddModal(false);
+      // 폼 초기화
       setNewSchedule({ 
-        time: '', carModel: '', serviceType: '', price: '', phone: '', 
+        time: '', carModel: '', serviceType: '', price: '', phone: '', memo: '',
         date: selectedDateStr 
       });
       setTimeParts({ ampm: '', hour: '', minute: '' });
+
+      // [신규] 성공 알림 띄우기
+      showToast("일정이 성공적으로 추가되었습니다!");
+
     } catch (e) { 
       console.error(e);
       alert("일정 저장에 실패했습니다."); 
@@ -188,7 +226,7 @@ const Dashboard = () => {
     return `${ampm} ${hour12}:${m}`;
   };
 
-  // 오늘 날짜 필터링 로직
+  // [유지] 오늘 날짜 필터링 및 본인 데이터만 노출
   const todayStr = new Date().toISOString().split('T')[0];
   const todaySchedules = schedules
     .filter(s => s.date === todayStr && s.userId === user?.uid)
@@ -206,6 +244,15 @@ const Dashboard = () => {
   return (
     <div className="flex flex-col h-full w-full bg-[#F8F9FB] text-slate-800 font-sans overflow-hidden max-w-md mx-auto shadow-2xl relative select-none text-left">
       
+      {/* [신규] 커스텀 토스트 알림바 */}
+      {toastMsg && (
+        <div className="fixed top-12 inset-x-0 z-[200] flex justify-center px-4 pointer-events-none animate-bounce-in">
+          <div className="bg-slate-900 text-white px-6 py-4 rounded-[2rem] text-[13px] font-black shadow-2xl flex items-center gap-3 border border-slate-700 backdrop-blur-md">
+            <CheckCircle2 size={18} className="text-blue-400" /> {toastMsg}
+          </div>
+        </div>
+      )}
+
       <div className="absolute inset-0 z-0 pointer-events-none">
          <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[40%] bg-blue-100/40 rounded-full blur-[80px]" />
          <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[40%] bg-slate-200/50 rounded-full blur-[80px]" />
@@ -251,7 +298,7 @@ const Dashboard = () => {
         {view === 'main' ? (
           <div className="flex flex-col gap-4 animate-fade-in">
             <div className="flex gap-3 h-[180px] shrink-0">
-              {/* [수정] 매출 버튼 텍스트 - 당월 표기 적용 */}
+              {/* 매출 버튼 (당월 표기) */}
               <button 
                 onClick={() => navigate('/sales')} 
                 className="flex-[1.4] bg-white rounded-[2.5rem] p-6 border border-slate-200 shadow-sm relative overflow-hidden group active:scale-[0.98] transition-all flex flex-col justify-between text-left cursor-pointer"
@@ -434,6 +481,7 @@ const Dashboard = () => {
                               <div>
                                  <p className="text-sm font-black text-slate-800">{s.carModel}</p>
                                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">{s.serviceType}</p>
+                                 {s.memo && <p className="text-[9px] text-blue-500 font-bold mt-0.5 line-clamp-1 italic">📝 {s.memo}</p>}
                               </div>
                            </div>
                            <div className="text-right">
@@ -464,7 +512,7 @@ const Dashboard = () => {
            <div className="bg-white w-full max-w-sm rounded-[3rem] shadow-2xl relative flex flex-col p-8 pb-10 overflow-hidden" onClick={e => e.stopPropagation()}>
               <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full -mr-16 -mt-16 opacity-50"></div>
               
-              <div className="flex justify-between items-center mb-8 relative z-10 text-left">
+              <div className="flex justify-between items-center mb-6 relative z-10 text-left">
                  <div>
                     <h3 className="text-xl font-black text-slate-900 tracking-tight">예약 등록</h3>
                     <p className="text-[10px] text-blue-600 font-bold uppercase tracking-widest mt-1">{newSchedule.date}</p>
@@ -473,6 +521,7 @@ const Dashboard = () => {
               </div>
 
               <div className="space-y-4 relative z-10 overflow-y-auto max-h-[70vh] pr-1 scrollbar-hide text-left">
+                 {/* 시간 선택 */}
                  <div className="space-y-1.5 text-left">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Reservation Time</p>
                     <div className="grid grid-cols-3 gap-2">
@@ -512,9 +561,11 @@ const Dashboard = () => {
                     </div>
                  </div>
 
+                 {/* 차종 */}
                  <div className="space-y-1.5 text-left">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Car Model</p>
                     <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3 focus-within:border-blue-500 transition-colors">
+                      <Car size={18} className="text-slate-400" />
                       <input 
                         type="text" 
                         placeholder="예: BMW 5 / 쏘렌토" 
@@ -528,9 +579,11 @@ const Dashboard = () => {
                     </div>
                  </div>
 
+                 {/* 시공 품목 */}
                  <div className="space-y-1.5 text-left">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Service Item</p>
                     <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3 focus-within:border-blue-500 transition-colors">
+                      <Tag size={18} className="text-slate-400" />
                       <input 
                         type="text" 
                         placeholder="예: 광택 + 유리막코팅" 
@@ -544,9 +597,11 @@ const Dashboard = () => {
                     </div>
                  </div>
 
+                 {/* 금액 */}
                  <div className="space-y-1.5 text-left">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Amount (KRW)</p>
                     <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3 focus-within:border-blue-500 transition-colors">
+                      <Wallet size={18} className="text-slate-400" />
                       <input 
                         type="text" 
                         placeholder="시공 금액" 
@@ -557,18 +612,32 @@ const Dashboard = () => {
                     </div>
                  </div>
 
+                 {/* 연락처 (하이픈 자동 완성) */}
                  <div className="space-y-1.5 text-left">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Customer Phone</p>
                     <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3 focus-within:border-blue-500 transition-colors">
+                      <Phone size={18} className="text-slate-400" />
                       <input 
                         type="tel" 
                         placeholder="010-0000-0000" 
                         className="bg-transparent text-sm font-bold w-full outline-none" 
                         value={newSchedule.phone} 
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setNewSchedule(prev => ({ ...prev, phone: val }));
-                        }}
+                        onChange={handlePhoneInput} 
+                      />
+                    </div>
+                 </div>
+
+                 {/* [신규] 추가 사항 (메모) 필드 */}
+                 <div className="space-y-1.5 text-left">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Additional Info</p>
+                    <div className="flex items-start bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3 focus-within:border-blue-500">
+                      <StickyNote size={18} className="text-slate-400 mt-1" />
+                      <textarea 
+                        rows="2"
+                        placeholder="예: 추가시공 현장상담요청" 
+                        className="bg-transparent text-sm font-bold w-full outline-none resize-none" 
+                        value={newSchedule.memo} 
+                        onChange={(e) => setNewSchedule(prev => ({ ...prev, memo: e.target.value }))}
                       />
                     </div>
                  </div>
@@ -583,6 +652,16 @@ const Dashboard = () => {
            </div>
         </div>
       )}
+
+      <style>{`
+        @keyframes bounceIn {
+          0% { transform: translateY(-20px); opacity: 0; }
+          60% { transform: translateY(10px); opacity: 1; }
+          100% { transform: translateY(0); }
+        }
+        .animate-bounce-in { animation: bounceIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+      `}</style>
     </div>
   );
 };
