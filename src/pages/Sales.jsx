@@ -28,6 +28,9 @@ const Sales = () => {
 
   const [chartData, setChartData] = useState([]);
 
+  // 현재 월 계산
+  const currentMonth = new Date().getMonth() + 1;
+
   // --- (Rule 3) 인증 로직 ---
   useEffect(() => {
     const initAuth = async () => {
@@ -49,19 +52,19 @@ const Sales = () => {
 
     const now = new Date();
     const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
+    const currentMonthIdx = now.getMonth();
     const todayStr = now.toISOString().split('T')[0];
     const currentH = now.getHours();
     const currentM = now.getMinutes();
 
     // 이번 달 일수 계산 및 초기화
-    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const daysInMonth = new Date(currentYear, currentMonthIdx + 1, 0).getDate();
     const dailyStats = Array.from({ length: daysInMonth }, (_, i) => ({
       day: i + 1,
       confirmed: 0,
       pending: 0,
       upcoming: 0,
-      dateStr: `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`
+      dateStr: `${currentYear}-${String(currentMonthIdx + 1).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`
     }));
 
     const qWarranties = query(collection(db, "warranties"), where("userId", "==", user.uid));
@@ -76,7 +79,7 @@ const Sales = () => {
         wSnap.docs.forEach(doc => {
           const data = doc.data();
           const d = new Date(data.issuedAt);
-          if (d.getFullYear() === currentYear && d.getMonth() === currentMonth) {
+          if (d.getFullYear() === currentYear && d.getMonth() === currentMonthIdx) {
             const price = Number(String(data.price || "0").replace(/[^0-9]/g, '')) || 0;
             confirmedSum += price;
             const dayIdx = d.getDate() - 1;
@@ -88,7 +91,7 @@ const Sales = () => {
           const data = doc.data();
           if (data.userId !== user.uid) return;
           const d = new Date(data.date);
-          if (d.getFullYear() === currentYear && d.getMonth() === currentMonth) {
+          if (d.getFullYear() === currentYear && d.getMonth() === currentMonthIdx) {
             const price = Number(String(data.price || "0").replace(/[^0-9]/g, '')) || 0;
             const [sH, sM] = (data.time || "00:00").split(':').map(Number);
             const isPastDate = data.date < todayStr;
@@ -163,11 +166,11 @@ const Sales = () => {
 
       <main className="flex-1 overflow-y-auto p-4 space-y-4 pb-32 scrollbar-hide">
         
-        {/* 현금 흐름 요약: 크기 조절 및 가독성 최적화 */}
+        {/* 현금 흐름 요약: 당월 표기 적용 */}
         <section className="bg-slate-900 rounded-[2rem] p-6 text-white shadow-xl relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-[50px] -mr-16 -mt-16" />
           <div className="relative z-10 text-left">
-            <p className="text-slate-400 text-[9px] font-bold uppercase tracking-[0.1em] mb-1">Total Monthly Revenue</p>
+            <p className="text-blue-400 text-[10px] font-black uppercase tracking-[0.1em] mb-1">{currentMonth}월 누적 실적 리포트</p>
             <div className="flex items-baseline gap-1.5 mb-6">
               <span className="text-3xl font-black tracking-tighter">{(stats.confirmed + stats.pending).toLocaleString()}</span>
               <span className="text-sm font-bold opacity-30">원</span>
@@ -190,11 +193,11 @@ const Sales = () => {
           </div>
         </section>
 
-        {/* 주식형 영역 차트: 콤팩트 사이즈로 리뉴얼 */}
+        {/* 주식형 영역 차트 */}
         <section className="bg-white rounded-[2rem] p-5 border border-slate-200 shadow-sm space-y-4">
           <div className="flex justify-between items-center px-1">
             <h3 className="text-sm font-black text-slate-900 flex items-center gap-1.5 italic">
-                <Zap size={14} className="text-blue-600 fill-blue-600" /> Growth Stream
+                <Zap size={14} className="text-blue-600 fill-blue-600" /> {currentMonth}월 Growth Stream
             </h3>
             <div className="flex gap-2 bg-slate-50 px-2.5 py-1 rounded-full border border-slate-100 shrink-0">
               <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"/><span className="text-[8px] font-bold text-slate-400">발행</span></div>
@@ -226,9 +229,9 @@ const Sales = () => {
               <path d={generatePath(chartData, 'confirmed', 120, 340)} fill="none" stroke="#3b82f6" strokeWidth="3" strokeLinecap="round" />
             </svg>
             <div className="flex justify-between mt-3 px-1">
-               <span className="text-[8px] font-bold text-slate-300">Start</span>
-               <span className="text-[8px] font-black text-blue-600">Today</span>
-               <span className="text-[8px] font-bold text-slate-300">End</span>
+               <span className="text-[8px] font-bold text-slate-300">1일</span>
+               <span className="text-[8px] font-black text-blue-600">오늘</span>
+               <span className="text-[8px] font-bold text-slate-300">말일</span>
             </div>
           </div>
         </section>
@@ -262,7 +265,7 @@ const Sales = () => {
         </div>
       </main>
 
-      {/* 하단 고정 액션 버튼: 사이즈 줄이고 세련되게 */}
+      {/* 하단 고정 액션 버튼 */}
       <footer className="fixed bottom-0 left-0 right-0 px-6 py-8 bg-white/90 backdrop-blur-md border-t border-slate-100 max-w-md mx-auto z-40">
         <button onClick={() => setShowMarketingModal(true)}
           className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-base flex items-center justify-center gap-2.5 shadow-xl active:scale-95 transition-all shadow-slate-900/20 border border-slate-800"
@@ -273,7 +276,7 @@ const Sales = () => {
         </button>
       </footer>
 
-      {/* 마케팅 브릿지 모달: 완벽한 중앙 배치 */}
+      {/* 마케팅 브릿지 모달 */}
       {showMarketingModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/80 backdrop-blur-sm animate-fade-in" onClick={() => setShowMarketingModal(false)}>
            <div className="bg-white w-full max-w-[320px] rounded-[2.5rem] shadow-2xl relative flex flex-col p-7 pb-8 overflow-hidden animate-scale-in text-left" onClick={e => e.stopPropagation()}>
