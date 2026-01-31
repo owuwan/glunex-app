@@ -1,587 +1,297 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  User, Crown, MessageSquare, ChevronRight, CloudRain, Sun, 
-  TrendingUp, Sparkles, Loader2, MapPin, Wallet, Bell, 
-  ArrowUpRight, Calendar, Clock, Car, Tag, Phone, Plus, X, ChevronLeft,
-  ChevronDown
+  ArrowLeft, Wallet, TrendingUp, Calendar, CheckCircle2, 
+  Clock, Sparkles, MessageSquare, Edit3, 
+  ChevronRight, Info, X, Loader2, ArrowUpRight, Target, Zap,
+  ArrowRight
 } from 'lucide-react';
 import { auth, db } from '../firebase';
-import { doc, getDoc, collection, query, where, getDocs, addDoc, onSnapshot } from 'firebase/firestore';
-import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
+import { signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { collection, query, where, onSnapshot, getDocs } from 'firebase/firestore';
 
-const Dashboard = () => {
+const Sales = () => {
   const navigate = useNavigate();
   const appId = typeof __app_id !== 'undefined' ? __app_id : 'glunex-app';
-  
+
   // --- 상태 관리 ---
-  const [view, setView] = useState('main'); 
-  const [userName, setUserName] = useState('파트너');
   const [user, setUser] = useState(null);
-  const [loadingUser, setLoadingUser] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [showMarketingModal, setShowMarketingModal] = useState(false);
   
-  const [weather, setWeather] = useState({ 
-    temp: 0, rain: 0, status: 'clear', region: 'Seoul', targetCustomers: 0, loading: true 
+  const [stats, setStats] = useState({
+    confirmed: 0,  // 보증서 발행완료 (블루)
+    pending: 0,    // 보증서 발행대기 (그린)
+    upcoming: 0,   // 스케줄 예약건 (노란색)
+    total: 0
   });
 
-  const [salesData, setSalesData] = useState({ today: 0, monthTotal: 0 });
-  const [schedules, setSchedules] = useState([]);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [selectedDateStr, setSelectedDateStr] = useState(new Date().toISOString().split('T')[0]);
-  
-  // 예약 등록 폼 상태
-  const [newSchedule, setNewSchedule] = useState({
-    time: '', carModel: '', serviceType: '', price: '', phone: '', date: new Date().toISOString().split('T')[0]
-  });
+  const [chartData, setChartData] = useState([]);
 
-  const [timeParts, setTimeParts] = useState({ ampm: '', hour: '', minute: '' });
-  const [currentDate, setCurrentDate] = useState(new Date());
-
-  // --- (Rule 3) 초기화 및 인증 ---
+  // --- (Rule 3) 인증 로직 ---
   useEffect(() => {
     const initAuth = async () => {
-      if (!auth.currentUser) {
-        await signInAnonymously(auth);
-      }
+      try {
+        if (!auth.currentUser) await signInAnonymously(auth);
+      } catch (err) { console.error(err); }
     };
     initAuth();
-
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
-      setLoadingUser(false);
+      if (u) setLoading(false);
     });
     return () => unsubscribe();
   }, []);
 
-  // --- 데이터 페칭 ---
+  // --- 데이터 분석 및 월간 그래프 가공 ---
   useEffect(() => {
     if (!user) return;
 
-    const loadUserData = async () => {
-      try {
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-          setUserName(data.storeName || '글루넥스 파트너');
-          
-          // 날씨 API용 지역명 처리 (영어 강제 고정 로직 유지)
-          let regionName = 'Seoul';
-          if (data.address) {
-             const firstPart = data.address.split(' ')[0];
-             if (!/[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(firstPart)) {
-                regionName = firstPart;
-             }
-          }
-          fetchRealWeather(regionName);
-        } else {
-          fetchRealWeather('Seoul');
-        }
-        await calculateSalesData(user.uid);
-      } catch (e) { console.error("User data load error:", e); }
-    };
-    loadUserData();
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const todayStr = now.toISOString().split('T')[0];
+    const currentH = now.getHours();
+    const currentM = now.getMinutes();
 
-    // (Rule 1) 스케줄 실시간 리스너
+    // 이번 달의 총 일수 계산
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const dailyStats = Array.from({ length: daysInMonth }, (_, i) => ({
+      day: i + 1,
+      confirmed: 0,
+      pending: 0,
+      upcoming: 0,
+      dateStr: `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`
+    }));
+
+    const qWarranties = query(collection(db, "warranties"), where("userId", "==", user.uid));
     const schedulesRef = collection(db, 'artifacts', appId, 'public', 'data', 'schedules');
-    const unsubSchedules = onSnapshot(schedulesRef, (snapshot) => {
-      const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setSchedules(list);
-    }, (err) => console.error("Firestore Error:", err));
 
-    return () => unsubSchedules();
+    const unsubW = onSnapshot(qWarranties, (wSnap) => {
+      const unsubS = onSnapshot(schedulesRef, (sSnap) => {
+        let confirmedSum = 0;
+        let pendingSum = 0;
+        let upcomingSum = 0;
+
+        // 1. 보증서 데이터 (확정 매출 - 블루)
+        wSnap.docs.forEach(doc => {
+          const data = doc.data();
+          const d = new Date(data.issuedAt);
+          // 이번 달 데이터만 필터링
+          if (d.getFullYear() === currentYear && d.getMonth() === currentMonth) {
+            const price = Number(String(data.price || "0").replace(/[^0-9]/g, '')) || 0;
+            confirmedSum += price;
+            const dayIdx = d.getDate() - 1;
+            if (dailyStats[dayIdx]) dailyStats[dayIdx].confirmed += price;
+          }
+        });
+
+        // 2. 스케줄 데이터 (발행대기/예약건)
+        sSnap.docs.forEach(doc => {
+          const data = doc.data();
+          if (data.userId !== user.uid) return;
+
+          const d = new Date(data.date);
+          if (d.getFullYear() === currentYear && d.getMonth() === currentMonth) {
+            const price = Number(String(data.price || "0").replace(/[^0-9]/g, '')) || 0;
+            const [sH, sM] = (data.time || "00:00").split(':').map(Number);
+            
+            const isPastDate = data.date < todayStr;
+            const isTodayPastTime = data.date === todayStr && (sH < currentH || (sH === currentH && sM < currentM));
+
+            const dayIdx = d.getDate() - 1;
+            if (isPastDate || isTodayPastTime) {
+              pendingSum += price; // 발행대기 (그린)
+              if (dailyStats[dayIdx]) dailyStats[dayIdx].pending += price;
+            } else {
+              upcomingSum += price; // 예약건 (노란색)
+              if (dailyStats[dayIdx]) dailyStats[dayIdx].upcoming += price;
+            }
+          }
+        });
+
+        setStats({ confirmed: confirmedSum, pending: pendingSum, upcoming: upcomingSum, total: confirmedSum + pendingSum + upcomingSum });
+        
+        // 차트 스케일 조정 (최대값 기준 백분율)
+        const maxVal = Math.max(...dailyStats.map(d => d.confirmed + d.pending + d.upcoming), 1000000);
+        const processedChart = dailyStats.map(d => ({
+          name: `${d.day}일`,
+          confirmed: (d.confirmed / maxVal) * 100,
+          pending: (d.pending / maxVal) * 100,
+          upcoming: (d.upcoming / maxVal) * 100,
+          isToday: d.dateStr === todayStr
+        }));
+        setChartData(processedChart);
+
+      }, (err) => console.error(err));
+      return () => unsubS();
+    }, (err) => console.error(err));
+
+    return () => unsubW();
   }, [user, appId]);
 
-  const calculateSalesData = async (uid) => {
-    try {
-      const q = query(collection(db, "warranties"), where("userId", "==", uid));
-      const snap = await getDocs(q);
-      const now = new Date();
-      let monthTotal = 0, todayTotal = 0, targets = 0;
-      
-      snap.forEach(doc => {
-        const data = doc.data();
-        const date = new Date(data.issuedAt);
-        const price = Number(String(data.price || "0").replace(/[^0-9]/g, '')) || 0;
-        if (date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()) monthTotal += price;
-        if (date.toDateString() === now.toDateString()) todayTotal += price;
-        
-        const diffDays = Math.ceil(Math.abs(now - date) / (1000 * 60 * 60 * 24));
-        if ((data.serviceType === 'wash' || data.serviceType === 'detailing') && diffDays >= 21) targets++;
-      });
-      
-      setSalesData({ monthTotal, today: todayTotal });
-      setWeather(prev => ({ ...prev, targetCustomers: targets }));
-    } catch (e) { console.error("Sales calc error:", e); }
+  const generatePath = (data, key, height = 150, width = 350) => {
+    if (data.length === 0) return "";
+    const points = data.map((d, i) => {
+      const x = (i / (data.length - 1)) * width;
+      const val = d[key] > 0 ? d[key] : 0; // 0 이하 방지
+      const y = height - (val / 100) * height;
+      return `${x},${y}`;
+    });
+    return `M ${points.join(' L ')}`;
   };
 
-  const fetchRealWeather = async (region) => {
-    try {
-      const API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
-      if (!API_KEY) return;
-      
-      const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${region}&appid=${API_KEY}&units=metric&lang=kr`);
-      const data = await res.json();
-      if (data.cod === 200) {
-        setWeather(prev => ({ 
-          ...prev, temp: Math.round(data.main.temp), status: data.weather[0].main.toLowerCase().includes('rain') ? 'rainy' : 'clear', region, loading: false 
-        }));
-      }
-    } catch (e) { 
-      setWeather(prev => ({ ...prev, loading: false })); 
-    }
+  const generateAreaPath = (data, key, height = 150, width = 350) => {
+    if (data.length === 0) return "";
+    const linePath = generatePath(data, key, height, width);
+    return `${linePath} L ${width},${height} L 0,${height} Z`;
   };
 
-  const handlePriceInput = (e) => {
-    const rawValue = e.target.value.replace(/[^0-9]/g, "");
-    const formattedValue = rawValue.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-    setNewSchedule(prev => ({ ...prev, price: formattedValue }));
-  };
-
-  const handleAddSchedule = async () => {
-    const { ampm, hour, minute } = timeParts;
-    const { carModel, serviceType, price, phone, date } = newSchedule;
-    
-    if (!ampm || !hour || !minute) return alert("예약 시간을 모두 선택해주세요.");
-    if (!carModel || carModel.trim() === "") return alert("차종을 입력해주세요.");
-    if (!serviceType || serviceType.trim() === "") return alert("시공 품목을 입력해주세요.");
-    if (!user) return;
-
-    let h = parseInt(hour);
-    if (ampm === '오후' && h < 12) h += 12;
-    if (ampm === '오전' && h === 12) h = 0;
-    const formattedTime = `${String(h).padStart(2, '0')}:${minute}`;
-
-    try {
-      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'schedules'), {
-        time: formattedTime,
-        displayTime: `${ampm} ${hour}:${minute}`,
-        carModel,
-        serviceType,
-        price: (price || "").replace(/,/g, ''),
-        phone: phone || "",
-        date: date || selectedDateStr,
-        userId: user.uid,
-        createdAt: new Date().toISOString()
-      });
-      
-      setShowAddModal(false);
-      setNewSchedule({ 
-        time: '', carModel: '', serviceType: '', price: '', phone: '', 
-        date: selectedDateStr 
-      });
-      setTimeParts({ ampm: '', hour: '', minute: '' });
-    } catch (e) { 
-      console.error(e);
-      alert("일정 저장에 실패했습니다."); 
-    }
-  };
-
-  const formatTimeDisplay = (time24) => {
-    if (!time24) return "";
-    const [h, m] = time24.split(':');
-    const hourNum = parseInt(h);
-    const ampm = hourNum >= 12 ? '오후' : '오전';
-    const hour12 = hourNum % 12 || 12;
-    return `${ampm} ${hour12}:${m}`;
-  };
-
-  // [수정] 오늘 날짜 필터링 강화 및 유저 ID 체크 (Rule 2)
-  const todayStr = new Date().toISOString().split('T')[0];
-  const todaySchedules = schedules
-    .filter(s => s.date === todayStr && s.userId === user?.uid)
-    .sort((a, b) => (a.time || "").localeCompare(b.time || ""));
-
-  const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
-  const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
-  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-  const padding = Array.from({ length: firstDayOfMonth }, (_, i) => i);
-
-  const ampmOptions = ['오전', '오후'];
-  const hourOptions = Array.from({ length: 12 }, (_, i) => String(i + 1));
-  const minuteOptions = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'));
+  if (loading) return (
+    <div className="h-full flex items-center justify-center bg-white">
+      <Loader2 className="animate-spin text-blue-600" size={32} />
+    </div>
+  );
 
   return (
-    <div className="flex flex-col h-full w-full bg-[#F8F9FB] text-slate-800 font-sans overflow-hidden max-w-md mx-auto shadow-2xl relative select-none">
+    <div className="flex flex-col h-full w-full bg-[#F8F9FB] text-slate-800 font-sans overflow-hidden max-w-md mx-auto relative select-none">
       
-      <div className="absolute inset-0 z-0 pointer-events-none">
-         <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[40%] bg-blue-100/40 rounded-full blur-[80px]" />
-         <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[40%] bg-slate-200/50 rounded-full blur-[80px]" />
-      </div>
+      <header className="px-6 pt-12 pb-6 flex items-center gap-4 bg-white border-b border-slate-100 z-10">
+        <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-50 rounded-full transition-colors active:scale-90 text-slate-400"><ArrowLeft size={24} /></button>
+        <h1 className="text-xl font-black text-slate-900 tracking-tight italic">MONTHLY <span className="text-blue-600">GROWTH</span></h1>
+      </header>
 
-      {/* 헤더 */}
-      <div className="relative px-6 pt-10 pb-4 z-10 flex justify-between items-center shrink-0">
-        <div className="flex-1 overflow-hidden">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="w-1.5 h-1.5 bg-[#D4AF37] rounded-full" />
-            <span className="text-[10px] font-bold text-slate-500 tracking-widest uppercase">GLUNEX PARTNER</span>
-          </div>
-          <h2 className="text-xl font-black text-slate-900 tracking-tight truncate pr-2">{loadingUser ? '...' : userName}</h2>
-        </div>
-
-        <div className="flex items-center gap-2 bg-white/70 backdrop-blur-md px-3 py-2 rounded-full border border-slate-200 shadow-sm mx-2 shrink-0">
-           <div className="flex items-center gap-1.5 border-r border-slate-200 pr-2">
-              {weather.loading ? (
-                <Loader2 size={12} className="animate-spin text-slate-300" />
-              ) : (
-                <>
-                  {weather.status === 'rainy' ? <CloudRain size={14} className="text-blue-500" /> : <Sun size={14} className="text-amber-500" />}
-                  <span className="text-[11px] font-black text-slate-700">{weather.temp}°</span>
-                </>
-              )}
-           </div>
-           <div className="flex items-center gap-1.5">
-              <Sparkles size={12} className="text-blue-600 fill-blue-600" />
-              <span className="text-[11px] font-black text-slate-700">{weather.targetCustomers}명</span>
-           </div>
-        </div>
-
-        <button 
-          onClick={() => navigate('/mypage')}
-          className="p-2.5 bg-white rounded-full border border-slate-200 shadow-sm active:scale-95 transition-all shrink-0"
-        >
-          <User size={18} className="text-slate-600" />
-        </button>
-      </div>
-
-      <div className="flex-1 flex flex-col px-5 pb-6 gap-4 z-10 min-h-0 overflow-y-auto scrollbar-hide">
+      <main className="flex-1 overflow-y-auto p-6 space-y-6 pb-36 scrollbar-hide">
         
-        {view === 'main' ? (
-          <div className="flex flex-col gap-4 animate-fade-in">
-            <div className="flex gap-3 h-[180px] shrink-0">
-              {/* [수정] 매출 현황 버튼 이동 기능 점검 */}
-              <button 
-                onClick={() => navigate('/sales')} 
-                className="flex-[1.4] bg-white rounded-[2.5rem] p-6 border border-slate-200 shadow-sm relative overflow-hidden group active:scale-[0.98] transition-all flex flex-col justify-between text-left cursor-pointer"
-              >
-                <div className="relative z-10 w-full text-left">
-                  <div className="flex items-center gap-1.5 mb-1 text-slate-400">
-                    <Wallet size={12} />
-                    <span className="text-[9px] font-black uppercase tracking-widest">Revenue</span>
-                  </div>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-2xl font-black text-slate-900 tracking-tighter">{salesData.monthTotal.toLocaleString()}</span>
-                    <span className="text-xs font-bold text-slate-400">원</span>
-                  </div>
-                </div>
-                <div className="w-full h-px bg-slate-100 my-2" />
-                <div className="relative z-10 w-full text-left">
-                  <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest mb-1 block">Today Sales</span>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-lg font-black text-slate-800 tracking-tighter">{salesData.today.toLocaleString()}</span>
-                    <span className="text-[10px] font-bold text-slate-400">원</span>
-                  </div>
-                </div>
-              </button>
-
-              <button 
-                onClick={() => setView('calendar')} 
-                className="flex-[1.1] bg-white rounded-[2.5rem] p-6 border border-slate-200 shadow-sm relative overflow-hidden flex flex-col group active:scale-[0.98] transition-all text-left"
-              >
-                 <div className="absolute top-0 right-0 w-20 h-20 bg-blue-50 rounded-full blur-2xl -mr-10 -mt-10 group-hover:bg-blue-100" />
-                 <div className="relative z-10 h-full flex flex-col justify-between">
-                    <div>
-                        <div className="flex items-center gap-1.5 mb-3">
-                        <div className="p-1.5 bg-blue-600 rounded-xl text-white shadow-lg"><Calendar size={14} /></div>
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Today</span>
-                        </div>
-                        
-                        <div className="space-y-2.5 overflow-hidden">
-                        {todaySchedules.length > 0 ? (
-                            <>
-                            {todaySchedules.slice(0, 2).map((s, idx) => (
-                                <div key={idx} className="flex flex-col gap-0.5 border-l-2 border-blue-600 pl-2">
-                                    <p className="text-[10px] font-black text-slate-800 leading-none truncate">{formatTimeDisplay(s.time).split(' ')[1]} | {s.carModel}</p>
-                                    <p className="text-[8px] text-slate-400 font-bold truncate">{s.serviceType}</p>
-                                </div>
-                            ))}
-                            </>
-                        ) : (
-                            <div className="py-4 flex flex-col items-center justify-center opacity-30">
-                                <Clock size={16} className="text-slate-400 mb-1" />
-                                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">Empty</p>
-                            </div>
-                        )}
-                        </div>
-                    </div>
-
-                    <div className="mt-2">
-                        {todaySchedules.length >= 3 && (
-                            <div className="flex items-center gap-1.5 bg-blue-50/80 px-2.5 py-1.5 rounded-xl border border-blue-100 animate-pulse mb-3">
-                                <Sparkles size={10} className="text-blue-600 fill-blue-600" />
-                                <span className="text-[9px] font-black text-blue-600 leading-none">오늘 총 {todaySchedules.length}건 시공</span>
-                            </div>
-                        )}
-                        
-                        <div className="flex items-center justify-between text-[10px] font-black text-slate-300 group-hover:text-blue-600 transition-colors">
-                            <span>Calendar</span>
-                            <ChevronRight size={12} />
-                        </div>
-                    </div>
-                 </div>
-              </button>
+        {/* 현금 흐름 요약 */}
+        <section className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-40 h-40 bg-blue-500/20 rounded-full blur-[60px] -mr-20 -mt-20" />
+          <div className="relative z-10 text-left">
+            <div className="flex items-center gap-2 mb-2">
+                <TrendingUp size={14} className="text-blue-400" />
+                <p className="text-blue-400 text-[10px] font-black uppercase tracking-[0.2em]">Monthly Performance Index</p>
             </div>
-
-            {/* 메인 서비스 */}
-            <div className="flex flex-col gap-3">
-              <button onClick={() => navigate('/creator')} className="bg-gradient-to-r from-indigo-50 to-white rounded-3xl border border-indigo-100 p-6 flex items-center justify-between group active:scale-[0.98] transition-all shadow-sm text-left">
-                 <div className="flex flex-col items-start">
-                    <div className="flex items-center gap-2 mb-1">
-                       <div className="p-1.5 rounded-xl bg-indigo-600 text-white shadow-md shadow-indigo-200"><Sparkles size={14} className="fill-white" /></div>
-                       <span className="text-base font-black text-indigo-900">AI 마케팅 에이전트</span>
-                    </div>
-                    <span className="text-xs text-slate-500 font-medium">네이버 블로그/인스타 포스팅 10초 완성</span>
-                 </div>
-                 <ArrowUpRight size={18} className="text-slate-300 group-hover:text-indigo-500 transition-colors" />
-              </button>
-
-              <button onClick={() => navigate('/create')} className="bg-white rounded-3xl border border-slate-200 p-6 flex items-center justify-between group active:scale-[0.98] transition-all shadow-sm text-left">
-                 <div className="flex flex-col items-start">
-                    <div className="flex items-center gap-2 mb-1">
-                       <div className="p-1.5 rounded-xl bg-amber-400 text-white shadow-md shadow-amber-100"><Crown size={14} className="fill-white" /></div>
-                       <span className="text-base font-black text-slate-800">보증서 발행</span>
-                    </div>
-                    <span className="text-xs text-slate-500 font-medium">보험수리 대응 공식 시공 보증서 발급</span>
-                 </div>
-                 <ArrowUpRight size={18} className="text-slate-300 group-hover:text-amber-500 transition-colors" />
-              </button>
-
-              <button onClick={() => navigate('/marketing')} className="bg-white rounded-3xl border border-slate-200 p-6 flex items-center justify-between group active:scale-[0.98] transition-all shadow-sm text-left">
-                 <div className="flex flex-col items-start">
-                    <div className="flex items-center gap-2 mb-1">
-                       <div className="p-1.5 rounded-xl bg-blue-500 text-white shadow-md shadow-blue-100"><MessageSquare size={14} className="fill-white" /></div>
-                       <span className="text-base font-black text-slate-800">단골 마케팅 센터</span>
-                    </div>
-                    <span className="text-xs text-slate-500 font-medium">재방문 유도 알림톡 및 고객 관리</span>
-                 </div>
-                 <ArrowUpRight size={18} className="text-slate-300 group-hover:text-blue-500 transition-colors" />
-              </button>
+            <div className="flex items-baseline gap-2 mb-8 text-left">
+              <span className="text-4xl font-black tracking-tighter">{(stats.confirmed + stats.pending).toLocaleString()}</span>
+              <span className="text-lg font-bold opacity-30">원</span>
             </div>
-          </div>
-        ) : (
-          /* 캘린더 뷰 */
-          <div className="flex flex-col gap-6 animate-fade-in pb-20">
-             <div className="flex items-center justify-between px-1">
-                <div className="flex items-center gap-3">
-                   <button onClick={() => setView('main')} className="p-2 bg-white rounded-xl border border-slate-200 shadow-sm"><ChevronLeft size={20} /></button>
-                   <h2 className="text-xl font-black text-slate-900 tracking-tight">{currentDate.getFullYear()}년 {currentDate.getMonth() + 1}월</h2>
-                </div>
-                <div className="flex bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                   <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-2.5 hover:bg-slate-50 transition-colors"><ChevronLeft size={16}/></button>
-                   <div className="w-px bg-slate-100 h-4 self-center" />
-                   <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-2.5 hover:bg-slate-50 transition-colors"><ChevronRight size={16}/></button>
-                </div>
-             </div>
-
-             <div className="bg-white rounded-[2.5rem] p-6 border border-slate-200 shadow-xl">
-                <div className="grid grid-cols-7 mb-4">
-                  {['일','월','화','수','목','금','토'].map((d, i) => (
-                    <div key={d} className={`text-center text-[10px] font-black uppercase tracking-widest ${i===0?'text-red-400':i===6?'text-blue-400':'text-slate-400'}`}>{d}</div>
-                  ))}
-                </div>
-                <div className="grid grid-cols-7 gap-1">
-                  {padding.map(p => <div key={`p-${p}`} className="aspect-square"></div>)}
-                  {days.map(d => {
-                    const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                    const daySchedules = schedules.filter(s => s.date === dateStr && s.userId === user?.uid);
-                    const isToday = (new Date().toISOString().split('T')[0]) === dateStr;
-                    const isSelected = selectedDateStr === dateStr;
-
-                    return (
-                      <button 
-                        key={d} 
-                        onClick={() => {
-                           setSelectedDateStr(dateStr);
-                           setNewSchedule(prev => ({ ...prev, date: dateStr }));
-                        }}
-                        className={`aspect-square rounded-2xl flex flex-col items-center justify-center relative transition-all active:scale-90 ${
-                           isSelected ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 z-10' : 
-                           isToday ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'bg-white text-slate-700 hover:bg-slate-50'
-                        }`}
-                      >
-                        <span className="text-sm font-black">{d}</span>
-                        {daySchedules.length > 0 && (
-                           <div className={`w-1 h-1 rounded-full mt-1 ${isSelected ? 'bg-white' : 'bg-blue-600'}`}></div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-             </div>
-
-             <div className="space-y-4 px-1">
-                <div className="flex justify-between items-end">
-                   <div className="text-left">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Timeline</p>
-                      <h3 className="text-lg font-black text-slate-900">{selectedDateStr === (new Date().toISOString().split('T')[0]) ? '오늘의 일정' : `${selectedDateStr} 일정`}</h3>
-                   </div>
-                   <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-xl font-black text-xs shadow-lg active:scale-95 transition-all">
-                      <Plus size={14} /> 일정 추가
-                   </button>
-                </div>
-                
-                <div className="space-y-3">
-                   {schedules.filter(s => s.date === selectedDateStr && s.userId === user?.uid).length > 0 ? (
-                      schedules.filter(s => s.date === selectedDateStr && s.userId === user?.uid).sort((a,b)=> (a.time || "").localeCompare(b.time || "")).map(s => (
-                        <div key={s.id} className="bg-white p-5 rounded-[2rem] flex justify-between items-center border border-slate-100 shadow-sm animate-fade-in-up">
-                           <div className="flex items-center gap-4 text-left">
-                              <div className="w-14 h-14 rounded-2xl bg-blue-50 flex flex-col items-center justify-center text-blue-600 font-black border border-blue-100">
-                                 <span className="text-[9px] uppercase">{s.time.split(':')[0] < 12 ? 'AM' : 'PM'}</span>
-                                 <span className="text-xs">{formatTimeDisplay(s.time).split(' ')[1]}</span>
-                              </div>
-                              <div>
-                                 <p className="text-sm font-black text-slate-800">{s.carModel}</p>
-                                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">{s.serviceType}</p>
-                              </div>
-                           </div>
-                           <div className="text-right">
-                              <p className="text-sm font-black text-slate-900">{Number(s.price || 0).toLocaleString()}원</p>
-                              <p className="text-[10px] text-slate-400 font-medium">{s.phone}</p>
-                           </div>
-                        </div>
-                      ))
-                   ) : (
-                      <div className="py-16 text-center bg-white rounded-[2.5rem] border border-dashed border-slate-200">
-                         <Clock size={20} className="text-slate-300 mx-auto mb-3" />
-                         <p className="text-xs text-slate-400 font-bold">등록된 시공 일정이 없습니다.</p>
-                      </div>
-                   )}
-                </div>
-             </div>
-          </div>
-        )}
-
-        <div className="text-center shrink-0 opacity-40 py-4">
-           <p className="text-[9px] text-slate-400 font-bold uppercase tracking-[0.3em]">Powered by GLUNEX AI Hub</p>
-        </div>
-      </div>
-
-      {/* 예약 등록 모달 */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in" onClick={() => setShowAddModal(false)}>
-           <div className="bg-white w-full max-w-sm rounded-[3rem] shadow-2xl relative flex flex-col p-8 pb-10 overflow-hidden" onClick={e => e.stopPropagation()}>
-              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full -mr-16 -mt-16 opacity-50"></div>
-              
-              <div className="flex justify-between items-center mb-8 relative z-10 text-left">
-                 <div>
-                    <h3 className="text-xl font-black text-slate-900 tracking-tight">예약 등록</h3>
-                    <p className="text-[10px] text-blue-600 font-bold uppercase tracking-widest mt-1">{newSchedule.date}</p>
-                 </div>
-                 <button onClick={() => setShowAddModal(false)} className="p-2.5 bg-slate-50 rounded-full text-slate-400 active:scale-90"><X size={20}/></button>
+            
+            <div className="grid grid-cols-3 gap-4 border-t border-white/10 pt-6">
+              <div className="text-left">
+                <p className="text-slate-500 text-[9px] font-bold mb-1 uppercase tracking-tighter">보증서 발행완료</p>
+                <p className="text-sm font-black text-blue-400">{stats.confirmed.toLocaleString()}</p>
               </div>
+              <div className="text-left">
+                <p className="text-slate-500 text-[9px] font-bold mb-1 uppercase tracking-tighter">보증서 발행대기</p>
+                <p className="text-sm font-black text-green-400">{stats.pending.toLocaleString()}</p>
+              </div>
+              <div className="text-left">
+                <p className="text-slate-500 text-[9px] font-bold mb-1 uppercase tracking-tighter">스케줄 예약건</p>
+                <p className="text-sm font-black text-amber-400">{stats.upcoming.toLocaleString()}</p>
+              </div>
+            </div>
+          </div>
+        </section>
 
-              <div className="space-y-4 relative z-10 overflow-y-auto max-h-[70vh] pr-1 scrollbar-hide text-left">
-                 <div className="space-y-1.5 text-left">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Reservation Time</p>
-                    <div className="grid grid-cols-3 gap-2">
-                       <div className="relative group">
-                          <select 
-                            className="appearance-none w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm font-bold outline-none focus:border-blue-500 transition-colors cursor-pointer"
-                            value={timeParts.ampm}
-                            onChange={(e) => setTimeParts(prev => ({ ...prev, ampm: e.target.value }))}
-                          >
-                            <option value="">오전/오후</option>
-                            {ampmOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                          </select>
-                          <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                       </div>
-                       <div className="relative group">
-                          <select 
-                            className="appearance-none w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm font-bold outline-none focus:border-blue-500 transition-colors cursor-pointer"
-                            value={timeParts.hour}
-                            onChange={(e) => setTimeParts(prev => ({ ...prev, hour: e.target.value }))}
-                          >
-                            <option value="">시</option>
-                            {hourOptions.map(opt => <option key={opt} value={opt}>{opt}시</option>)}
-                          </select>
-                          <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                       </div>
-                       <div className="relative group">
-                          <select 
-                            className="appearance-none w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm font-bold outline-none focus:border-blue-500 transition-colors cursor-pointer"
-                            value={timeParts.minute}
-                            onChange={(e) => setTimeParts(prev => ({ ...prev, minute: e.target.value }))}
-                          >
-                            <option value="">분</option>
-                            {minuteOptions.map(opt => <option key={opt} value={opt}>{opt}분</option>)}
-                          </select>
-                          <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                       </div>
-                    </div>
+        {/* 월간 성장 차트 */}
+        <section className="bg-white rounded-[2.5rem] p-7 border border-slate-200 shadow-[0_10px_30px_rgba(0,0,0,0.03)] space-y-6">
+          <div className="flex justify-between items-center">
+            <h3 className="text-base font-black text-slate-900 flex items-center gap-2 italic"><Zap size={18} className="text-blue-600 fill-blue-600" /> Revenue Stream</h3>
+            <div className="flex gap-2 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100">
+              <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"/><span className="text-[8px] font-bold text-slate-400">발행</span></div>
+              <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-green-500"/><span className="text-[8px] font-bold text-slate-400">대기</span></div>
+              <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-amber-500"/><span className="text-[8px] font-bold text-slate-400">예약</span></div>
+            </div>
+          </div>
+
+          <div className="relative h-44 w-full px-1">
+            <svg className="w-full h-full overflow-visible" viewBox="0 0 350 150" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="gradBlue" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#3b82f6" stopOpacity="0.4" /><stop offset="100%" stopColor="#3b82f6" stopOpacity="0" /></linearGradient>
+                <linearGradient id="gradGreen" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#22c55e" stopOpacity="0.2" /><stop offset="100%" stopColor="#22c55e" stopOpacity="0" /></linearGradient>
+                <linearGradient id="gradAmber" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f59e0b" stopOpacity="0.1" /><stop offset="100%" stopColor="#f59e0b" stopOpacity="0" /></linearGradient>
+              </defs>
+              <line x1="0" y1="0" x2="350" y2="0" stroke="#f8fafc" strokeWidth="1" /><line x1="0" y1="75" x2="350" y2="75" stroke="#f8fafc" strokeWidth="1" /><line x1="0" y1="150" x2="350" y2="150" stroke="#f1f5f9" strokeWidth="1" />
+              
+              {/* 예약건 (앰버) */}
+              <path d={generateAreaPath(chartData, 'upcoming')} fill="url(#gradAmber)" className="transition-all duration-1000" />
+              <path d={generatePath(chartData, 'upcoming')} fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" opacity="0.4" />
+              
+              {/* 발행대기 (그린) */}
+              <path d={generateAreaPath(chartData, 'pending')} fill="url(#gradGreen)" className="transition-all duration-1000" />
+              <path d={generatePath(chartData, 'pending')} fill="none" stroke="#22c55e" strokeWidth="3" strokeDasharray="6 4" strokeLinecap="round" />
+              
+              {/* 발행완료 (블루) */}
+              <path d={generateAreaPath(chartData, 'confirmed')} fill="url(#gradBlue)" className="transition-all duration-1000" />
+              <path d={generatePath(chartData, 'confirmed')} fill="none" stroke="#3b82f6" strokeWidth="4" strokeLinecap="round" />
+            </svg>
+            <div className="flex justify-between mt-6 px-1"><span className="text-[10px] font-black text-slate-300">1일</span><span className="text-[10px] font-black text-blue-600">오늘</span><span className="text-[10px] font-black text-slate-300">말일</span></div>
+          </div>
+        </section>
+
+        {/* 상세 목록 */}
+        <section className="grid grid-cols-1 gap-3">
+           {[
+             { label: '보증서 발행완료', value: stats.confirmed, color: 'blue', icon: <CheckCircle2 size={20}/> },
+             { label: '보증서 발행대기', value: stats.pending, color: 'green', icon: <Clock size={20}/> },
+             { label: '스케줄 예약건', value: stats.upcoming, color: 'amber', icon: <Calendar size={20}/> }
+           ].map((item, idx) => (
+             <div key={idx} className="bg-white p-6 rounded-[2rem] border border-slate-200 flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-4 text-left">
+                   <div className={`p-3 rounded-2xl text-white shadow-lg ${item.color === 'blue' ? 'bg-blue-600' : item.color === 'green' ? 'bg-green-600' : 'bg-amber-500'}`}>{item.icon}</div>
+                   <div><p className="text-xs font-bold text-slate-800">{item.label}</p><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Monthly Item</p></div>
+                </div>
+                <p className="text-lg font-black text-slate-900">{item.value.toLocaleString()}원</p>
+             </div>
+           ))}
+        </section>
+      </main>
+
+      {/* 액션 버튼 */}
+      <footer className="fixed bottom-0 left-0 right-0 p-8 bg-white/80 backdrop-blur-2xl border-t border-slate-100 max-w-md mx-auto z-40">
+        <button onClick={() => setShowMarketingModal(true)}
+          className="w-full py-5 bg-slate-900 text-white rounded-[2rem] font-black text-lg flex items-center justify-center gap-3 shadow-2xl active:scale-95 transition-all shadow-slate-900/40 border border-slate-700"
+        >
+          <Sparkles size={22} className="text-amber-400 animate-pulse" /> 
+          <span>매출 성장 솔루션 실행</span>
+          <ArrowRight size={18} className="text-slate-500" />
+        </button>
+      </footer>
+
+      {showMarketingModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/80 backdrop-blur-md animate-fade-in" onClick={() => setShowMarketingModal(false)}>
+           <div className="bg-white w-full max-w-sm rounded-[3.5rem] shadow-2xl relative flex flex-col p-8 pb-12 overflow-hidden animate-scale-in text-left" onClick={e => e.stopPropagation()}>
+              <div className="flex justify-between items-start mb-10 text-left">
+                 <div>
+                    <div className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-3 inline-block">Growth Engine</div>
+                    <h3 className="text-[28px] font-black text-slate-900 tracking-tighter leading-[1.1]">수익 성장을 위한<br/>최적 전략 실행</h3>
                  </div>
-
-                 <div className="space-y-1.5 text-left">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Car Model</p>
-                    <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3 focus-within:border-blue-500 transition-colors">
-                      <input 
-                        type="text" 
-                        placeholder="예: BMW 5 / 쏘렌토" 
-                        className="bg-transparent text-sm font-bold w-full outline-none" 
-                        value={newSchedule.carModel} 
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setNewSchedule(prev => ({ ...prev, carModel: val }));
-                        }}
-                      />
-                    </div>
-                 </div>
-
-                 <div className="space-y-1.5 text-left">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Service Item</p>
-                    <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3 focus-within:border-blue-500 transition-colors">
-                      <input 
-                        type="text" 
-                        placeholder="예: 광택 + 유리막코팅" 
-                        className="bg-transparent text-sm font-bold w-full outline-none" 
-                        value={newSchedule.serviceType} 
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setNewSchedule(prev => ({ ...prev, serviceType: val }));
-                        }}
-                      />
-                    </div>
-                 </div>
-
-                 <div className="space-y-1.5 text-left">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Amount (KRW)</p>
-                    <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3 focus-within:border-blue-500 transition-colors">
-                      <input 
-                        type="text" 
-                        placeholder="시공 금액" 
-                        className="bg-transparent text-sm font-bold w-full outline-none" 
-                        value={newSchedule.price} 
-                        onChange={handlePriceInput} 
-                      />
-                    </div>
-                 </div>
-
-                 <div className="space-y-1.5 text-left">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Customer Phone</p>
-                    <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3 focus-within:border-blue-500 transition-colors">
-                      <input 
-                        type="tel" 
-                        placeholder="010-0000-0000" 
-                        className="bg-transparent text-sm font-bold w-full outline-none" 
-                        value={newSchedule.phone} 
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setNewSchedule(prev => ({ ...prev, phone: val }));
-                        }}
-                      />
-                    </div>
-                 </div>
-
-                 <button 
-                  onClick={handleAddSchedule}
-                  className="w-full py-4.5 bg-blue-600 text-white rounded-[1.5rem] font-black text-base shadow-xl shadow-blue-200 active:scale-95 transition-all mt-4"
-                 >
-                   일정 저장하기
+                 <button onClick={() => setShowMarketingModal(false)} className="p-2 bg-slate-50 rounded-full text-slate-300 active:scale-90"><X size={24}/></button>
+              </div>
+              <div className="space-y-4">
+                 <button onClick={() => navigate('/marketing')} className="w-full p-7 bg-blue-600 rounded-[2.5rem] flex items-center justify-between group active:scale-[0.98] transition-all shadow-xl shadow-blue-200">
+                    <div className="flex items-center gap-5 text-left"><div className="p-3 bg-white/20 rounded-2xl text-white shadow-inner"><MessageSquare size={26} /></div>
+                       <div><p className="text-[10px] font-black text-blue-100 uppercase tracking-widest mb-1">CRM Marketing</p><p className="text-lg font-black text-white leading-none">기존 고객에게 연락하기</p></div>
+                    </div><ArrowUpRight className="text-white opacity-40 group-hover:opacity-100 transition-all" />
+                 </button>
+                 <button onClick={() => navigate('/creator')} className="w-full p-7 bg-slate-900 rounded-[2.5rem] flex items-center justify-between group active:scale-[0.98] transition-all shadow-xl shadow-slate-400">
+                    <div className="flex items-center gap-5 text-left"><div className="p-3 bg-white/10 rounded-2xl text-white shadow-inner"><Edit3 size={26} /></div>
+                       <div><p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Acquisition AI</p><p className="text-lg font-black text-white leading-none">새로운 홍보글 쓰기</p></div>
+                    </div><ArrowUpRight className="text-white opacity-40 group-hover:opacity-100 transition-all" />
                  </button>
               </div>
+              <div className="mt-10 text-center"><p className="text-[9px] text-slate-300 font-bold uppercase tracking-[0.5em]">Powered by GLUNEX Growth AI</p></div>
            </div>
         </div>
       )}
+
+      <style>{`
+        @keyframes scaleIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+        .animate-scale-in { animation: scaleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+      `}</style>
     </div>
   );
 };
 
-export default Dashboard;
+export default Sales;

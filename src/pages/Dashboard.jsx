@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   User, Crown, MessageSquare, ChevronRight, CloudRain, Sun, 
@@ -34,26 +34,20 @@ const Dashboard = () => {
     time: '', carModel: '', serviceType: '', price: '', phone: '', date: new Date().toISOString().split('T')[0]
   });
 
-  // 커스텀 시간 선택 상태
   const [timeParts, setTimeParts] = useState({ ampm: '', hour: '', minute: '' });
-
-  // 캘린더 월 관리
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  // --- 초기화 및 인증 ---
+  // --- (Rule 3) 초기화 및 인증 ---
   useEffect(() => {
     const initAuth = async () => {
-      // Rule 3: Auth before Queries
-      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        // Custom token handling if needed
-      } else {
+      if (!auth.currentUser) {
         await signInAnonymously(auth);
       }
     };
     initAuth();
 
-    const unsubscribe = onAuthStateChanged(auth, (authenticatedUser) => {
-      setUser(authenticatedUser);
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
       setLoadingUser(false);
     });
     return () => unsubscribe();
@@ -70,13 +64,11 @@ const Dashboard = () => {
           const data = userDoc.data();
           setUserName(data.storeName || '글루넥스 파트너');
           
-          // [수정] 날씨 API용 지역명 처리 (한글 필터링 및 영어 강제 고정)
-          let regionName = 'Seoul'; // Default
+          // 날씨 API용 지역명 처리 (영어 강제 고정 로직 유지)
+          let regionName = 'Seoul';
           if (data.address) {
              const firstPart = data.address.split(' ')[0];
-             // 한글이 포함되어 있는지 체크하는 정규식
-             const hasKorean = /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(firstPart);
-             if (!hasKorean) {
+             if (!/[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(firstPart)) {
                 regionName = firstPart;
              }
           }
@@ -89,7 +81,7 @@ const Dashboard = () => {
     };
     loadUserData();
 
-    // Rule 1: Using strict path /artifacts/{appId}/public/data/{collectionName}
+    // (Rule 1) 스케줄 실시간 리스너
     const schedulesRef = collection(db, 'artifacts', appId, 'public', 'data', 'schedules');
     const unsubSchedules = onSnapshot(schedulesRef, (snapshot) => {
       const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -101,7 +93,6 @@ const Dashboard = () => {
 
   const calculateSalesData = async (uid) => {
     try {
-      // Rule 2: Simple query, avoid complex indexes
       const q = query(collection(db, "warranties"), where("userId", "==", uid));
       const snap = await getDocs(q);
       const now = new Date();
@@ -128,7 +119,6 @@ const Dashboard = () => {
       const API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
       if (!API_KEY) return;
       
-      // [중요] 지역명은 반드시 영어로 전달되어야 함
       const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${region}&appid=${API_KEY}&units=metric&lang=kr`);
       const data = await res.json();
       if (data.cod === 200) {
@@ -162,7 +152,7 @@ const Dashboard = () => {
     const formattedTime = `${String(h).padStart(2, '0')}:${minute}`;
 
     try {
-      const scheduleToSave = {
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'schedules'), {
         time: formattedTime,
         displayTime: `${ampm} ${hour}:${minute}`,
         carModel,
@@ -172,9 +162,7 @@ const Dashboard = () => {
         date: date || selectedDateStr,
         userId: user.uid,
         createdAt: new Date().toISOString()
-      };
-
-      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'schedules'), scheduleToSave);
+      });
       
       setShowAddModal(false);
       setNewSchedule({ 
@@ -197,8 +185,10 @@ const Dashboard = () => {
     return `${ampm} ${hour12}:${m}`;
   };
 
+  // [수정] 오늘 날짜 필터링 강화 및 유저 ID 체크 (Rule 2)
+  const todayStr = new Date().toISOString().split('T')[0];
   const todaySchedules = schedules
-    .filter(s => s.date === new Date().toISOString().split('T')[0])
+    .filter(s => s.date === todayStr && s.userId === user?.uid)
     .sort((a, b) => (a.time || "").localeCompare(b.time || ""));
 
   const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
@@ -228,7 +218,6 @@ const Dashboard = () => {
           <h2 className="text-xl font-black text-slate-900 tracking-tight truncate pr-2">{loadingUser ? '...' : userName}</h2>
         </div>
 
-        {/* [날씨/타겟 정보] */}
         <div className="flex items-center gap-2 bg-white/70 backdrop-blur-md px-3 py-2 rounded-full border border-slate-200 shadow-sm mx-2 shrink-0">
            <div className="flex items-center gap-1.5 border-r border-slate-200 pr-2">
               {weather.loading ? (
@@ -258,12 +247,13 @@ const Dashboard = () => {
         
         {view === 'main' ? (
           <div className="flex flex-col gap-4 animate-fade-in">
-            <div className="flex gap-3 h-[190px] shrink-0">
+            <div className="flex gap-3 h-[180px] shrink-0">
+              {/* [수정] 매출 현황 버튼 이동 기능 점검 */}
               <button 
-                onClick={() => navigate('/sales')}
-                className="flex-[1.4] bg-white rounded-[2.5rem] p-6 border border-slate-200 shadow-sm relative overflow-hidden group active:scale-[0.98] transition-all flex flex-col justify-between text-left"
+                onClick={() => navigate('/sales')} 
+                className="flex-[1.4] bg-white rounded-[2.5rem] p-6 border border-slate-200 shadow-sm relative overflow-hidden group active:scale-[0.98] transition-all flex flex-col justify-between text-left cursor-pointer"
               >
-                <div className="relative z-10 w-full">
+                <div className="relative z-10 w-full text-left">
                   <div className="flex items-center gap-1.5 mb-1 text-slate-400">
                     <Wallet size={12} />
                     <span className="text-[9px] font-black uppercase tracking-widest">Revenue</span>
@@ -274,7 +264,7 @@ const Dashboard = () => {
                   </div>
                 </div>
                 <div className="w-full h-px bg-slate-100 my-2" />
-                <div className="relative z-10 w-full">
+                <div className="relative z-10 w-full text-left">
                   <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest mb-1 block">Today Sales</span>
                   <div className="flex items-baseline gap-1">
                     <span className="text-lg font-black text-slate-800 tracking-tighter">{salesData.today.toLocaleString()}</span>
@@ -283,12 +273,11 @@ const Dashboard = () => {
                 </div>
               </button>
 
-              {/* [수정] 오늘의 스케줄 카드 - 레이아웃 및 배지 디자인 최적화 */}
               <button 
-                onClick={() => setView('calendar')}
+                onClick={() => setView('calendar')} 
                 className="flex-[1.1] bg-white rounded-[2.5rem] p-6 border border-slate-200 shadow-sm relative overflow-hidden flex flex-col group active:scale-[0.98] transition-all text-left"
               >
-                 <div className="absolute top-0 right-0 w-20 h-20 bg-blue-50 rounded-full blur-2xl -mr-10 -mt-10 group-hover:bg-blue-100 transition-colors" />
+                 <div className="absolute top-0 right-0 w-20 h-20 bg-blue-50 rounded-full blur-2xl -mr-10 -mt-10 group-hover:bg-blue-100" />
                  <div className="relative z-10 h-full flex flex-col justify-between">
                     <div>
                         <div className="flex items-center gap-1.5 mb-3">
@@ -316,12 +305,12 @@ const Dashboard = () => {
                     </div>
 
                     <div className="mt-2">
-                        {todaySchedules.length >= 3 ? (
+                        {todaySchedules.length >= 3 && (
                             <div className="flex items-center gap-1.5 bg-blue-50/80 px-2.5 py-1.5 rounded-xl border border-blue-100 animate-pulse mb-3">
                                 <Sparkles size={10} className="text-blue-600 fill-blue-600" />
-                                <span className="text-[9px] font-black text-blue-600 leading-none">오늘 총 {todaySchedules.length}건 시공 예정</span>
+                                <span className="text-[9px] font-black text-blue-600 leading-none">오늘 총 {todaySchedules.length}건 시공</span>
                             </div>
-                        ) : null}
+                        )}
                         
                         <div className="flex items-center justify-between text-[10px] font-black text-slate-300 group-hover:text-blue-600 transition-colors">
                             <span>Calendar</span>
@@ -332,10 +321,10 @@ const Dashboard = () => {
               </button>
             </div>
 
-            {/* 서비스 버튼 */}
+            {/* 메인 서비스 */}
             <div className="flex flex-col gap-3">
-              <button onClick={() => navigate('/creator')} className="bg-gradient-to-r from-indigo-50 to-white rounded-3xl border border-indigo-100 p-6 flex items-center justify-between group active:scale-[0.98] transition-all shadow-sm">
-                 <div className="flex flex-col items-start text-left">
+              <button onClick={() => navigate('/creator')} className="bg-gradient-to-r from-indigo-50 to-white rounded-3xl border border-indigo-100 p-6 flex items-center justify-between group active:scale-[0.98] transition-all shadow-sm text-left">
+                 <div className="flex flex-col items-start">
                     <div className="flex items-center gap-2 mb-1">
                        <div className="p-1.5 rounded-xl bg-indigo-600 text-white shadow-md shadow-indigo-200"><Sparkles size={14} className="fill-white" /></div>
                        <span className="text-base font-black text-indigo-900">AI 마케팅 에이전트</span>
@@ -345,8 +334,8 @@ const Dashboard = () => {
                  <ArrowUpRight size={18} className="text-slate-300 group-hover:text-indigo-500 transition-colors" />
               </button>
 
-              <button onClick={() => navigate('/create')} className="bg-white rounded-3xl border border-slate-200 p-6 flex items-center justify-between group active:scale-[0.98] transition-all shadow-sm">
-                 <div className="flex flex-col items-start text-left">
+              <button onClick={() => navigate('/create')} className="bg-white rounded-3xl border border-slate-200 p-6 flex items-center justify-between group active:scale-[0.98] transition-all shadow-sm text-left">
+                 <div className="flex flex-col items-start">
                     <div className="flex items-center gap-2 mb-1">
                        <div className="p-1.5 rounded-xl bg-amber-400 text-white shadow-md shadow-amber-100"><Crown size={14} className="fill-white" /></div>
                        <span className="text-base font-black text-slate-800">보증서 발행</span>
@@ -356,8 +345,8 @@ const Dashboard = () => {
                  <ArrowUpRight size={18} className="text-slate-300 group-hover:text-amber-500 transition-colors" />
               </button>
 
-              <button onClick={() => navigate('/marketing')} className="bg-white rounded-3xl border border-slate-200 p-6 flex items-center justify-between group active:scale-[0.98] transition-all shadow-sm">
-                 <div className="flex flex-col items-start text-left">
+              <button onClick={() => navigate('/marketing')} className="bg-white rounded-3xl border border-slate-200 p-6 flex items-center justify-between group active:scale-[0.98] transition-all shadow-sm text-left">
+                 <div className="flex flex-col items-start">
                     <div className="flex items-center gap-2 mb-1">
                        <div className="p-1.5 rounded-xl bg-blue-500 text-white shadow-md shadow-blue-100"><MessageSquare size={14} className="fill-white" /></div>
                        <span className="text-base font-black text-slate-800">단골 마케팅 센터</span>
@@ -393,8 +382,8 @@ const Dashboard = () => {
                   {padding.map(p => <div key={`p-${p}`} className="aspect-square"></div>)}
                   {days.map(d => {
                     const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                    const daySchedules = schedules.filter(s => s.date === dateStr);
-                    const isToday = new Date().toISOString().split('T')[0] === dateStr;
+                    const daySchedules = schedules.filter(s => s.date === dateStr && s.userId === user?.uid);
+                    const isToday = (new Date().toISOString().split('T')[0]) === dateStr;
                     const isSelected = selectedDateStr === dateStr;
 
                     return (
@@ -421,9 +410,9 @@ const Dashboard = () => {
 
              <div className="space-y-4 px-1">
                 <div className="flex justify-between items-end">
-                   <div>
+                   <div className="text-left">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Timeline</p>
-                      <h3 className="text-lg font-black text-slate-900">{selectedDateStr === new Date().toISOString().split('T')[0] ? '오늘의 일정' : `${selectedDateStr} 일정`}</h3>
+                      <h3 className="text-lg font-black text-slate-900">{selectedDateStr === (new Date().toISOString().split('T')[0]) ? '오늘의 일정' : `${selectedDateStr} 일정`}</h3>
                    </div>
                    <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-xl font-black text-xs shadow-lg active:scale-95 transition-all">
                       <Plus size={14} /> 일정 추가
@@ -431,10 +420,10 @@ const Dashboard = () => {
                 </div>
                 
                 <div className="space-y-3">
-                   {schedules.filter(s => s.date === selectedDateStr).length > 0 ? (
-                      schedules.filter(s => s.date === selectedDateStr).sort((a,b)=> (a.time || "").localeCompare(b.time || "")).map(s => (
+                   {schedules.filter(s => s.date === selectedDateStr && s.userId === user?.uid).length > 0 ? (
+                      schedules.filter(s => s.date === selectedDateStr && s.userId === user?.uid).sort((a,b)=> (a.time || "").localeCompare(b.time || "")).map(s => (
                         <div key={s.id} className="bg-white p-5 rounded-[2rem] flex justify-between items-center border border-slate-100 shadow-sm animate-fade-in-up">
-                           <div className="flex items-center gap-4">
+                           <div className="flex items-center gap-4 text-left">
                               <div className="w-14 h-14 rounded-2xl bg-blue-50 flex flex-col items-center justify-center text-blue-600 font-black border border-blue-100">
                                  <span className="text-[9px] uppercase">{s.time.split(':')[0] < 12 ? 'AM' : 'PM'}</span>
                                  <span className="text-xs">{formatTimeDisplay(s.time).split(' ')[1]}</span>
@@ -452,9 +441,7 @@ const Dashboard = () => {
                       ))
                    ) : (
                       <div className="py-16 text-center bg-white rounded-[2.5rem] border border-dashed border-slate-200">
-                         <div className="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center mx-auto mb-3">
-                            <Clock size={20} className="text-slate-300" />
-                         </div>
+                         <Clock size={20} className="text-slate-300 mx-auto mb-3" />
                          <p className="text-xs text-slate-400 font-bold">등록된 시공 일정이 없습니다.</p>
                       </div>
                    )}
@@ -471,10 +458,10 @@ const Dashboard = () => {
       {/* 예약 등록 모달 */}
       {showAddModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in" onClick={() => setShowAddModal(false)}>
-           <div className="bg-white w-full max-w-sm rounded-[3rem] shadow-2xl relative flex flex-col p-8 overflow-hidden" onClick={e => e.stopPropagation()}>
+           <div className="bg-white w-full max-w-sm rounded-[3rem] shadow-2xl relative flex flex-col p-8 pb-10 overflow-hidden" onClick={e => e.stopPropagation()}>
               <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full -mr-16 -mt-16 opacity-50"></div>
               
-              <div className="flex justify-between items-center mb-8 relative z-10">
+              <div className="flex justify-between items-center mb-8 relative z-10 text-left">
                  <div>
                     <h3 className="text-xl font-black text-slate-900 tracking-tight">예약 등록</h3>
                     <p className="text-[10px] text-blue-600 font-bold uppercase tracking-widest mt-1">{newSchedule.date}</p>
@@ -482,8 +469,8 @@ const Dashboard = () => {
                  <button onClick={() => setShowAddModal(false)} className="p-2.5 bg-slate-50 rounded-full text-slate-400 active:scale-90"><X size={20}/></button>
               </div>
 
-              <div className="space-y-4 relative z-10 overflow-y-auto max-h-[70vh] pr-1 scrollbar-hide">
-                 <div className="space-y-1.5">
+              <div className="space-y-4 relative z-10 overflow-y-auto max-h-[70vh] pr-1 scrollbar-hide text-left">
+                 <div className="space-y-1.5 text-left">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Reservation Time</p>
                     <div className="grid grid-cols-3 gap-2">
                        <div className="relative group">
@@ -522,7 +509,7 @@ const Dashboard = () => {
                     </div>
                  </div>
 
-                 <div className="space-y-1.5">
+                 <div className="space-y-1.5 text-left">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Car Model</p>
                     <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3 focus-within:border-blue-500 transition-colors">
                       <input 
@@ -538,7 +525,7 @@ const Dashboard = () => {
                     </div>
                  </div>
 
-                 <div className="space-y-1.5">
+                 <div className="space-y-1.5 text-left">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Service Item</p>
                     <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3 focus-within:border-blue-500 transition-colors">
                       <input 
@@ -554,7 +541,7 @@ const Dashboard = () => {
                     </div>
                  </div>
 
-                 <div className="space-y-1.5">
+                 <div className="space-y-1.5 text-left">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Amount (KRW)</p>
                     <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3 focus-within:border-blue-500 transition-colors">
                       <input 
@@ -567,13 +554,13 @@ const Dashboard = () => {
                     </div>
                  </div>
 
-                 <div className="space-y-1.5">
+                 <div className="space-y-1.5 text-left">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Customer Phone</p>
                     <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3 focus-within:border-blue-500 transition-colors">
                       <input 
                         type="tel" 
                         placeholder="010-0000-0000" 
-                        className="bg-transparent text-sm font-black w-full outline-none" 
+                        className="bg-transparent text-sm font-bold w-full outline-none" 
                         value={newSchedule.phone} 
                         onChange={(e) => {
                           const val = e.target.value;
