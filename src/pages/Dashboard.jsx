@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  User, Calendar, Clock, Sparkles, Loader2, Wallet, ArrowUpRight, ChevronRight, CloudRain, Sun, MessageSquare, Crown
+  User, Calendar, Clock, Sparkles, Loader2, Wallet, ArrowUpRight, ChevronRight, CloudRain, Sun, MessageSquare, Crown, AlertTriangle, RefreshCw
 } from 'lucide-react';
 import { auth, db } from '../firebase';
 import { doc, getDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
@@ -12,8 +12,10 @@ const Dashboard = () => {
   const appId = typeof __app_id !== 'undefined' ? __app_id : 'glunex-app';
   
   const [userName, setUserName] = useState('파트너');
-  const [user, setUser] = useState(auth.currentUser);
+  const [user, setUser] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [loadingUser, setLoadingUser] = useState(true);
+  
   const [weather, setWeather] = useState({ temp: 0, status: 'clear', region: 'Seoul', targetCustomers: 0, loading: true });
   const [salesData, setSalesData] = useState({ today: 0, monthTotal: 0 });
   const [schedules, setSchedules] = useState([]);
@@ -23,15 +25,15 @@ const Dashboard = () => {
   useEffect(() => {
     let isMounted = true;
     
-    // 이미 로그인 정보가 있는 경우 즉시 세팅
-    if (auth.currentUser) {
-      setUser(auth.currentUser);
-      setLoadingUser(false);
-    }
-
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       if (isMounted) {
-        setUser(u);
+        if (u) {
+            setUser(u);
+        } else {
+            console.warn("Dashboard: Redirect to login");
+            navigate('/login');
+        }
+        setAuthChecked(true);
         setLoadingUser(false);
       }
     });
@@ -39,11 +41,12 @@ const Dashboard = () => {
     const safetyTimer = setTimeout(() => { if (isMounted) setLoadingUser(false); }, 3000);
 
     return () => { isMounted = false; unsubscribe(); clearTimeout(safetyTimer); };
-  }, []);
+  }, [navigate]);
 
-  // --- 데이터 페칭 (인증 가드) ---
+  // --- 데이터 페칭 (인증 가드 필히 준수) ---
   useEffect(() => {
-    if (!user) return;
+    if (!user || !authChecked) return;
+
     const loadUserData = async () => {
       try {
         const userDoc = await getDoc(doc(db, "users", user.uid));
@@ -53,7 +56,7 @@ const Dashboard = () => {
         }
         fetchRealWeather('Seoul');
         await calculateSalesData(user.uid);
-      } catch (e) { console.error(e); }
+      } catch (e) { console.error("User Load Error:", e); }
     };
     loadUserData();
 
@@ -62,26 +65,28 @@ const Dashboard = () => {
     const unsubSchedules = onSnapshot(schedulesRef, (snapshot) => {
       const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setSchedules(list);
-    }, (err) => console.warn("Dashboard Listener Error:", err));
+    }, (err) => console.warn("Dashboard Schedules Error:", err.code));
 
     return () => unsubSchedules();
-  }, [user, appId]);
+  }, [user, authChecked, appId]);
 
   const calculateSalesData = async (uid) => {
-    const q = query(collection(db, "warranties"), where("userId", "==", uid));
-    const snap = await getDocs(q);
-    const now = new Date();
-    let monthTotal = 0, todayTotal = 0, targets = 0;
-    snap.forEach(doc => {
-      const data = doc.data();
-      const date = new Date(data.issuedAt);
-      const price = Number(String(data.price || "0").replace(/[^0-9]/g, '')) || 0;
-      if (date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()) monthTotal += price;
-      if (date.toDateString() === now.toDateString()) todayTotal += price;
-      if ((data.serviceType === 'wash' || data.serviceType === 'detailing')) targets++;
-    });
-    setSalesData({ monthTotal, today: todayTotal });
-    setWeather(prev => ({ ...prev, targetCustomers: targets }));
+    try {
+        const q = query(collection(db, "warranties"), where("userId", "==", uid));
+        const snap = await getDocs(q);
+        const now = new Date();
+        let monthTotal = 0, todayTotal = 0, targets = 0;
+        snap.forEach(doc => {
+          const data = doc.data();
+          const date = new Date(data.issuedAt);
+          const price = Number(String(data.price || "0").replace(/[^0-9]/g, '')) || 0;
+          if (date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()) monthTotal += price;
+          if (date.toDateString() === now.toDateString()) todayTotal += price;
+          if (data.serviceType === 'wash' || data.serviceType === 'detailing') targets++;
+        });
+        setSalesData({ monthTotal, today: todayTotal });
+        setWeather(prev => ({ ...prev, targetCustomers: targets }));
+    } catch (e) { console.error("Sales Calc Error:", e); }
   };
 
   const fetchRealWeather = async (region) => {
@@ -98,6 +103,15 @@ const Dashboard = () => {
     .filter(s => s.date === todayStr && s.userId === user?.uid)
     .sort((a, b) => (a.time || "").localeCompare(b.time || ""));
 
+  if (loadingUser) {
+    return (
+        <div className="h-full flex flex-col items-center justify-center bg-white p-8">
+            <Loader2 className="animate-spin text-blue-600 mb-4" size={40} />
+            <p className="text-sm font-black text-slate-900 tracking-tight">사장님 계정 확인 중...</p>
+        </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full w-full bg-[#F8F9FB] overflow-hidden max-w-md mx-auto shadow-2xl relative select-none">
       <div className="absolute inset-0 pointer-events-none">
@@ -111,7 +125,7 @@ const Dashboard = () => {
             <span className="w-1.5 h-1.5 bg-[#D4AF37] rounded-full" />
             <span className="text-[10px] font-bold text-slate-500 uppercase">GLUNEX PARTNER</span>
           </div>
-          <h2 className="text-xl font-black text-slate-900 tracking-tight truncate pr-2">{loadingUser ? '...' : userName}</h2>
+          <h2 className="text-xl font-black text-slate-900 tracking-tight truncate pr-2">{userName}</h2>
         </div>
         <div className="flex items-center gap-2 bg-white/70 backdrop-blur-md px-3 py-2 rounded-full border border-slate-200 shadow-sm mx-2">
            <div className="flex items-center gap-1.5 border-r border-slate-200 pr-2">
@@ -132,19 +146,19 @@ const Dashboard = () => {
 
       <div className="flex-1 flex flex-col px-5 pb-6 gap-4 z-10 min-h-0 overflow-y-auto scrollbar-hide">
             <div className="flex gap-3 h-[180px] shrink-0">
-              <button onClick={() => navigate('/sales')} className="flex-[1.4] bg-white rounded-[2.5rem] p-6 border border-slate-200 shadow-sm flex flex-col justify-between text-left">
+              <button onClick={() => navigate('/sales')} className="flex-[1.4] bg-white rounded-[2.5rem] p-6 border border-slate-200 shadow-sm flex flex-col justify-between text-left active:scale-[0.98] transition-all">
                 <div className="w-full">
                   <div className="flex items-center gap-1.5 mb-1 text-slate-400"><Wallet size={12} /><span className="text-[9px] font-black uppercase tracking-tighter">{currentMonth}월 실적 리포트</span></div>
                   <div className="flex items-baseline gap-1"><span className="text-2xl font-black text-slate-900 tracking-tighter">{salesData.monthTotal.toLocaleString()}</span><span className="text-xs font-bold text-slate-400">원</span></div>
                 </div>
                 <div className="w-full h-px bg-slate-100 my-2" />
                 <div className="w-full">
-                  <span className="text-[9px] font-black text-blue-600 uppercase mb-1 block">Today Sales</span>
+                  <span className="text-[9px] font-black text-blue-600 uppercase mb-1 block font-noto">Today Sales</span>
                   <div className="flex items-baseline gap-1"><span className="text-lg font-black text-slate-800 tracking-tighter">{salesData.today.toLocaleString()}</span><span className="text-[10px] font-bold text-slate-400">원</span></div>
                 </div>
               </button>
 
-              <button onClick={() => navigate('/scheduler')} className="flex-[1.1] bg-white rounded-[2.5rem] p-6 border border-slate-200 shadow-sm flex flex-col justify-between text-left relative overflow-hidden">
+              <button onClick={() => navigate('/scheduler')} className="flex-[1.1] bg-white rounded-[2.5rem] p-6 border border-slate-200 shadow-sm flex flex-col justify-between text-left relative overflow-hidden active:scale-[0.98] transition-all">
                  <div className="absolute top-0 right-0 w-20 h-20 bg-blue-50 rounded-full blur-2xl -mr-10 -mt-10" />
                  <div className="relative z-10 h-full flex flex-col justify-between">
                     <div>
@@ -159,7 +173,7 @@ const Dashboard = () => {
                         </div>
                     </div>
                     <div className="mt-2">
-                        {todaySchedules.length >= 3 && <div className="bg-blue-50 px-2 py-1 rounded-lg mb-2"><span className="text-[9px] font-black text-blue-600">총 {todaySchedules.length}건 시공</span></div>}
+                        {todaySchedules.length >= 3 && <div className="bg-blue-50 px-2 py-1 rounded-lg mb-2 text-center"><span className="text-[9px] font-black text-blue-600">총 {todaySchedules.length}건 시공</span></div>}
                         <div className="flex items-center justify-between text-[10px] font-black text-slate-300"><span>Calendar</span><ChevronRight size={12} /></div>
                     </div>
                  </div>
@@ -168,15 +182,15 @@ const Dashboard = () => {
 
             <div className="flex flex-col gap-3">
               <button onClick={() => navigate('/creator')} className="bg-white rounded-3xl border border-slate-200 p-6 flex items-center justify-between shadow-sm text-left active:scale-[0.98] transition-all">
-                 <div className="flex flex-col items-start"><div className="flex items-center gap-2 mb-1"><div className="p-1.5 rounded-xl bg-indigo-600 text-white shadow-md shadow-indigo-100"><Sparkles size={14} className="fill-white" /></div><span className="text-base font-black text-indigo-900">AI 마케팅 에이전트</span></div><span className="text-xs text-slate-500 font-medium tracking-tight">블로그/인스타 포스팅 10초 완성</span></div>
+                 <div className="flex flex-col items-start text-left"><div className="flex items-center gap-2 mb-1"><div className="p-1.5 rounded-xl bg-indigo-600 text-white shadow-md shadow-indigo-100"><Sparkles size={14} className="fill-white" /></div><span className="text-base font-black text-indigo-900">AI 마케팅 에이전트</span></div><span className="text-xs text-slate-500 font-medium tracking-tight">블로그/인스타 포스팅 10초 완성</span></div>
                  <ArrowUpRight size={18} className="text-slate-300" />
               </button>
               <button onClick={() => navigate('/create')} className="bg-white rounded-3xl border border-slate-200 p-6 flex items-center justify-between shadow-sm text-left active:scale-[0.98] transition-all">
-                 <div className="flex flex-col items-start"><div className="flex items-center gap-2 mb-1"><div className="p-1.5 rounded-xl bg-amber-400 text-white shadow-md shadow-amber-100"><Crown size={14} className="fill-white" /></div><span className="text-base font-black text-slate-800">보증서 발행</span></div><span className="text-xs text-slate-500 font-medium tracking-tight">보험수리 대응 공식 시공 보증서 발급</span></div>
+                 <div className="flex flex-col items-start text-left"><div className="flex items-center gap-2 mb-1"><div className="p-1.5 rounded-xl bg-amber-400 text-white shadow-md shadow-amber-100"><Crown size={14} className="fill-white" /></div><span className="text-base font-black text-slate-800">보증서 발행</span></div><span className="text-xs text-slate-500 font-medium tracking-tight">보험수리 대응 공식 시공 보증서 발급</span></div>
                  <ArrowUpRight size={18} className="text-slate-300" />
               </button>
               <button onClick={() => navigate('/marketing')} className="bg-white rounded-3xl border border-slate-200 p-6 flex items-center justify-between shadow-sm text-left active:scale-[0.98] transition-all">
-                 <div className="flex flex-col items-start"><div className="flex items-center gap-2 mb-1"><div className="p-1.5 rounded-xl bg-blue-500 text-white shadow-md shadow-blue-100"><MessageSquare size={14} className="fill-white" /></div><span className="text-base font-black text-slate-800">단골 마케팅 센터</span></div><span className="text-xs text-slate-500 font-medium tracking-tight">재방문 유도 알림톡 및 고객 관리</span></div>
+                 <div className="flex flex-col items-start text-left"><div className="flex items-center gap-2 mb-1"><div className="p-1.5 rounded-xl bg-blue-500 text-white shadow-md shadow-blue-100"><MessageSquare size={14} className="fill-white" /></div><span className="text-base font-black text-slate-800">단골 마케팅 센터</span></div><span className="text-xs text-slate-500 font-medium tracking-tight">재방문 유도 알림톡 및 고객 관리</span></div>
                  <ArrowUpRight size={18} className="text-slate-300" />
               </button>
             </div>
