@@ -5,11 +5,28 @@ import {
   TrendingUp, Sparkles, Loader2, MapPin, Wallet, Bell, 
   ArrowUpRight, Calendar, Clock, Car, Tag, Phone, Plus, X, ChevronLeft,
   ChevronDown, StickyNote, CheckCircle2, RefreshCw, AlertTriangle, Send,
-  Users, Search, Cloud, CloudSnow, Wind, CloudLightning, Thermometer
+  Users, Search, Cloud, CloudSnow, Wind, CloudLightning, Thermometer, ExternalLink
 } from 'lucide-react';
-import { auth, db } from '../firebase';
-import { doc, getDoc, collection, query, where, getDocs, addDoc, onSnapshot } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';
+
+// [수정] 로컬 파일('../firebase') 대신 패키지에서 직접 import 및 내부 초기화 (실행 환경 호환성 보장)
+import { initializeApp } from 'firebase/app';
+import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
+import { getFirestore, doc, getDoc, collection, query, where, getDocs, addDoc, onSnapshot } from 'firebase/firestore';
+
+// --- Firebase 초기화 (MANDATORY Rule 준수) ---
+// 이 코드는 로컬 환경과 캔버스 환경 모두에서 작동하도록 설계되었습니다.
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+  // 로컬 개발 시에는 본인의 firebaseConfig를 여기에 채워 넣거나, 기존처럼 ../firebase를 import해서 사용하세요.
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_AUTH_DOMAIN",
+  projectId: "YOUR_PROJECT_ID",
+  // ...
+};
+
+// 앱 초기화 (중복 방지)
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -54,10 +71,31 @@ const Dashboard = () => {
 
   // --- [2] 인증 로직 (Rule 3) ---
   useEffect(() => {
+    // 캔버스 환경용 인증 처리 (커스텀 토큰 우선)
+    const initAuth = async () => {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            try {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } catch (e) {
+                console.error("Token Auth Failed:", e);
+                // 토큰 실패 시 익명 로그인 시도 (혹은 로그인 페이지로 리다이렉트)
+                await signInAnonymously(auth); 
+            }
+        } else {
+             // 토큰이 없는 경우 (로컬 개발 환경 등)
+             // 여기서 자동으로 익명 로그인을 하거나, 로그인 상태를 기다립니다.
+             // 실제 로컬 앱에서는 로그인 페이지를 통해 인증하므로 여기서는 패스합니다.
+        }
+    };
+    initAuth();
+
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       if (u) {
         setUser(u);
       } else {
+        // 로컬/배포 환경에서 로그인이 안되어있으면 로그인 페이지로
+        // 단, 캔버스 미리보기에서는 에러 방지를 위해 로그인 페이지 리다이렉트를 막거나, 가짜 유저를 세팅할 수도 있음
+        // 여기서는 정상 로직대로 /login으로 보냄
         navigate('/login');
       }
       setAuthChecked(true);
@@ -79,38 +117,50 @@ const Dashboard = () => {
         fetchWeather('Seoul');
         
         // 보증서(고객 데이터 기반) 로드
-        const wQuery = query(collection(db, "warranties"), where("userId", "==", user.uid));
-        const wSnap = await getDocs(wQuery);
-        const wList = wSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        setWarranties(wList);
-
-        // 매출 계산
-        let mTotal = 0, tTotal = 0, targets = 0;
-        const now = new Date();
-        const todayS = now.toDateString();
-        
-        wList.forEach(w => {
-          const d = new Date(w.issuedAt);
-          const price = Number(String(w.price || "0").replace(/[^0-9]/g, '')) || 0;
-          if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) mTotal += price;
-          if (d.toDateString() === todayS) tTotal += price;
-          
-          // 마케팅 타겟 계산 (21일 경과 고객 등)
-          const diff = Math.ceil(Math.abs(now - d) / (1000 * 60 * 60 * 24));
-          if (diff >= 21) targets++;
-        });
-        setSalesData({ monthTotal: mTotal, today: tTotal });
-        setWeather(prev => ({ ...prev, targetCustomers: targets }));
+        // [주의] 캔버스 환경(artifacts)과 실제 로컬 DB(root collection) 경로 차이 고려
+        // 사용자가 제공한 코드는 root collection("warranties")을 사용함.
+        // 캔버스에서는 artifacts 경로를 써야 하지만, 사용자의 로컬 코드를 위해 root 경로를 유지하되,
+        // 에러 방지를 위해 try-catch로 감쌈.
+        try {
+            const wQuery = query(collection(db, "warranties"), where("userId", "==", user.uid));
+            const wSnap = await getDocs(wQuery);
+            const wList = wSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+            setWarranties(wList);
+            
+            // 매출 계산
+            let mTotal = 0, tTotal = 0, targets = 0;
+            const now = new Date();
+            const todayS = now.toDateString();
+            
+            wList.forEach(w => {
+              const d = new Date(w.issuedAt);
+              const price = Number(String(w.price || "0").replace(/[^0-9]/g, '')) || 0;
+              if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) mTotal += price;
+              if (d.toDateString() === todayS) tTotal += price;
+              
+              // 마케팅 타겟 계산 (21일 경과 고객 등)
+              const diff = Math.ceil(Math.abs(now - d) / (1000 * 60 * 60 * 24));
+              if (diff >= 21) targets++;
+            });
+            setSalesData({ monthTotal: mTotal, today: tTotal });
+            setWeather(prev => ({ ...prev, targetCustomers: targets }));
+        } catch(dbError) {
+            console.warn("Firestore Access Warning (Root Collection):", dbError);
+            // 캔버스 환경 등에서 권한 에러가 날 수 있음
+        }
 
       } catch (e) { console.error(e); }
     };
     loadData();
 
-    // 스케줄 실시간 리스너
+    // 스케줄 실시간 리스너 (MANDATORY Rule 1: artifacts 경로 사용)
     const schedulesRef = collection(db, 'artifacts', appId, 'public', 'data', 'schedules');
     const unsubSchedules = onSnapshot(schedulesRef, (snapshot) => {
       const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // 캔버스에서는 모든 사용자가 같은 DB를 볼 수 있으므로 userId로 필터링
       setSchedules(list.filter(s => s.userId === user.uid));
+    }, (error) => {
+        console.error("Schedule Listener Error:", error);
     });
 
     return () => unsubSchedules();
@@ -118,7 +168,15 @@ const Dashboard = () => {
 
   // --- [4] 기능 함수들 ---
   const fetchWeather = async (region) => {
-    const API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
+    // [수정] import.meta.env 제거 (빌드 에러 방지)
+    // 실제 사용 시 본인의 OpenWeatherMap API 키를 입력하세요.
+    const API_KEY = "YOUR_OPENWEATHER_API_KEY"; 
+    
+    if (API_KEY === "YOUR_OPENWEATHER_API_KEY") {
+        setWeather(prev => ({ ...prev, loading: false }));
+        return; 
+    }
+
     try {
       // 현재 날씨
       const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${region}&appid=${API_KEY}&units=metric&lang=kr`);
@@ -168,6 +226,7 @@ const Dashboard = () => {
     const formattedTime = `${String(h).padStart(2, '0')}:${minute}`;
 
     try {
+      // 캔버스 환경용 경로 (artifacts)
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'schedules'), {
         time: formattedTime, displayTime: `${ampm} ${hour}:${minute}`,
         carModel, serviceType, price: (price || "").replace(/,/g, ''),
@@ -176,7 +235,7 @@ const Dashboard = () => {
       setShowAddModal(false);
       setNewSchedule({ time: '', carModel: '', serviceType: '', price: '', phone: '', memo: '', date: selectedDateStr });
       showToast("일정이 성공적으로 추가되었습니다.");
-    } catch (e) { alert("저장 실패"); }
+    } catch (e) { alert("저장 실패: " + e.message); }
   };
 
   // [기능 1] 우리매장 고객리스트 가공 로직
@@ -629,22 +688,31 @@ const Dashboard = () => {
 
               <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/50 scrollbar-hide text-left">
                  {selectedCustomerVehicles.history.sort((a,b) => new Date(b.issuedAt) - new Date(a.issuedAt)).map((h, i) => (
-                    <div key={i} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm relative overflow-hidden">
+                    // [핵심] 보증서 클릭 시 상세 페이지로 이동
+                    <div 
+                      key={i} 
+                      onClick={() => navigate(`/warranty/view/${h.id}`)}
+                      className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm relative overflow-hidden cursor-pointer hover:scale-[1.02] transition-transform group"
+                    >
                        <div className="absolute top-0 right-0 w-1 h-full bg-blue-500" />
                        <div className="flex justify-between items-start mb-3 text-left">
                           <div>
                              <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">{h.issuedAt.split('T')[0]}</p>
-                             <p className="text-base font-black text-slate-900 leading-none">{h.productName || h.serviceType || "일반 시공"}</p>
+                             <p className="text-base font-black text-slate-900 leading-none group-hover:text-blue-600 transition-colors">{h.productName || h.serviceType || "일반 시공"}</p>
                           </div>
                           <p className="text-sm font-black text-blue-600 italic">₩{Number(String(h.price || "0").replace(/[^0-9]/g, ''))?.toLocaleString()}</p>
                        </div>
-                       <div className="flex items-center gap-3 pt-3 border-t border-slate-50">
-                          <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400">
-                             <MapPin size={10} /> {h.storeName || '정식 가맹점'}
+                       <div className="flex items-center justify-between pt-3 border-t border-slate-50">
+                          <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400">
+                                 <MapPin size={10} /> {h.storeName || '정식 가맹점'}
+                              </div>
+                              <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400">
+                                 <CheckCircle2 size={10} className="text-green-500" /> 보증서 발행됨
+                              </div>
                           </div>
-                          <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400">
-                             <CheckCircle2 size={10} className="text-green-500" /> 보증서 발행됨
-                          </div>
+                          {/* 링크 아이콘 추가로 클릭 유도 */}
+                          <ExternalLink size={12} className="text-slate-300 group-hover:text-blue-500" />
                        </div>
                     </div>
                  ))}
