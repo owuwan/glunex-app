@@ -17,6 +17,7 @@ import {
 
 const Scheduler = () => {
   const navigate = useNavigate();
+  // 환경 변수 안전하게 가져오기
   const appId = typeof __app_id !== 'undefined' ? __app_id : 'glunex-app';
 
   // --- 상태 관리 ---
@@ -40,63 +41,75 @@ const Scheduler = () => {
     setTimeout(() => setToastMsg(""), 3000);
   };
 
-  // --- [Rule 3] 인증 로직 강화 ---
+  // --- [Rule 3] 인증 로직 강화 및 세이프티 가드 ---
   useEffect(() => {
+    let isMounted = true;
+
     const initAuth = async () => {
       try {
-        // 커스텀 토큰이 있는지 먼저 확인
+        // 1. 커스텀 토큰 우선 처리
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
           await signInWithCustomToken(auth, __initial_auth_token);
-        } else if (!auth.currentUser) {
-          // 토큰이 없고 로그인이 안 되어 있다면 익명 로그인 시도
+        } 
+        // 2. 이미 로그인된 유저가 없다면 익명 로그인 시도
+        else if (!auth.currentUser) {
           await signInAnonymously(auth);
         }
       } catch (err) {
-        console.error("인증 초기화 실패:", err);
-        // 인증에 실패하더라도 로딩은 해제하여 빈 화면 방지
-        setLoading(false);
+        console.error("인증 시도 중 제한된 작업 오류 발생:", err);
+        // 에러가 나더라도 로딩은 풀어줘야 화면이 보임
+        if (isMounted) setLoading(false);
       }
     };
+
     initAuth();
 
     const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      // 유저 정보가 확정되면 로딩 해제 (유저가 null이더라도 로딩은 끝내야 함)
-      if (u) {
-        setLoading(false);
-      } else {
-        // 익명 로그인조차 실패한 경우 3초 후 강제 로딩 해제 (예비 방책)
-        setTimeout(() => setLoading(false), 3000);
+      if (isMounted) {
+        setUser(u);
+        // 유저 정보가 확인되면 일단 로딩 해제 시도
+        if (u) setLoading(false);
       }
     });
-    return () => unsubscribe();
+
+    // 무한 로딩 방지용 타이머 (5초 후 강제 로딩 해제)
+    const safetyTimer = setTimeout(() => {
+      if (isMounted) setLoading(false);
+    }, 5000);
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+      clearTimeout(safetyTimer);
+    };
   }, []);
 
-  // --- [Rule 1 & 2] 데이터 페칭 (인증 가드 적용) ---
+  // --- [Rule 1 & 2] 데이터 페칭 (에러 핸들링 포함) ---
   useEffect(() => {
-    // 유저가 없으면 쿼리를 실행하지 않음 (권한 에러 방지)
+    // 유저 인증이 완료되기 전에는 Firestore 접근 금지 (Rule 3)
     if (!user) return;
 
     // Rule 1: 지정된 경로 사용
     const schedulesRef = collection(db, 'artifacts', appId, 'public', 'data', 'schedules');
     
-    // 실시간 리스너 설정
+    // 실시간 리스너 설정 (에러 콜백 필수)
     const unsub = onSnapshot(schedulesRef, (snapshot) => {
       const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
-      // Rule 2: 메모리 내에서 필터링
+      // Rule 2: 쿼리 대신 메모리 내에서 유저별 필터링
       const mySchedules = list.filter(s => s.userId === user.uid);
       setSchedules(mySchedules);
       setLoading(false);
     }, (err) => {
-      console.error("Firestore 리스너 에러:", err);
+      console.error("Firestore 실시간 리스너 권한 에러:", err);
+      // 에러 시에도 로딩은 해제
       setLoading(false);
     });
 
     return () => unsub();
   }, [user, appId]);
 
-  // 금액/전화번호 포매팅 (사용자 요청 사항 유지)
+  // 금액/전화번호 포매팅
   const handlePriceInput = (e) => {
     const val = e.target.value.replace(/[^0-9]/g, "").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     setNewSchedule(p => ({ ...p, price: val }));
@@ -116,7 +129,7 @@ const Scheduler = () => {
     
     if (!ampm || !hour || !minute) return alert("예약 시간을 선택해주세요.");
     if (!carModel.trim() || !serviceType.trim()) return alert("필수 항목을 입력해주세요.");
-    if (!user) return alert("인증 정보가 없습니다. 다시 로그인해 주세요.");
+    if (!user) return alert("인증 정보가 없습니다. 잠시 후 다시 시도해 주세요.");
     
     let h = parseInt(hour);
     if (ampm === '오후' && h < 12) h += 12;
@@ -145,8 +158,8 @@ const Scheduler = () => {
       setTimeParts({ ampm: '', hour: '', minute: '' });
       showToast("일정이 성공적으로 추가되었습니다!");
     } catch (e) { 
-      console.error(e);
-      alert("저장에 실패했습니다."); 
+      console.error("데이터 저장 실패:", e);
+      alert("일정 저장에 실패했습니다."); 
     }
   };
 
@@ -159,7 +172,7 @@ const Scheduler = () => {
     return (
       <div className="h-full flex flex-col items-center justify-center bg-white">
         <Loader2 className="animate-spin text-blue-600 mb-4" size={32} />
-        <p className="text-sm font-bold text-slate-400">데이터를 불러오는 중...</p>
+        <p className="text-sm font-bold text-slate-400 tracking-tight">계정 정보를 확인하는 중입니다...</p>
       </div>
     );
   }
@@ -177,7 +190,7 @@ const Scheduler = () => {
 
       {/* 헤더 */}
       <header className="px-5 pt-12 pb-4 flex items-center justify-between bg-white border-b border-slate-100 z-10 shrink-0">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 text-left">
             <button onClick={() => navigate('/dashboard')} className="p-1.5 hover:bg-slate-50 rounded-full text-slate-400 active:scale-90 transition-all"><ArrowLeft size={22} /></button>
             <h1 className="text-xl font-black text-slate-900 tracking-tight italic">시공 <span className="text-blue-600">스케줄러</span></h1>
         </div>
@@ -237,7 +250,7 @@ const Scheduler = () => {
               {schedules.filter(s => s.date === selectedDateStr).length > 0 ? (
                 schedules.filter(s => s.date === selectedDateStr).sort((a,b)=> (a.time || "").localeCompare(b.time || "")).map(s => (
                   <div key={s.id} className="bg-white p-5 rounded-[2rem] flex justify-between items-center border border-slate-100 shadow-sm animate-fade-in-up">
-                     <div className="flex items-center gap-4">
+                     <div className="flex items-center gap-4 text-left">
                         <div className="w-14 h-14 rounded-2xl bg-blue-50 flex flex-col items-center justify-center text-blue-600 font-black border border-blue-100">
                            <span className="text-[9px] uppercase">{s.time < '12:00' ? 'AM' : 'PM'}</span>
                            <span className="text-xs">
@@ -273,7 +286,7 @@ const Scheduler = () => {
               <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full -mr-16 -mt-16 opacity-50" />
               
               <div className="flex justify-between items-center mb-6 relative z-10 text-left">
-                 <div>
+                 <div className="text-left">
                    <h3 className="text-xl font-black text-slate-900">예약 등록</h3>
                    <p className="text-[10px] text-blue-600 font-bold uppercase tracking-widest mt-1">{newSchedule.date}</p>
                  </div>
@@ -281,7 +294,7 @@ const Scheduler = () => {
               </div>
 
               <div className="space-y-4 relative z-10 overflow-y-auto max-h-[65vh] pr-1 scrollbar-hide text-left">
-                 <div className="space-y-1.5">
+                 <div className="space-y-1.5 text-left">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Reservation Time</p>
                     <div className="grid grid-cols-3 gap-2">
                        <select className="appearance-none bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm font-bold outline-none focus:border-blue-500" value={timeParts.ampm} onChange={(e) => setTimeParts(p => ({ ...p, ampm: e.target.value }))}>
@@ -293,26 +306,26 @@ const Scheduler = () => {
                     </div>
                  </div>
 
-                 <div className="space-y-1.5">
+                 <div className="space-y-1.5 text-left">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Work Details</p>
                     <div className="space-y-2">
-                        <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3">
+                        <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3 focus-within:border-blue-500 transition-colors">
                            <Car size={18} className="text-slate-400" />
                            <input placeholder="차종 (예: BMW 5)" className="bg-transparent text-sm font-bold w-full outline-none" value={newSchedule.carModel} onChange={e=>setNewSchedule(p=>({...p, carModel:e.target.value}))}/>
                         </div>
-                        <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3">
+                        <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3 focus-within:border-blue-500 transition-colors">
                            <Tag size={18} className="text-slate-400" />
                            <input placeholder="시공품목" className="bg-transparent text-sm font-bold w-full outline-none" value={newSchedule.serviceType} onChange={e=>setNewSchedule(p=>({...p, serviceType:e.target.value}))}/>
                         </div>
-                        <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3">
+                        <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3 focus-within:border-blue-500 transition-colors">
                            <Wallet size={18} className="text-slate-400" />
                            <input placeholder="시공금액" className="bg-transparent text-sm font-bold w-full outline-none" value={newSchedule.price} onChange={handlePriceInput}/>
                         </div>
-                        <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3">
+                        <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3 focus-within:border-blue-500 transition-colors">
                            <Phone size={18} className="text-slate-400" />
                            <input placeholder="연락처" className="bg-transparent text-sm font-bold w-full outline-none" value={newSchedule.phone} onChange={handlePhoneInput}/>
                         </div>
-                        <div className="flex items-start bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3">
+                        <div className="flex items-start bg-slate-50 border border-slate-200 rounded-2xl p-4 gap-3 focus-within:border-blue-500 transition-colors">
                            <StickyNote size={18} className="text-slate-400 mt-1" />
                            <textarea placeholder="추가메모 (예: 픽업 요청)" rows="2" className="bg-transparent text-sm font-bold w-full outline-none resize-none" value={newSchedule.memo} onChange={e=>setNewSchedule(p=>({...p, memo:e.target.value}))}/>
                         </div>
