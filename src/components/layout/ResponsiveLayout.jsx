@@ -6,7 +6,7 @@ import {
 
 /**
  * ResponsiveLayout: PC와 모바일의 디자인을 물리적으로 분리합니다.
- * PC 상단바에서 검색창을 제거하고 UI를 정돈했습니다.
+ * PC 상단바 영역을 완전히 제거하여 콘텐츠가 더 넓게 보이도록 최적화했습니다.
  */
 const ResponsiveLayout = ({ children }) => {
   const navigate = useNavigate();
@@ -77,27 +77,8 @@ const ResponsiveLayout = ({ children }) => {
           </div>
         </aside>
 
-        {/* PC 메인 영역 */}
+        {/* PC 메인 영역: 상단 헤더 블록을 제거하여 공간을 최대로 확보 */}
         <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
-          {/* PC 상단바: 검색창 제거됨 */}
-          <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-10 shrink-0">
-            <div className="flex-1">
-              {/* 기존 검색창 영역을 비워두어 우측 정렬 유지 */}
-            </div>
-            <div className="flex items-center gap-4">
-               <div className="text-right mr-4">
-                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">System Status</p>
-                 <p className="text-sm font-bold text-emerald-500 flex items-center gap-1 justify-end">
-                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live
-                 </p>
-               </div>
-               <button className="p-2.5 text-slate-400 hover:bg-slate-100 rounded-xl relative transition-colors">
-                 <Bell size={22} />
-                 <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
-               </button>
-            </div>
-          </header>
-
           <main className="flex-1 overflow-y-auto p-10 bg-[#FBFBFC]">
             <div className="max-w-6xl mx-auto">
               {children}
