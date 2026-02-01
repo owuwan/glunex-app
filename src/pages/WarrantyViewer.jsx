@@ -1,12 +1,43 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import { Crown, Wrench, AlertCircle, AlertTriangle, Loader2, Store, Phone } from 'lucide-react';
-import AccordionItem from '../components/common/AccordionItem';
+import { useParams, useNavigate } from 'react-router-dom';
+import { 
+  Crown, Wrench, AlertCircle, AlertTriangle, Loader2, Store, Phone, 
+  ChevronLeft, Share2, MoreHorizontal, ChevronDown 
+} from 'lucide-react';
+
+// [오류 수정] 외부 파일 참조 문제를 해결하기 위해 AccordionItem 컴포넌트를 내부에 포함했습니다.
+// 로컬 환경에서도 별도의 파일 없이 이 코드가 독립적으로 작동할 수 있게 합니다.
+const AccordionItem = ({ icon: Icon, title, children }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm mb-2 transition-all">
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          {Icon && <Icon size={18} className="text-indigo-600" />}
+          <span className="font-bold text-xs text-slate-700">{title}</span>
+        </div>
+        <ChevronDown size={16} className={`text-slate-400 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+      {isOpen && (
+        <div className="p-4 pt-0 border-t border-slate-50 animate-in slide-in-from-top-2 duration-200">
+          <div className="text-xs text-slate-500 leading-relaxed">{children}</div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// [오류 수정] Firebase 및 Firestore 임포트 경로 확인
+// 로컬 프로젝트의 src/firebase.js 파일에서 설정된 db 인스턴스를 가져옵니다.
 import { db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
 
 const WarrantyViewer = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [shopInfo, setShopInfo] = useState({ name: 'GLUNEX Partner', phone: '' });
   const [loading, setLoading] = useState(true);
@@ -54,12 +85,37 @@ const WarrantyViewer = () => {
   };
   const formatPrice = (price) => Number(String(price).replace(/[^0-9]/g, ''))?.toLocaleString() || '0';
 
+  const handleBack = () => {
+    navigate(-1);
+  };
+
   return (
-    // [핵심 수정] h-full로 부모 높이 상속 + overflow-y-auto로 자체 스크롤 생성
     <div className="h-full w-full bg-[#F8F9FB] font-noto overflow-y-auto">
+      {/* 고정 상단 헤더: 뒤로가기 버튼 포함 */}
+      <div className="bg-white/90 backdrop-blur-md border-b border-slate-200 sticky top-0 z-50 px-4 h-16 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={handleBack}
+            className="p-2 -ml-2 hover:bg-slate-100 rounded-full text-slate-600 transition-colors"
+            aria-label="뒤로가기"
+          >
+            <ChevronLeft size={28} />
+          </button>
+          <h1 className="text-lg font-bold text-slate-900">보증서 조회</h1>
+        </div>
+        <div className="flex items-center gap-1">
+          <button className="p-2 text-slate-400 hover:text-slate-600">
+            <Share2 size={20} />
+          </button>
+          <button className="p-2 text-slate-400 hover:text-slate-600">
+            <MoreHorizontal size={20} />
+          </button>
+        </div>
+      </div>
+
       <div className="p-6 pb-20 flex flex-col items-center min-h-full">
         
-        <div className="mb-8 text-center w-full mt-10">
+        <div className="mb-8 text-center w-full mt-4">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 rounded-full border border-amber-100 mb-3 shadow-sm">
             <Crown size={12} className="text-amber-500 fill-amber-500" />
             <span className="text-amber-600 text-[10px] font-bold tracking-widest uppercase">Official Certification</span>
