@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import Dashboard from '../pages/Dashboard';
+import PcDashboard from '../pages/pc/Dashboard'; // [추가] PC 전용 대시보드 임포트
 import WarrantyIssue from '../pages/WarrantyIssue';
 import WarrantyResult from '../pages/WarrantyResult';
 import Marketing from '../pages/Marketing';
 import Sales from '../pages/Sales';
-import Creator from '../pages/Creator'; // [중요] 임포트 경로 재확인
+import Creator from '../pages/Creator'; 
 import Register from '../pages/Register';
 import Login from '../pages/Login';
 import MyPage from '../pages/MyPage';
@@ -20,12 +21,19 @@ const AppRouter = () => {
   const navigate = useNavigate();
   const location = useLocation(); 
   
+  // PC 모드 감지를 위한 상태
+  const [isPc, setIsPc] = useState(window.innerWidth >= 768);
+
   const [formData, setFormData] = useState({
     productName: '', customerName: '', phone: '', carModel: '', plateNumber: '', price: '', warrantyPrice: '', maintPeriod: '6', _serviceType: 'coating'
   });
   const [userStatus, setUserStatus] = useState('free');
 
   useEffect(() => {
+    // 리사이즈 감지 로직 추가 (PC/모바일 실시간 전환 대응)
+    const handleResize = () => setIsPc(window.innerWidth >= 768);
+    window.addEventListener('resize', handleResize);
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
         if (location.pathname !== '/login' && location.pathname !== '/register' && !location.pathname.startsWith('/warranty/view')) {
@@ -57,13 +65,18 @@ const AppRouter = () => {
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      unsubscribe();
+    };
   }, [navigate, location.pathname]);
 
   return (
     <Routes>
-      <Route path="/" element={<Dashboard />} />
-      <Route path="/dashboard" element={<Dashboard />} />
+      {/* [수정] 메인 경로: PC일 때는 PcDashboard를, 모바일일 때는 기존 Dashboard를 렌더링 */}
+      <Route path="/" element={isPc ? <PcDashboard /> : <Dashboard />} />
+      <Route path="/dashboard" element={isPc ? <PcDashboard /> : <Dashboard />} />
+      
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       
@@ -73,7 +86,6 @@ const AppRouter = () => {
       <Route path="/marketing" element={<Marketing userStatus={userStatus} />} />
       <Route path="/sales" element={<Sales />} />
       
-      {/* [확인] 이 경로가 src/pages/Creator.jsx를 정확히 가리켜야 함 */}
       <Route path="/creator" element={<Creator userStatus={userStatus} />} />
       
       <Route path="/mypage" element={<MyPage userStatus={userStatus} />} />
