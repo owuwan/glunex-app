@@ -10,7 +10,8 @@ import {
   RefreshCw,
   Layout,
   FileText,
-  Save
+  Save,
+  MoreHorizontal // [오류 수정] 누락되었던 아이콘을 추가했습니다.
 } from 'lucide-react';
 
 /**
