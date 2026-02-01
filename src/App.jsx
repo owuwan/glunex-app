@@ -1,12 +1,15 @@
 import React from 'react';
 import AppRouter from './routes/AppRouter';
+import ResponsiveLayout from './components/layout/ResponsiveLayout';
 
 function App() {
   return (
-    <div className="bg-gray-100 min-h-screen flex justify-center items-center font-sans selection:bg-amber-100">
-      <div className="w-full max-w-md h-[100dvh] bg-white relative overflow-hidden shadow-2xl flex flex-col sm:rounded-[2rem] sm:h-[90dvh] sm:border-8 sm:border-slate-900 ring-4 ring-slate-900/10">
+    /* App.jsx에서는 프레임을 제거하고 레이아웃 스위처만 연결합니다.
+       선택 영역 배경색(selection:bg-amber-100)은 유지했습니다. */
+    <div className="selection:bg-amber-100">
+      <ResponsiveLayout>
         <AppRouter />
-      </div>
+      </ResponsiveLayout>
     </div>
   );
 }

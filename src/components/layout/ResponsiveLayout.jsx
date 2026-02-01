@@ -5,27 +5,22 @@ import {
 } from 'lucide-react';
 
 /**
- * ResponsiveLayout: 브라우저 창 크기를 직접 감지하여 PC와 모바일 레이아웃을 강제로 전환합니다.
- * CSS 미디어 쿼리(md:)가 작동하지 않는 환경에서도 자바스크립트 엔진이 화면 너비를 계산하여 처리합니다.
+ * ResponsiveLayout: PC와 모바일의 디자인을 물리적으로 분리합니다.
+ * App.jsx에 있던 '스마트폰 틀' 디자인을 모바일 섹션으로 옮겨와서
+ * PC에서는 시원한 전체 화면을 사용할 수 있게 합니다.
  */
 const ResponsiveLayout = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   
-  // 초기값을 현재 창 너비로 설정
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 768);
 
-  // 브라우저 리사이즈 이벤트 감지
   useEffect(() => {
     const handleResize = () => {
-      // 768px 이상이면 PC 모드로 판단
       setIsDesktop(window.innerWidth >= 768);
     };
-
     window.addEventListener('resize', handleResize);
-    // 초기 로드 시에도 한 번 더 체크
     handleResize();
-
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
@@ -39,11 +34,11 @@ const ResponsiveLayout = ({ children }) => {
   const activeId = location.pathname;
 
   // ==========================================
-  // 1. PC 전용 레이아웃 (isDesktop === true)
+  // 1. PC 전용 레이아웃 (전체 화면 대시보드)
   // ==========================================
   if (isDesktop) {
     return (
-      <div className="fixed inset-0 w-full h-full bg-slate-50 font-noto flex overflow-hidden">
+      <div className="fixed inset-0 w-full h-full bg-slate-50 font-sans flex overflow-hidden">
         {/* PC 사이드바 */}
         <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 shadow-sm">
           <div className="p-8 flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
@@ -85,7 +80,6 @@ const ResponsiveLayout = ({ children }) => {
 
         {/* PC 메인 영역 */}
         <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
-          {/* PC 상단바 */}
           <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-10 shrink-0">
             <div className="relative w-96">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -109,7 +103,6 @@ const ResponsiveLayout = ({ children }) => {
             </div>
           </header>
 
-          {/* PC 컨텐츠 영역 */}
           <main className="flex-1 overflow-y-auto p-10 bg-[#FBFBFC]">
             <div className="max-w-6xl mx-auto">
               {children}
@@ -121,12 +114,14 @@ const ResponsiveLayout = ({ children }) => {
   }
 
   // ==========================================
-  // 2. 모바일 전용 레이아웃 (isDesktop === false)
+  // 2. 모바일 전용 레이아웃 (기존 App.jsx의 폰 프레임 디자인 적용)
   // ==========================================
   return (
-    <div className="min-h-screen w-full bg-[#F8F9FB] font-noto flex flex-col overflow-x-hidden">
-      <div className="flex-1">
-        {children}
+    <div className="bg-gray-100 min-h-screen flex justify-center items-center font-sans overflow-hidden">
+      <div className="w-full max-w-md h-[100dvh] bg-white relative overflow-hidden shadow-2xl flex flex-col sm:rounded-[2rem] sm:h-[90dvh] sm:border-8 sm:border-slate-900 ring-4 ring-slate-900/10">
+        <div className="flex-1 overflow-y-auto">
+          {children}
+        </div>
       </div>
     </div>
   );
