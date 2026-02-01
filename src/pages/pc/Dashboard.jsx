@@ -5,23 +5,27 @@ import {
   TrendingUp, 
   CheckCircle, 
   ChevronRight, 
-  Calendar,
   ArrowUpRight,
-  ArrowDownRight,
   Sparkles,
   ShieldCheck,
   MessageCircle,
   Loader2,
-  Eye
+  Eye,
+  BarChart3,
+  ArrowRight,
+  Plus,
+  ArrowDownRight,
+  Layers,
+  Database
 } from 'lucide-react';
 
-// 파이어베이스 연동 (상위 폴더 경로 확인 후 임포트)
+// 파이어베이스 연동 (프로젝트 구조상 src/firebase.js를 참조하는 정확한 경로)
 import { auth, db } from '../../firebase';
 import { collection, onSnapshot, doc, getDoc } from 'firebase/firestore';
 
 /**
- * PC 전용 대시보드 (실제 데이터 연동 버전)
- * 더미 데이터를 제거하고 Firestore의 실제 시공 내역을 실시간 반영합니다.
+ * PC 전용 통합 대시보드 (SaaS 워크스테이션 스타일)
+ * 실제 데이터 연동 및 각 지표별 페이지 이동 기능이 포함되었습니다.
  */
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -30,7 +34,9 @@ const Dashboard = () => {
   const [stats, setStats] = useState({
     totalCustomers: 0,
     monthSales: 0,
-    totalCount: 0
+    totalCount: 0,
+    salesChange: 12.5, // 데코용 증감률
+    customerChange: 8.2
   });
   const [userInfo, setUserInfo] = useState({ storeName: '관리자' });
 
@@ -84,181 +90,262 @@ const Dashboard = () => {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    // 1. 이번 달 데이터 필터링
     const thisMonthData = data.filter(w => {
       const date = w.createdAt?.seconds ? new Date(w.createdAt.seconds * 1000) : new Date();
       return date >= startOfMonth;
     });
 
-    // 2. 매출 합계 계산 (문자열 금액에서 숫자만 추출)
     const sales = thisMonthData.reduce((sum, item) => {
       const priceStr = String(item.warrantyPrice || '0').replace(/[^0-9]/g, '');
       return sum + Number(priceStr);
     }, 0);
 
-    // 3. 고유 고객 수 (전화번호 기준 중복 제거)
     const uniquePhones = new Set(data.map(item => item.phone)).size;
 
-    setStats({
+    setStats(prev => ({
+      ...prev,
       totalCustomers: uniquePhones,
       monthSales: sales,
       totalCount: data.length
-    });
+    }));
   };
 
   const formatPrice = (val) => Number(val).toLocaleString();
 
   if (loading) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center space-y-4">
-        <Loader2 className="animate-spin text-indigo-600" size={40} />
-        <p className="text-slate-400 font-bold">매장 데이터를 불러오고 있습니다...</p>
+      <div className="flex-1 flex flex-col items-center justify-center bg-slate-50/30 h-full min-h-[600px]">
+        <div className="relative mb-6">
+          <div className="w-16 h-16 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin"></div>
+          <Database size={24} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-indigo-600 animate-pulse" />
+        </div>
+        <p className="text-slate-400 font-bold tracking-tight uppercase italic text-xs">Synchronizing Enterprise Data...</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* 1. 상단 타이틀 */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
-            {userInfo.storeName} <span className="text-indigo-600">통합 대시보드</span>
-          </h1>
-          <p className="text-slate-500 mt-1">오늘의 매장 데이터와 주요 지표를 실시간으로 확인하세요.</p>
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-700 pb-20 max-w-[1600px] mx-auto">
+      
+      {/* 1. 하이엔드 히어로 섹션 (SaaS 스타일) */}
+      <div className="flex items-center justify-between bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden relative">
+        <div className="absolute top-0 right-0 p-12 opacity-[0.05] pointer-events-none">
+          <BarChart3 size={200} className="text-slate-900" />
         </div>
-        <div className="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 border border-emerald-100 shadow-sm">
-          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          실시간 연동중
+        <div className="relative z-10 space-y-1">
+          <div className="flex items-center gap-3">
+             <div className="bg-indigo-600 text-white p-2 rounded-xl shadow-lg">
+               <Layers size={20} />
+             </div>
+             <h1 className="text-2xl font-black text-slate-900 tracking-tighter uppercase italic">
+               {userInfo.storeName} <span className="text-indigo-600 not-italic">Enterprise Dashboard</span>
+             </h1>
+          </div>
+          <p className="text-slate-500 font-medium ml-1">실시간 시공 데이터 통합 분석 및 고객 자산 관리 스튜디오</p>
+        </div>
+        <div className="flex items-center gap-3 relative z-10">
+          <div className="flex flex-col items-end mr-4">
+             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Status</span>
+             <div className="flex items-center gap-1.5 mt-1">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-sm font-bold text-slate-700">Cloud Connected</span>
+             </div>
+          </div>
+          <button 
+            onClick={() => navigate('/create')}
+            className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black text-sm hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100"
+          >
+            <Plus size={18} /> 새 보증서 발행
+          </button>
         </div>
       </div>
 
-      {/* 2. 핵심 지표 카드 (평균 작업 시간 제거 및 실제 데이터 연동) */}
+      {/* 2. 핵심 지표 카드 그리드 (PC 전용 고정 비율) */}
       <div className="grid grid-cols-3 gap-6">
-        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group">
-          <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-            <Users size={24} />
+        {/* 전체 관리 고객 -> 마케팅 센터 이동 */}
+        <div 
+          onClick={() => navigate('/marketing')}
+          className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all cursor-pointer group"
+        >
+          <div className="flex items-center justify-between mb-8">
+            <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-all shadow-inner">
+              <Users size={22} />
+            </div>
+            <div className="flex items-center gap-1 text-emerald-500 font-black text-xs">
+              <ArrowUpRight size={14} /> {stats.customerChange}%
+            </div>
           </div>
-          <p className="text-sm font-black text-slate-400 uppercase tracking-widest">전체 관리 고객</p>
-          <h3 className="text-3xl font-black text-slate-900 mt-1">{stats.totalCustomers}명</h3>
+          <div className="space-y-1">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] italic">Total CRM Assets</p>
+            <h3 className="text-4xl font-black text-slate-900 tracking-tighter italic">
+              {stats.totalCustomers}<span className="text-lg not-italic ml-1">명</span>
+            </h3>
+          </div>
+          <div className="mt-6 pt-6 border-t border-slate-50 flex items-center justify-between text-slate-400 group-hover:text-indigo-600 transition-colors">
+            <span className="text-xs font-bold uppercase">Customer Management Center</span>
+            <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+          </div>
         </div>
 
-        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group">
-          <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-            <TrendingUp size={24} />
+        {/* 이번 달 매출 -> 영업 관리 이동 */}
+        <div 
+          onClick={() => navigate('/sales')}
+          className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all cursor-pointer group"
+        >
+          <div className="flex items-center justify-between mb-8">
+            <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-all shadow-inner">
+              <TrendingUp size={22} />
+            </div>
+            <div className="flex items-center gap-1 text-emerald-500 font-black text-xs">
+              <ArrowUpRight size={14} /> {stats.salesChange}%
+            </div>
           </div>
-          <p className="text-sm font-black text-slate-400 uppercase tracking-widest">이번 달 매출</p>
-          <h3 className="text-3xl font-black text-slate-900 mt-1">₩{formatPrice(stats.monthSales)}</h3>
+          <div className="space-y-1">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] italic">Monthly Performance</p>
+            <h3 className="text-4xl font-black text-slate-900 tracking-tighter italic">
+              ₩{formatPrice(stats.monthSales)}
+            </h3>
+          </div>
+          <div className="mt-6 pt-6 border-t border-slate-50 flex items-center justify-between text-slate-400 group-hover:text-emerald-600 transition-colors">
+            <span className="text-xs font-bold uppercase">Financial Sales Report</span>
+            <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+          </div>
         </div>
 
-        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group">
-          <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-            <CheckCircle size={24} />
+        {/* 누적 보증서 발행 -> 영업 관리 이동 */}
+        <div 
+          onClick={() => navigate('/sales')}
+          className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all cursor-pointer group"
+        >
+          <div className="flex items-center justify-between mb-8">
+            <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-inner">
+              <CheckCircle size={22} />
+            </div>
+            <div className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded text-[10px] font-black">All-Time</div>
           </div>
-          <p className="text-sm font-black text-slate-400 uppercase tracking-widest">누적 보증서 발행</p>
-          <h3 className="text-3xl font-black text-slate-900 mt-1">{stats.totalCount}건</h3>
+          <div className="space-y-1">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] italic">Cumulative Database</p>
+            <h3 className="text-4xl font-black text-slate-900 tracking-tighter italic">
+              {stats.totalCount}<span className="text-lg not-italic ml-1">건</span>
+            </h3>
+          </div>
+          <div className="mt-6 pt-6 border-t border-slate-50 flex items-center justify-between text-slate-400 group-hover:text-indigo-600 transition-colors">
+            <span className="text-xs font-bold uppercase">Operational History Archive</span>
+            <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+          </div>
         </div>
       </div>
 
-      {/* 3. 퀵 메뉴 섹션 */}
+      {/* 3. 워크플로우 퀵 채널 (전문가 모드) */}
       <div className="grid grid-cols-3 gap-6">
         <button 
           onClick={() => navigate('/creator')}
-          className="p-8 bg-gradient-to-br from-indigo-600 to-violet-700 rounded-[2.5rem] text-left text-white shadow-xl shadow-indigo-100 group transition-all hover:-translate-y-1"
+          className="group p-8 bg-slate-900 rounded-[2.5rem] text-left text-white shadow-2xl transition-all hover:scale-[1.02] relative overflow-hidden"
         >
-          <div className="flex items-center justify-between mb-10">
-            <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center">
-              <Sparkles size={28} className="text-white" />
-            </div>
-            <ChevronRight size={24} className="text-white/50 group-hover:translate-x-1 transition-transform" />
+          <div className="absolute top-0 right-0 p-8 opacity-[0.03] text-white">
+            <Sparkles size={120} />
           </div>
-          <h4 className="text-2xl font-black mb-1">AI 마케팅 에이전트</h4>
-          <p className="text-indigo-100 text-sm font-medium">블로그 및 SNS 포스팅 10초 완성</p>
+          <div className="flex items-center justify-between mb-10">
+            <div className="w-14 h-14 bg-white/10 backdrop-blur-xl rounded-2xl flex items-center justify-center border border-white/10 group-hover:bg-indigo-600 transition-colors">
+              <Sparkles size={28} className="text-indigo-400 group-hover:text-white" />
+            </div>
+            <ChevronRight size={24} className="text-slate-600 group-hover:translate-x-2 transition-transform" />
+          </div>
+          <h4 className="text-xl font-black mb-2 italic tracking-tighter uppercase leading-none">AI Agent Studio</h4>
+          <p className="text-slate-400 text-sm font-medium">알고리즘 기반 블로그/SNS 포스팅 자동 생성</p>
         </button>
 
         <button 
           onClick={() => navigate('/create')}
-          className="p-8 bg-white border border-slate-200 rounded-[2.5rem] text-left shadow-sm group transition-all hover:border-indigo-600 hover:-translate-y-1 hover:shadow-xl"
+          className="group p-8 bg-white border-2 border-slate-200 hover:border-slate-900 rounded-[2.5rem] text-left shadow-sm transition-all hover:scale-[1.02] relative"
         >
           <div className="flex items-center justify-between mb-10">
-            <div className="w-14 h-14 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center">
+            <div className="w-14 h-14 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center group-hover:bg-slate-900 group-hover:text-amber-400 transition-colors shadow-inner">
               <ShieldCheck size={28} />
             </div>
-            <ChevronRight size={24} className="text-slate-300 group-hover:translate-x-1 transition-transform" />
+            <ChevronRight size={24} className="text-slate-200 group-hover:text-slate-900 group-hover:translate-x-2 transition-transform" />
           </div>
-          <h4 className="text-2xl font-black text-slate-900 mb-1">신규 보증서 발행</h4>
-          <p className="text-slate-400 text-sm font-medium">공식 시공 보증서 디지털 발급</p>
+          <h4 className="text-xl font-black text-slate-900 mb-2 italic tracking-tighter uppercase leading-none">Digital Certificate</h4>
+          <p className="text-slate-500 text-sm font-medium">보험사 대응 공식 디지털 시공 보증서 발행</p>
         </button>
 
         <button 
           onClick={() => navigate('/marketing')}
-          className="p-8 bg-white border border-slate-200 rounded-[2.5rem] text-left shadow-sm group transition-all hover:border-blue-600 hover:-translate-y-1 hover:shadow-xl"
+          className="group p-8 bg-white border-2 border-slate-200 hover:border-indigo-600 rounded-[2.5rem] text-left shadow-sm transition-all hover:scale-[1.02] relative"
         >
           <div className="flex items-center justify-between mb-10">
-            <div className="w-14 h-14 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center">
+            <div className="w-14 h-14 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-inner">
               <MessageCircle size={28} />
             </div>
-            <ChevronRight size={24} className="text-slate-300 group-hover:translate-x-1 transition-transform" />
+            <ChevronRight size={24} className="text-slate-200 group-hover:text-indigo-600 group-hover:translate-x-2 transition-transform" />
           </div>
-          <h4 className="text-2xl font-black text-slate-900 mb-1">고객 관리 센터</h4>
-          <p className="text-slate-400 text-sm font-medium">재방문 유도 알림 및 상담 이력</p>
+          <h4 className="text-xl font-black text-slate-900 mb-2 italic tracking-tighter uppercase leading-none">Marketing Core</h4>
+          <p className="text-slate-500 text-sm font-medium">고객 관리 및 재방문 유도 타겟 마케팅</p>
         </button>
       </div>
 
-      {/* 4. 최근 시공 리스트 (실제 데이터 연동) */}
-      <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
-        <div className="p-8 border-b border-slate-50 flex items-center justify-between">
-          <h2 className="text-xl font-bold">최근 발행 이력</h2>
-          <button onClick={() => navigate('/sales')} className="text-indigo-600 text-sm font-bold flex items-center gap-1 hover:underline">
-            전체 보기 <ChevronRight size={16} />
+      {/* 4. 최신 이력 데이터 그리드 (전문적인 데이터 테이블) */}
+      <div className="bg-white rounded-[3rem] border border-slate-200 shadow-sm overflow-hidden">
+        <div className="p-10 border-b border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+             <div className="w-1.5 h-8 bg-indigo-600 rounded-full" />
+             <h2 className="text-2xl font-black italic tracking-tighter uppercase leading-none">Operational Logs</h2>
+          </div>
+          <button 
+            onClick={() => navigate('/sales')} 
+            className="px-6 py-2.5 bg-slate-50 text-slate-500 rounded-xl font-black text-[11px] flex items-center gap-2 hover:bg-slate-900 hover:text-white transition-all uppercase tracking-widest"
+          >
+            Full Archive Access <ChevronRight size={14} />
           </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="bg-slate-50/50 text-slate-400 text-[11px] font-black uppercase tracking-[0.2em]">
+            <thead className="bg-slate-50/50 text-slate-400 text-[10px] font-black uppercase tracking-[0.4em] border-b border-slate-100">
               <tr>
-                <th className="px-8 py-5">고객 정보</th>
-                <th className="px-8 py-5">차종 및 번호</th>
-                <th className="px-8 py-5">시공 항목</th>
-                <th className="px-8 py-5">보증 가액</th>
-                <th className="px-8 py-5 text-center">조회</th>
+                <th className="px-10 py-6">Customer Profile</th>
+                <th className="px-10 py-6">Vehicle Intelligence</th>
+                <th className="px-10 py-6">Service Category</th>
+                <th className="px-10 py-6">Valuation</th>
+                <th className="px-10 py-6 text-center">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {warranties.length > 0 ? warranties.slice(0, 5).map((item) => (
+              {warranties.length > 0 ? warranties.slice(0, 8).map((item) => (
                 <tr 
                   key={item.id} 
-                  className="hover:bg-slate-50/50 transition-colors cursor-pointer group" 
+                  className="hover:bg-slate-50/50 transition-all cursor-pointer group" 
                   onClick={() => navigate(`/warranty/view/${item.id}`)}
                 >
-                  <td className="px-8 py-5">
-                    <div className="font-bold text-slate-900">{item.customerName}</div>
-                    <div className="text-[10px] text-slate-400 font-bold">{item.phone}</div>
+                  <td className="px-10 py-6">
+                    <div className="font-black text-lg text-slate-900 group-hover:text-indigo-600 transition-colors uppercase">{item.customerName}</div>
+                    <div className="text-xs text-slate-400 font-bold mt-0.5 tracking-tight">{item.phone}</div>
                   </td>
-                  <td className="px-8 py-5">
-                    <div className="font-bold text-slate-600 text-sm">{item.carModel}</div>
-                    <div className="inline-block mt-1 px-2 py-0.5 bg-slate-100 rounded text-[10px] text-slate-400 font-bold uppercase">{item.plateNumber}</div>
+                  <td className="px-10 py-6">
+                    <div className="font-bold text-slate-700 text-base tracking-tight leading-none uppercase">{item.carModel}</div>
+                    <div className="inline-block mt-2 px-2.5 py-0.5 bg-slate-900 text-white rounded text-[10px] font-black tracking-widest leading-none uppercase">{item.plateNumber}</div>
                   </td>
-                  <td className="px-8 py-5">
-                    <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-[10px] font-black">{item.productName}</span>
+                  <td className="px-10 py-6">
+                    <div className="flex items-center gap-2">
+                       <span className="text-sm font-black text-indigo-600 italic uppercase tracking-tighter px-3 py-1 bg-indigo-50 rounded-lg">{item.productName}</span>
+                    </div>
                   </td>
-                  <td className="px-8 py-5 font-black text-slate-900 text-sm">
+                  <td className="px-10 py-6 font-black text-slate-900 text-xl tracking-tighter italic">
                     ₩{formatPrice(item.warrantyPrice)}
                   </td>
-                  <td className="px-8 py-5">
+                  <td className="px-10 py-6">
                     <div className="flex justify-center">
-                       <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-indigo-600 group-hover:text-white transition-all">
-                          <Eye size={16} />
+                       <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-indigo-600 group-hover:text-white group-hover:shadow-lg transition-all">
+                          <Eye size={20} />
                        </div>
                     </div>
                   </td>
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan="5" className="px-8 py-24 text-center">
-                    <div className="flex flex-col items-center opacity-30">
-                      <Layout size={48} className="mb-4" />
-                      <p className="font-bold text-slate-900">발행된 보증서 내역이 없습니다.</p>
+                  <td colSpan="5" className="px-10 py-32 text-center">
+                    <div className="flex flex-col items-center opacity-10">
+                      <Database size={64} className="mb-4" />
+                      <p className="text-xl font-black uppercase italic tracking-widest leading-none">Awaiting Data Entries</p>
                     </div>
                   </td>
                 </tr>
