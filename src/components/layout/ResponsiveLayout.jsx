@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
-  Layout, Home, Users, Settings, Plus, Sparkles, MessageCircle, LogOut, ShieldCheck, Crown, User
+  Layout, Home, Users, Settings, Plus, Sparkles, MessageCircle, LogOut, ShieldCheck, Crown, User, BarChart3
 } from 'lucide-react';
 // 파이어베이스 연동 및 데이터 조회를 위한 임포트
 // 경로 오류를 방지하기 위해 파일 구조(src/components/layout/...)에 맞춘 상대 경로를 재확인합니다.
@@ -60,9 +60,10 @@ const ResponsiveLayout = ({ children }) => {
     };
   }, []);
 
+  // [수정] 메뉴 명칭 '영업 관리' -> '매출 현황' 변경 및 아이콘 변경
   const navItems = [
     { id: '/', label: '대시보드', icon: Home },
-    { id: '/sales', label: '영업 관리', icon: Layout },
+    { id: '/sales', label: '매출 현황', icon: BarChart3 },
     { id: '/marketing', label: '마케팅 센터', icon: Users },
     { id: '/admin', label: '시스템 설정', icon: Settings },
   ];
