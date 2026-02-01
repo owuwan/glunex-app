@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 /**
- * [AI 마스터 프롬프트 설정 - 모바일 버전 100% 복사]
+ * [AI 마스터 프롬프트 설정 - 모바일 앱 버전 100% 복사]
  */
 const SYSTEM_PROMPT_TITLES = `
 당신은 대한민국 최고의 '자동차 외장관리(Automotive Detailing)' 전문 마케터입니다.
@@ -54,8 +54,18 @@ const SYSTEM_PROMPT_CONTENT = `
 JSON 응답: { "blog_html": "...", "insta_text": "...", "short_form": "...", "image_prompts": { "p1": "...", "p2": "...", "p3": "...", "p4": "...", "p5": "..." } }
 `;
 
-// [오류 수정] 환경 변수 접근 방식을 수정하고 시스템 제공 키를 사용합니다.
-const apiKey = ""; 
+// [오류 수정] Canvas 환경의 컴파일러 경고를 방지하기 위해 import.meta.env 접근 방식을 안전하게 변경합니다.
+// 실제 빌드 환경(Vite)에서는 정상 작동하며, Preview 환경에서의 크래시를 방지합니다.
+const getEnvVar = (key) => {
+  try {
+    // @ts-ignore
+    return import.meta.env[key];
+  } catch (e) {
+    return undefined;
+  }
+};
+
+const apiKey = ""; // Gemini API 키 (환경에서 제공됨)
 
 const Creator = () => {
   const navigate = useNavigate();
@@ -111,8 +121,9 @@ const Creator = () => {
   useEffect(() => {
     const fetchWeather = async () => {
       try {
-        // 날씨 API 호출 (안전한 처리를 위해 기본값 설정 포함)
-        const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=Seoul&appid=6e4b95d9a0d1e9b2f6b3a0f7b5e4c3d2&units=metric&lang=kr`);
+        const WEATHER_KEY = getEnvVar('VITE_WEATHER_API_KEY');
+        if (!WEATHER_KEY) throw new Error("No API Key");
+        const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=Seoul&appid=${WEATHER_KEY}&units=metric&lang=kr`);
         const data = await response.json();
         if (data.cod === 200) {
           const main = data.weather[0].main.toLowerCase();
@@ -144,24 +155,27 @@ const Creator = () => {
     { id: 'new_car', name: '신차패키지' }, { id: 'leather_coating', name: '가죽코팅' }
   ];
 
-  // [오류 수정] 지수 백오프 방식의 재시도 로직을 포함한 Gemini API 호출
-  const callGemini = async (userQuery, systemPrompt) => {
+  // [오류 수정] 403 오류 해결을 위해 Gemini API 호출 시 지수 백오프와 적절한 키 참조를 적용합니다.
+  const callGemini = async (prompt, systemPrompt) => {
+    const GEMINI_KEY = getEnvVar('VITE_FIREBASE_API_KEY') || apiKey;
     let delay = 1000;
     for (let i = 0; i < 5; i++) {
       try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_KEY}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contents: [{ parts: [{ text: userQuery }] }],
+            contents: [{ parts: [{ text: prompt }] }],
             systemInstruction: { parts: [{ text: systemPrompt }] },
-            generationConfig: { 
-                responseMimeType: "application/json" 
-            }
+            generationConfig: { responseMimeType: "application/json" }
           })
         });
+        
+        if (response.status === 403) throw new Error("Forbidden: Check API Key and Permissions");
+        
         const resData = await response.json();
-        if (!resData.candidates?.[0]?.content?.parts?.[0]?.text) throw new Error("Invalid Response");
+        if (!resData.candidates?.[0]?.content?.parts?.[0]?.text) throw new Error("Invalid response from Gemini");
+        
         return JSON.parse(resData.candidates[0].content.parts[0].text);
       } catch (error) {
         if (i === 4) throw error;
@@ -171,15 +185,14 @@ const Creator = () => {
     }
   };
 
+  // Fal AI 호출 로직 복구
   const callFalAI = async (prompt) => {
-    // Fal AI 호출 (임시적으로 직접적인 키 사용을 피하고 로직만 유지)
+    const FAL_KEY = getEnvVar('VITE_FAL_API_KEY');
+    if (!FAL_KEY || FAL_KEY === "undefined") return null;
     try {
       const response = await fetch("https://fal.run/fal-ai/flux-2", {
         method: "POST",
-        headers: { 
-            "Authorization": `Key d89f9e5c-9c7b-4a3d-8e2a-1f0b9c8d7e6f`, // 사용자의 실제 키가 필요한 부분입니다.
-            "Content-Type": "application/json" 
-        },
+        headers: { "Authorization": `Key ${FAL_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: prompt,
           image_size: { width: 768, height: 576 } 
@@ -187,9 +200,7 @@ const Creator = () => {
       });
       const data = await response.json();
       return data.images[0].url;
-    } catch (e) { 
-        return "https://images.unsplash.com/photo-1601362840469-51e4d8d59085?w=800&q=80"; // Fallback image
-    }
+    } catch (e) { return null; }
   };
 
   const handleGenerateTitles = async () => {
@@ -202,7 +213,10 @@ const Creator = () => {
       const data = await callGemini(`시공: ${selectedNames}, 날씨: ${weather.desc}`, SYSTEM_PROMPT_TITLES);
       setTitles(data.titles);
       setStep('title');
-    } catch (e) { alert("연결 오류 발생"); }
+    } catch (e) { 
+      console.error(e);
+      alert("AI 연결 오류가 발생했습니다. API 키 설정을 확인해주세요."); 
+    }
     finally { setLoading(false); }
   };
 
@@ -292,7 +306,7 @@ const Creator = () => {
              <div className="bg-indigo-600 text-white p-1 rounded-lg"><Sparkles size={16} /></div>
              <h1 className="text-3xl font-black text-slate-900 tracking-tight uppercase italic">GLUNEX <span className="text-indigo-600 not-italic">AI STUDIO</span></h1>
           </div>
-          <p className="text-slate-500 text-sm font-medium italic">Professional Detailing Content Generator</p>
+          <p className="text-slate-500 text-sm font-medium italic">Professional Detailing Content Studio</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="px-4 py-2 bg-white border border-slate-200 rounded-2xl flex items-center gap-2 shadow-sm">
@@ -313,10 +327,9 @@ const Creator = () => {
         </div>
       </div>
 
-      {/* 메인 워크스페이스 */}
       <div className="flex-1 grid grid-cols-5 gap-8 min-h-0 overflow-hidden">
         
-        {/* 좌측 패널 */}
+        {/* 좌측 제어 패널 */}
         <div className="col-span-2 flex flex-col space-y-4 min-h-0 overflow-hidden">
           <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col flex-1 overflow-hidden">
             <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between shrink-0">
@@ -361,7 +374,7 @@ const Creator = () => {
                   </div>
 
                   <div className="space-y-4">
-                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">시공 품목 선택 (다중)</h3>
+                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">시공 품목 선택</h3>
                     <div className="grid grid-cols-2 gap-3">
                       {categories.map((cat) => (
                         <button 
@@ -414,13 +427,13 @@ const Creator = () => {
                   </div>
                 </div>
               ) : (
-                <div className="h-full flex flex-col items-center justify-center space-y-6 py-20">
-                   <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-100 animate-bounce">
+                <div className="h-full flex flex-col items-center justify-center space-y-6 py-20 text-center">
+                   <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-100 animate-bounce mx-auto">
                      <CheckCircle2 size={32} />
                    </div>
-                   <div className="text-center">
-                     <h3 className="text-xl font-black text-slate-900">생성 완료!</h3>
-                     <p className="text-sm text-slate-500 mt-2 font-medium">우측 창에서 채널별 결과물을 확인하세요.</p>
+                   <div>
+                     <h3 className="text-xl font-black text-slate-900">콘텐츠 생성 완료!</h3>
+                     <p className="text-sm text-slate-500 mt-2 font-medium">우측 창에서 최종 결과물을 확인하세요.</p>
                    </div>
                 </div>
               )}
@@ -444,23 +457,30 @@ const Creator = () => {
                   <FileText size={22} className="text-indigo-400" /> 시공 전문 원고 집필
                 </button>
               )}
+              {step === 'result' && (
+                <button 
+                  onClick={() => setStep('keyword')}
+                  className="w-full py-5 bg-white border border-slate-200 text-slate-500 rounded-[2rem] font-black text-lg hover:bg-slate-50 active:scale-[0.98] transition-all shadow-sm"
+                >
+                  새로운 콘텐츠 만들기
+                </button>
+              )}
             </div>
           </div>
         </div>
 
-        {/* 우측 패널 */}
+        {/* 우측 미리보기 패널 */}
         <div className="col-span-3 bg-slate-100 rounded-[3.5rem] border border-slate-200 overflow-hidden flex flex-col relative shadow-inner">
           <div className="absolute top-8 left-8 flex items-center gap-3 bg-white/90 backdrop-blur-xl px-5 py-2.5 rounded-full shadow-lg z-20 border border-white/50">
             <div className={`w-2 h-2 rounded-full ${step === 'result' ? 'bg-emerald-500' : 'bg-amber-400'} animate-pulse`} />
             <span className="text-[11px] font-black text-slate-700 uppercase tracking-widest italic">
-              {step === 'result' ? 'Content Finalized' : 'System Ready'}
+              {step === 'result' ? 'Content Finalized' : 'AI System Ready'}
             </span>
           </div>
 
           <div className="flex-1 overflow-y-auto p-12 scrollbar-hide flex flex-col items-center">
             {step === 'result' && generatedData ? (
                <div className="w-full max-w-2xl animate-in fade-in slide-in-from-right-10 duration-700">
-                  {/* 탭 전환 */}
                   <div className="flex bg-white/60 backdrop-blur p-1.5 rounded-2xl border border-white mb-10 shadow-sm">
                     {[
                       { id: 'blog', name: '블로그', icon: <Layout size={16}/> },
@@ -475,7 +495,6 @@ const Creator = () => {
                     ))}
                   </div>
 
-                  {/* 결과 내용 */}
                   <div className="bg-white rounded-[4rem] p-12 shadow-2xl border border-white min-h-[600px] text-left overflow-hidden">
                     {activeTab === 'blog' ? (
                       <article className="prose prose-slate max-w-none">
@@ -494,24 +513,28 @@ const Creator = () => {
                              dangerouslySetInnerHTML={{ __html: generatedData.blog_html }} />
                       </article>
                     ) : activeTab === 'insta' ? (
-                      <div className="space-y-8">
+                      <div className="space-y-8 animate-in fade-in slide-in-from-right-4">
                         <div className="flex items-center gap-4 p-5 bg-slate-50 rounded-[2rem]">
                           <div className="w-14 h-14 bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 rounded-full flex items-center justify-center text-white shadow-lg"><Instagram size={28}/></div>
                           <div>
-                            <p className="font-black text-slate-900 text-lg tracking-tight">Instagram Posting</p>
-                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest italic leading-none">Social Engagement</p>
+                            <p className="font-black text-slate-900 text-lg tracking-tight italic">Social Engagement Feed</p>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest italic leading-none">Algorithm Optimized Content</p>
                           </div>
                         </div>
                         <div className="p-10 bg-slate-50 rounded-[3rem] border border-slate-100 font-bold text-slate-700 leading-relaxed whitespace-pre-wrap italic shadow-inner">
                           {generatedData.insta_text}
                         </div>
+                        <div className="p-6 bg-indigo-50 rounded-3xl border border-indigo-100 shadow-sm">
+                          <p className="text-[11px] font-black text-indigo-600 uppercase mb-3 flex items-center gap-2 tracking-widest italic"><Hash size={14}/> Recommended Hashtags</p>
+                          <p className="text-xs text-indigo-400 font-bold tracking-tight leading-relaxed">#GLUNEX #디테일링 #시공후기 #차쟁이 #유리막코팅 #카스타그램 #세차스타그램 #명품시공</p>
+                        </div>
                       </div>
                     ) : (
-                      <div className="space-y-8">
+                      <div className="space-y-8 animate-in fade-in slide-in-from-right-4">
                         <div className="flex items-center gap-4 p-5 bg-slate-900 rounded-[2rem] text-white shadow-xl">
                           <Film size={28} className="text-blue-400" />
                           <div>
-                            <p className="font-black text-lg tracking-tight">Short-form Script</p>
+                            <p className="font-black text-lg tracking-tight italic">Short-form Script</p>
                             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Video Production Guide</p>
                           </div>
                         </div>
@@ -528,8 +551,8 @@ const Creator = () => {
                   <div className="space-y-8 opacity-20">
                     <MousePointer2 size={64} className="mx-auto text-indigo-600 animate-bounce" />
                     <div className="space-y-3">
-                       <h5 className="font-black text-slate-900 text-2xl uppercase italic">Waiting for Input</h5>
-                       <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">좌측 패널에서 시공 항목을 선택하면<br/>이곳에 결과 미리보기가 생성됩니다.</p>
+                       <h5 className="font-black text-slate-900 text-2xl uppercase italic tracking-tighter">Awaiting Logic Input</h5>
+                       <p className="text-sm text-slate-400 font-bold uppercase tracking-widest leading-relaxed">좌측 패널에서 시공 항목을 선택하면<br/>이곳에 AI 실시간 미리보기가 생성됩니다.</p>
                     </div>
                   </div>
                </div>
@@ -541,8 +564,8 @@ const Creator = () => {
                <div className="flex items-center gap-5">
                   <div className="bg-indigo-50 p-4 rounded-2xl text-indigo-600 shadow-inner"><Download size={24} /></div>
                   <div className="text-left">
-                    <p className="text-base font-black text-slate-900 italic uppercase leading-none">Content Ready</p>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-2">Verified by GLUNEX AI</p>
+                    <p className="text-base font-black text-slate-900 italic uppercase leading-none">Content Verified</p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-2">Ready for deployment</p>
                   </div>
                </div>
                <div className="flex gap-4">
@@ -551,7 +574,7 @@ const Creator = () => {
                     className={`px-10 py-5 ${isCopied ? 'bg-emerald-600' : 'bg-slate-900'} text-white rounded-[2rem] font-black text-lg flex items-center gap-4 transition-all hover:scale-[1.03] shadow-2xl active:scale-95`}
                   >
                     {isCopied ? <CheckCircle2 size={24} /> : <Copy size={24} />}
-                    {isCopied ? '복사 완료' : '전체 복사'}
+                    {isCopied ? '복사 완료' : '전체 내용 복사'}
                   </button>
                </div>
             </div>
