@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import Dashboard from '../pages/Dashboard';
-import PcDashboard from '../pages/pc/Dashboard'; // [추가] PC 전용 대시보드 임포트
+import PcDashboard from '../pages/pc/Dashboard';
 import WarrantyIssue from '../pages/WarrantyIssue';
 import WarrantyResult from '../pages/WarrantyResult';
 import Marketing from '../pages/Marketing';
 import Sales from '../pages/Sales';
+import PcSales from '../pages/pc/Sales'; // [추가] PC 전용 영업 관리 임포트
 import Creator from '../pages/Creator'; 
 import Register from '../pages/Register';
 import Login from '../pages/Login';
@@ -30,7 +31,7 @@ const AppRouter = () => {
   const [userStatus, setUserStatus] = useState('free');
 
   useEffect(() => {
-    // 리사이즈 감지 로직 추가 (PC/모바일 실시간 전환 대응)
+    // 리사이즈 감지 로직 (PC/모바일 실시간 전환 대응)
     const handleResize = () => setIsPc(window.innerWidth >= 768);
     window.addEventListener('resize', handleResize);
 
@@ -73,7 +74,6 @@ const AppRouter = () => {
 
   return (
     <Routes>
-      {/* [수정] 메인 경로: PC일 때는 PcDashboard를, 모바일일 때는 기존 Dashboard를 렌더링 */}
       <Route path="/" element={isPc ? <PcDashboard /> : <Dashboard />} />
       <Route path="/dashboard" element={isPc ? <PcDashboard /> : <Dashboard />} />
       
@@ -84,7 +84,9 @@ const AppRouter = () => {
       <Route path="/warranty/result" element={<WarrantyResult formData={formData} userStatus={userStatus} />} />
       
       <Route path="/marketing" element={<Marketing userStatus={userStatus} />} />
-      <Route path="/sales" element={<Sales />} />
+      
+      {/* [수정] 영업 관리 경로: PC일 때는 PcSales를, 모바일일 때는 기존 Sales를 렌더링 */}
+      <Route path="/sales" element={isPc ? <PcSales /> : <Sales />} />
       
       <Route path="/creator" element={<Creator userStatus={userStatus} />} />
       
