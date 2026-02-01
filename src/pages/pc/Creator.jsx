@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 
 /**
- * [AI 마스터 프롬프트 설정 - 모바일 앱 버전 100% 유지]
+ * [AI 마스터 프롬프트 설정 - 모바일 앱 버전 100% 복사]
  */
 const SYSTEM_PROMPT_TITLES = `
 당신은 대한민국 최고의 '자동차 외장관리(Automotive Detailing)' 전문 마케터입니다.
@@ -31,16 +31,19 @@ const SYSTEM_PROMPT_INDEX = `
 
 const SYSTEM_PROMPT_CONTENT = `
 당신은 대한민국 자동차 외장관리(디테일링) 전문가입니다. 선정된 5개 목차를 바탕으로 블로그 본문과 실사 이미지 프롬프트를 생성하세요.
+
 [1단계: 본문 작성 지침]
 - 자동차와 관련 없는 내용(피부, 에스테틱 등)은 절대 금지합니다. 오직 차량 시공 공정만 다루세요.
 - 각 목차별 본문 내용은 공백 제외 450~550자 사이로 아주 상세하게 작성하세요. (전체 최소 2,250자 이상 필수)
 - 전문적인 용어와 실제 자동차 시공 공정을 기술하세요. 상호명(GLUNEX 등) 언급 금지.
 - 각 섹션 끝에 [[image_1]] ~ [[image_5]] 태그를 배치하세요.
 - HTML 태그(h2, p, br, strong)를 사용하세요.
+
 [2단계: 이미지 프롬프트 생성 지침 (장비 고증 로직 대폭 강화)]
 - 모든 프롬프트(p1~p5)는 반드시 다음 형식을 준수하세요:
   "Authentic real-life photo, Authentic real-work photo, Work-in-progress (WIP) of [상황 키워드] referencing professional work images from www.naver.com. [구체적인 물리적/장비 묘사]. Raw handheld shot, iPhone 15 Pro, no UI elements, no text, realistic, harsh overhead fluorescent lighting, blurred license plate."
 - [장비 및 도구 필수 고증]: 철분제거, 유리막, 광택기, 썬팅 헤라 등 고유의 질감 묘사 포함.
+
 [출력 형식]
 JSON 응답: { "blog_html": "...", "insta_text": "...", "short_form": "...", "image_prompts": { "p1": "...", "p2": "...", "p3": "...", "p4": "...", "p5": "..." } }
 `;
@@ -77,7 +80,7 @@ const Creator = () => {
 
   const copyBufferRef = useRef(null);
 
-  // [수정] 모바일 앱 버전과 동일한 로딩 문구 적용
+  // [수정] 모바일 앱 버전 로딩 문구와 100% 동일하게 복구
   const loadingMessages = {
     title: [
       "고객의 시선을 사로잡는\n최적의 자동차 시공 제목을 설계 중입니다",
@@ -226,10 +229,10 @@ const Creator = () => {
       let finalHtml = data.blog_html;
       images.forEach((url, i) => {
         const replacement = url ? `
-          <div style="margin: 24px 0; border-radius: 16px; overflow: hidden; border: 1px solid #e2e8f0;">
-            <img src="${url}" width="100%" style="display: block;" alt="Professional Work" />
+          <div style="margin: 32px 0; border-radius: 20px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05);">
+            <img src="${url}" width="100%" style="display: block;" alt="전문 시공 사진" />
           </div>
-        ` : `<p>[이미지 생성 중...]</p>`;
+        ` : `<p>[이미지 생성 대기 중...]</p>`;
         finalHtml = finalHtml.replace(`[[image_${i + 1}]]`, replacement);
       });
 
@@ -267,8 +270,8 @@ const Creator = () => {
   };
 
   return (
-    <div className="h-full flex flex-col bg-slate-50 font-sans selection:bg-indigo-100 overflow-hidden">
-      {/* 1. 글로벌 헤더 (전체 한글화) */}
+    <div className="h-full flex-1 flex flex-col bg-slate-50 font-sans selection:bg-indigo-100 overflow-hidden">
+      {/* 1. 글로벌 헤더 (완전 한글화) */}
       <header className="h-14 px-6 bg-white border-b border-slate-200 flex items-center justify-between shrink-0 z-50">
         <div className="flex items-center gap-4">
           <button 
@@ -290,7 +293,7 @@ const Creator = () => {
             <div className={`p-0.5 rounded ${weather.status === 'rain' ? 'text-blue-500' : 'text-orange-500'}`}>
               {weather.status === 'rain' ? <CloudRain size={14} /> : <Sun size={14} />}
             </div>
-            <span className="text-[11px] font-semibold text-slate-600">{weather.desc}, {weather.temp}°C 동기화</span>
+            <span className="text-[11px] font-semibold text-slate-600">{weather.desc}, {weather.temp}°C 연동</span>
           </div>
           <button onClick={() => setStep('keyword')} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-bold text-[11px] text-slate-500 hover:bg-slate-900 hover:text-white transition-all shadow-sm">
             초기화
@@ -298,8 +301,8 @@ const Creator = () => {
         </div>
       </header>
 
-      {/* 2. 메인 캔버스 */}
-      <main className="flex-1 overflow-hidden flex relative">
+      {/* 2. 메인 컨텐츠 */}
+      <main className="flex-1 overflow-hidden flex flex-col relative">
         
         {toastMsg && (
           <div className="fixed top-16 right-6 z-[100] animate-in slide-in-from-top-2">
@@ -309,17 +312,17 @@ const Creator = () => {
           </div>
         )}
 
-        {/* [수정] 로딩 화면: 수직/수평 중앙 정렬 및 앱 버전 문구 적용 */}
+        {/* [수정] 로딩 화면: 수직/수평 정중앙 배치 및 모바일 앱 문구 적용 */}
         {loading ? (
-          <div className="flex-1 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm z-[60]">
-            <div className="relative mb-6">
-               <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin"></div>
-               <Sparkles size={24} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-indigo-600 animate-pulse" />
+          <div className="flex-1 flex flex-col items-center justify-center bg-white/60 backdrop-blur-sm z-[60] animate-in fade-in duration-300">
+            <div className="relative mb-10">
+               <div className="w-20 h-20 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin"></div>
+               <Sparkles size={28} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-indigo-600 animate-pulse" />
             </div>
-            <h3 className="text-lg font-bold text-slate-900 mb-2 whitespace-pre-line text-center leading-relaxed">
+            <h3 className="text-xl font-black text-slate-900 mb-3 whitespace-pre-line text-center leading-relaxed tracking-tight">
               {loadingMessages[loadingType][loadingMsgIndex]}
             </h3>
-            <p className="text-[10px] text-slate-400 font-bold tracking-widest italic uppercase">AI 분석 중</p>
+            <p className="text-[11px] text-slate-400 font-bold tracking-[0.2em] uppercase italic">AI Analysis Center</p>
           </div>
         ) : step === 'keyword' ? (
           /* 1단계: 시공 품목 구성 (한글화) */
@@ -336,7 +339,7 @@ const Creator = () => {
                     className={`flex items-center gap-4 px-4 py-2 rounded-xl transition-all border-2 ${isWeatherEnabled ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-100' : 'bg-white border-slate-200 text-slate-400 hover:border-indigo-100'}`}
                 >
                   <div className="text-left">
-                    <h4 className="text-xs font-bold leading-tight uppercase italic">날씨 연동 시스템</h4>
+                    <h4 className="text-xs font-bold leading-tight uppercase italic">날씨 동기화 시스템</h4>
                   </div>
                   <div className={`w-10 h-5 rounded-full relative transition-all ${isWeatherEnabled ? 'bg-white/20' : 'bg-slate-100'}`}>
                     <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${isWeatherEnabled ? 'right-0.5' : 'left-0.5'}`} />
@@ -373,7 +376,7 @@ const Creator = () => {
                   className="group px-12 py-4 bg-indigo-600 text-white rounded-xl font-bold text-base shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all hover:scale-[1.02] active:scale-95 flex items-center gap-4 disabled:opacity-20"
                 >
                   <Sparkles size={20} fill="currentColor" className="text-amber-300" />
-                  마케팅 제목 생성
+                  마케팅 전략 수립
                   <ArrowRight size={20} />
                 </button>
               </div>
@@ -384,8 +387,8 @@ const Creator = () => {
           <div className="flex-1 overflow-y-auto p-10 animate-in fade-in duration-500">
             <div className="max-w-3xl mx-auto space-y-8">
               <div className="border-b border-slate-200 pb-6 space-y-1">
-                <h2 className="text-2xl font-black text-slate-900 tracking-tight italic uppercase">02 전략 선택</h2>
-                <p className="text-sm text-slate-500 font-medium">검색 알고리즘에 최적화된 헤드라인을 선정하십시오.</p>
+                <h2 className="text-2xl font-black text-slate-900 tracking-tight italic uppercase">02 제목 선정</h2>
+                <p className="text-sm text-slate-500 font-medium">검색 유입률이 가장 높은 헤드라인을 선정하십시오.</p>
               </div>
 
               <div className="space-y-3">
@@ -406,17 +409,17 @@ const Creator = () => {
             </div>
           </div>
         ) : step === 'index' ? (
-          /* 3단계: 아키텍처 확인 (한글화) */
+          /* 3단계: 구조 확인 (한글화) */
           <div className="flex-1 overflow-y-auto p-10 animate-in fade-in duration-500">
             <div className="max-w-3xl mx-auto space-y-10">
               <div className="border-b border-slate-200 pb-6 space-y-1">
-                <h2 className="text-2xl font-black text-slate-900 tracking-tight italic uppercase">03 콘텐츠 구조</h2>
-                <p className="text-sm text-slate-500 font-medium">콘텐츠 전문성을 극대화하기 위한 아키텍처입니다.</p>
+                <h2 className="text-2xl font-black text-slate-900 tracking-tight italic uppercase">03 원고 구조</h2>
+                <p className="text-sm text-slate-500 font-medium">콘텐츠 전문성을 위한 시공 프로세스 아키텍처입니다.</p>
               </div>
 
               <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-100 space-y-6 relative overflow-hidden">
                 <div className="bg-indigo-50 p-5 rounded-xl border border-indigo-100 mb-6">
-                  <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1 italic">선택된 제목</h4>
+                  <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1 italic">확정된 헤드라인</h4>
                   <p className="text-lg font-black text-indigo-900 leading-tight">"{selectedTitle}"</p>
                 </div>
                 <div className="space-y-4">
@@ -435,7 +438,7 @@ const Creator = () => {
                   className="px-16 py-4 bg-slate-900 text-white rounded-xl font-bold text-base shadow-xl hover:bg-black transition-all hover:scale-[1.02] active:scale-95 flex items-center gap-4"
                 >
                   <FileText size={20} className="text-indigo-500" />
-                  전문 원고 집필 시작
+                  최종 원고 집필 시작
                 </button>
               </div>
             </div>
@@ -463,7 +466,7 @@ const Creator = () => {
                          <div className="flex items-center gap-4 mb-8">
                             <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-yellow-400 via-pink-600 to-purple-800 flex items-center justify-center text-white shadow-xl"><Instagram size={24}/></div>
                             <div>
-                               <p className="text-lg font-black text-white italic leading-tight uppercase tracking-tighter">알고리즘 엔진</p>
+                               <p className="text-lg font-black text-white italic leading-tight uppercase tracking-tighter">알고리즘 분석 센터</p>
                                <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.3em] mt-1">SNS 최적화 본문</p>
                             </div>
                          </div>
@@ -471,13 +474,17 @@ const Creator = () => {
                             {generatedData.insta_text}
                          </pre>
                       </div>
+                      <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200">
+                         <p className="text-[11px] font-black text-slate-400 uppercase mb-3 flex items-center gap-2 tracking-widest italic"><Hash size={14} className="text-indigo-500" /> 추천 해시태그</p>
+                         <p className="text-xs text-slate-600 font-bold">#GLUNEX #디테일링 #시공후기 #차쟁이 #유리막코팅 #카스타그램 #세차스타그램 #프리미엄시공</p>
+                      </div>
                     </div>
                   ) : (
                     <div className="space-y-10 max-w-lg mx-auto">
                       <div className="flex items-center gap-4 p-8 bg-indigo-600 rounded-3xl text-white shadow-xl">
                         <Film size={32} className="text-white fill-white/20 animate-pulse" />
                         <div>
-                          <p className="text-2xl font-black italic tracking-tighter uppercase leading-none">영상 대본 엔진</p>
+                          <p className="text-2xl font-black italic tracking-tighter uppercase leading-none">영상 스크립트 엔진</p>
                           <p className="text-[10px] text-indigo-200 font-black uppercase tracking-[0.4em] mt-2">숏폼 제작 센터</p>
                         </div>
                       </div>
@@ -496,19 +503,19 @@ const Creator = () => {
             <div className="w-80 bg-slate-50 border-l border-slate-200 p-8 flex flex-col shrink-0">
                <div className="space-y-8 flex-1">
                   <div className="space-y-4">
-                     <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] italic border-l-2 border-indigo-600 pl-3">채널별 제작 센터</h5>
+                     <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] italic border-l-2 border-indigo-600 pl-3">채널별 콘텐츠 스위치</h5>
                      <div className="space-y-2">
                         {[
-                          { id: 'blog', name: '네이버 블로그', icon: <Monitor size={18}/>, desc: '상위 노출 SEO 전문 원고' },
-                          { id: 'insta', name: '인스타그램 피드', icon: <Instagram size={18}/>, desc: '도달 최적화 SNS 본문' },
-                          { id: 'short', name: '숏폼 가이드', icon: <Film size={18}/>, desc: '릴스/쇼츠 제작 대본' }
+                          { id: 'blog', name: '네이버 블로그', icon: <Monitor size={18}/>, desc: 'SEO 최적화 전문 리포트' },
+                          { id: 'insta', name: '인스타그램 피드', icon: <Instagram size={18}/>, desc: '도달 최적화 소셜 본문' },
+                          { id: 'short', name: '숏폼 가이드북', icon: <Film size={18}/>, desc: '릴스/쇼츠 촬영 대본' }
                         ].map(tab => (
                           <button key={tab.id} onClick={() => setActiveTab(tab.id)}
                             className={`w-full p-4 rounded-xl border-2 text-left transition-all ${activeTab === tab.id ? 'bg-slate-900 border-slate-900 text-white shadow-lg' : 'bg-white border-white text-slate-400 hover:border-indigo-50 shadow-sm'}`}
                           >
                             <div className="flex items-center gap-3 mb-1">
                                <div className={`${activeTab === tab.id ? 'text-indigo-400' : 'text-slate-200'}`}>{tab.icon}</div>
-                               <span className="text-sm font-bold tracking-tight uppercase italic">{tab.name}</span>
+                               <span className="text-sm font-black tracking-tight uppercase italic">{tab.name}</span>
                             </div>
                             <p className={`text-[10px] font-semibold ${activeTab === tab.id ? 'text-slate-400' : 'text-slate-300'}`}>{tab.desc}</p>
                           </button>
@@ -520,7 +527,7 @@ const Creator = () => {
                     <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center shrink-0"><Download size={20} /></div>
                     <div>
                       <p className="text-sm font-black italic tracking-tighter leading-none">검증 완료</p>
-                      <p className="text-[9px] font-bold uppercase tracking-widest mt-1.5 text-indigo-200 leading-none">발행 준비 완료</p>
+                      <p className="text-[9px] font-bold uppercase tracking-widest mt-1.5 text-indigo-200 leading-none">내보내기 준비 완료</p>
                     </div>
                   </div>
                </div>
@@ -530,7 +537,7 @@ const Creator = () => {
                   className={`w-full py-4 ${isCopied ? 'bg-emerald-600' : 'bg-slate-900'} text-white rounded-xl font-black text-sm flex items-center justify-center gap-3 transition-all hover:scale-[1.02] shadow-xl active:scale-95 uppercase italic`}
                >
                   {isCopied ? <CheckCircle2 size={18} /> : <Copy size={18} />}
-                  {isCopied ? '복사 완료' : '전체 내용 복사'}
+                  {isCopied ? '복사 완료' : '전체 내용 복사하기'}
                </button>
             </div>
           </div>
@@ -540,7 +547,7 @@ const Creator = () => {
       {/* 3. 복사 버퍼 (비노출 로직) */}
       <div 
         ref={copyBufferRef}
-        style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '600px', pointerEvents: 'none', userSelect: 'all', display: 'none' }}
+        style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '800px', pointerEvents: 'none', userSelect: 'all', display: 'none' }}
         dangerouslySetInnerHTML={{ __html: generatedData ? `<h2>${selectedTitle}</h2>` + generatedData.blog_html : '' }}
       />
     </div>

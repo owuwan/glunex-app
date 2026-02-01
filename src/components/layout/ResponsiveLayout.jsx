@@ -6,7 +6,7 @@ import {
 
 /**
  * ResponsiveLayout: PC와 모바일의 디자인을 물리적으로 분리합니다.
- * PC 상단바 영역을 완전히 제거하여 콘텐츠가 더 넓게 보이도록 최적화했습니다.
+ * PC 메인 영역이 flex-col 구조를 가져 자식 컴포넌트가 중앙 정렬을 할 수 있도록 개선되었습니다.
  */
 const ResponsiveLayout = ({ children }) => {
   const navigate = useNavigate();
@@ -39,7 +39,7 @@ const ResponsiveLayout = ({ children }) => {
     return (
       <div className="fixed inset-0 w-full h-full bg-slate-50 font-sans flex overflow-hidden">
         {/* PC 사이드바 */}
-        <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 shadow-sm">
+        <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 shadow-sm z-10">
           <div className="p-8 flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
             <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-100">
               <Layout size={24} />
@@ -77,10 +77,10 @@ const ResponsiveLayout = ({ children }) => {
           </div>
         </aside>
 
-        {/* PC 메인 영역: 상단 헤더 블록을 제거하여 공간을 최대로 확보 */}
-        <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
-          <main className="flex-1 overflow-y-auto p-10 bg-[#FBFBFC]">
-            <div className="max-w-6xl mx-auto">
+        {/* PC 메인 영역: flex flex-col 및 min-h-full 추가로 자식 중앙 정렬 지원 */}
+        <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
+          <main className="flex-1 overflow-y-auto p-10 bg-[#FBFBFC] flex flex-col">
+            <div className="max-w-6xl mx-auto w-full flex-1 flex flex-col">
               {children}
             </div>
           </main>
