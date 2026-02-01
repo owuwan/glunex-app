@@ -5,10 +5,11 @@ import PcDashboard from '../pages/pc/Dashboard';
 import WarrantyIssue from '../pages/WarrantyIssue';
 import WarrantyResult from '../pages/WarrantyResult';
 import Marketing from '../pages/Marketing';
-import PcMarketing from '../pages/pc/Marketing'; // [추가] PC 전용 마케팅 임포트
+import PcMarketing from '../pages/pc/Marketing';
 import Sales from '../pages/Sales';
 import PcSales from '../pages/pc/Sales';
 import Creator from '../pages/Creator'; 
+import PcCreator from '../pages/pc/Creator'; // [추가] PC 전용 크리에이터 임포트
 import Register from '../pages/Register';
 import Login from '../pages/Login';
 import MyPage from '../pages/MyPage';
@@ -82,12 +83,12 @@ const AppRouter = () => {
       <Route path="/create" element={<WarrantyIssue formData={formData} setFormData={setFormData} userStatus={userStatus} />} />
       <Route path="/warranty/result" element={<WarrantyResult formData={formData} userStatus={userStatus} />} />
       
-      {/* [수정] 마케팅 관리 경로: PC일 때는 PcMarketing을, 모바일일 때는 기존 Marketing을 렌더링 */}
       <Route path="/marketing" element={isPc ? <PcMarketing /> : <Marketing userStatus={userStatus} />} />
       
       <Route path="/sales" element={isPc ? <PcSales /> : <Sales />} />
       
-      <Route path="/creator" element={<Creator userStatus={userStatus} />} />
+      {/* [수정] 크리에이터 경로: PC일 때는 PcCreator를, 모바일일 때는 기존 Creator를 렌더링 */}
+      <Route path="/creator" element={isPc ? <PcCreator /> : <Creator userStatus={userStatus} />} />
       
       <Route path="/mypage" element={<MyPage userStatus={userStatus} />} />
       <Route path="/warranty/view/:id" element={<WarrantyViewer />} />
