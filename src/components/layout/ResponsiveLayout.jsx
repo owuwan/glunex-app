@@ -6,8 +6,7 @@ import {
 
 /**
  * ResponsiveLayout: PC와 모바일의 디자인을 물리적으로 분리합니다.
- * App.jsx에 있던 '스마트폰 틀' 디자인을 모바일 섹션으로 옮겨와서
- * PC에서는 시원한 전체 화면을 사용할 수 있게 합니다.
+ * PC 상단바에서 검색창을 제거하고 UI를 정돈했습니다.
  */
 const ResponsiveLayout = ({ children }) => {
   const navigate = useNavigate();
@@ -80,14 +79,10 @@ const ResponsiveLayout = ({ children }) => {
 
         {/* PC 메인 영역 */}
         <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+          {/* PC 상단바: 검색창 제거됨 */}
           <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-10 shrink-0">
-            <div className="relative w-96">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-              <input 
-                type="text" 
-                placeholder="관리자 모드 검색..." 
-                className="w-full pl-12 pr-4 py-2.5 bg-slate-100 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500/20 outline-none font-medium" 
-              />
+            <div className="flex-1">
+              {/* 기존 검색창 영역을 비워두어 우측 정렬 유지 */}
             </div>
             <div className="flex items-center gap-4">
                <div className="text-right mr-4">
@@ -114,7 +109,7 @@ const ResponsiveLayout = ({ children }) => {
   }
 
   // ==========================================
-  // 2. 모바일 전용 레이아웃 (기존 App.jsx의 폰 프레임 디자인 적용)
+  // 2. 모바일 전용 레이아웃
   // ==========================================
   return (
     <div className="bg-gray-100 min-h-screen flex justify-center items-center font-sans overflow-hidden">
