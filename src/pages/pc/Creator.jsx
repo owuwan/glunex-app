@@ -8,7 +8,7 @@ import {
   Camera, Wand2, Info, Eye, Smartphone, ChevronRight,
   Star, ShieldCheck, Palette, ZapOff, X, FileSearch, CheckCircle,
   Download, AlertTriangle, SmartphoneIcon, Film, Type, Hash, Clock3, Play,
-  ChevronDown, MoreHorizontal
+  ChevronDown, MoreHorizontal, Maximize2, Monitor
 } from 'lucide-react';
 
 /**
@@ -54,8 +54,7 @@ const SYSTEM_PROMPT_CONTENT = `
 JSON 응답: { "blog_html": "...", "insta_text": "...", "short_form": "...", "image_prompts": { "p1": "...", "p2": "...", "p3": "...", "p4": "...", "p5": "..." } }
 `;
 
-// [오류 수정] Canvas 환경의 컴파일러 경고를 방지하기 위해 import.meta.env 접근 방식을 안전하게 변경합니다.
-// 실제 빌드 환경(Vite)에서는 정상 작동하며, Preview 환경에서의 크래시를 방지합니다.
+// 환경 변수 접근 헬퍼
 const getEnvVar = (key) => {
   try {
     // @ts-ignore
@@ -65,11 +64,12 @@ const getEnvVar = (key) => {
   }
 };
 
-const apiKey = ""; // Gemini API 키 (환경에서 제공됨)
+const apiKey = ""; // Gemini API 키 (시스템 제공)
 
 const Creator = () => {
   const navigate = useNavigate();
   
+  // 상태 관리 (기존 로직 유지)
   const [step, setStep] = useState('keyword'); 
   const [loading, setLoading] = useState(false);
   const [loadingType, setLoadingType] = useState('title'); 
@@ -91,20 +91,20 @@ const Creator = () => {
 
   const loadingMessages = {
     title: [
-      "고객의 시선을 사로잡는\n최적의 자동차 시공 제목을 설계 중입니다",
-      "검색량 분석을 통해 유입이 가장 잘 되는\n차량 관련 키워드를 추출하고 있습니다",
-      "예약 전환율을 높이는\n전략적인 첫 문장을 고민하고 있습니다"
+      "고객의 시선을 사로잡는 최적의 자동차 시공 제목을 설계 중입니다",
+      "검색량 분석을 통해 유입이 가장 잘 되는 차량 키워드를 추출하고 있습니다",
+      "예약 전환율을 높이는 전략적인 첫 문장을 고민하고 있습니다"
     ],
     index: [
-      "차량 전문가의 깊이가 느껴지는\n체계적인 목차를 구성하고 있습니다",
-      "글의 논리적인 흐름과\nSEO 최적화 구조를 설계 중입니다",
-      "사장님의 전문성을 돋보이게 할\n스토리보드를 완성하고 있습니다"
+      "차량 전문가의 깊이가 느껴지는 체계적인 목차를 구성하고 있습니다",
+      "글의 논리적인 흐름과 SEO 최적화 구조를 설계 중입니다",
+      "사장님의 전문성을 돋보이게 할 스토리보드를 완성하고 있습니다"
     ],
     content: [
-      "실제 시공 현장의 생생함을 담은 이미지를\n비용 최적화 실사 질감으로 현상하고 있습니다",
-      "디테일링 전문가의 관점에서\n정성스럽게 전문 원고를 집필 중입니다",
-      "이미지와 글의 완벽한 복사 호환을 위해\n데이터 구조를 정밀하게 가공하고 있습니다",
-      "네이버 블로그 알고리즘에 맞춘\n맞춤형 포스팅을 곧 완성합니다"
+      "실제 시공 현장의 생생함을 담은 이미지를 비용 최적화 실사 질감으로 현상하고 있습니다",
+      "디테일링 전문가의 관점에서 정성스럽게 전문 원고를 집필 중입니다",
+      "이미지와 글의 완벽한 복사 호환을 위해 데이터 구조를 정밀하게 가공하고 있습니다",
+      "네이버 블로그 알고리즘에 맞춘 맞춤형 포스팅을 곧 완성합니다"
     ]
   };
 
@@ -122,7 +122,6 @@ const Creator = () => {
     const fetchWeather = async () => {
       try {
         const WEATHER_KEY = getEnvVar('VITE_WEATHER_API_KEY');
-        if (!WEATHER_KEY) throw new Error("No API Key");
         const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=Seoul&appid=${WEATHER_KEY}&units=metric&lang=kr`);
         const data = await response.json();
         if (data.cod === 200) {
@@ -155,7 +154,6 @@ const Creator = () => {
     { id: 'new_car', name: '신차패키지' }, { id: 'leather_coating', name: '가죽코팅' }
   ];
 
-  // [오류 수정] 403 오류 해결을 위해 Gemini API 호출 시 지수 백오프와 적절한 키 참조를 적용합니다.
   const callGemini = async (prompt, systemPrompt) => {
     const GEMINI_KEY = getEnvVar('VITE_FIREBASE_API_KEY') || apiKey;
     let delay = 1000;
@@ -170,12 +168,7 @@ const Creator = () => {
             generationConfig: { responseMimeType: "application/json" }
           })
         });
-        
-        if (response.status === 403) throw new Error("Forbidden: Check API Key and Permissions");
-        
         const resData = await response.json();
-        if (!resData.candidates?.[0]?.content?.parts?.[0]?.text) throw new Error("Invalid response from Gemini");
-        
         return JSON.parse(resData.candidates[0].content.parts[0].text);
       } catch (error) {
         if (i === 4) throw error;
@@ -185,7 +178,6 @@ const Creator = () => {
     }
   };
 
-  // Fal AI 호출 로직 복구
   const callFalAI = async (prompt) => {
     const FAL_KEY = getEnvVar('VITE_FAL_API_KEY');
     if (!FAL_KEY || FAL_KEY === "undefined") return null;
@@ -213,10 +205,7 @@ const Creator = () => {
       const data = await callGemini(`시공: ${selectedNames}, 날씨: ${weather.desc}`, SYSTEM_PROMPT_TITLES);
       setTitles(data.titles);
       setStep('title');
-    } catch (e) { 
-      console.error(e);
-      alert("AI 연결 오류가 발생했습니다. API 키 설정을 확인해주세요."); 
-    }
+    } catch (e) { alert("AI 연결 오류"); }
     finally { setLoading(false); }
   };
 
@@ -248,9 +237,9 @@ const Creator = () => {
       let finalHtml = data.blog_html;
       images.forEach((url, i) => {
         const replacement = url ? `
-          <p style="text-align: center; margin: 30px 0;">
-            <img src="${url}" width="100%" style="display: block; border-radius: 12px; shadow: 0 4px 12px rgba(0,0,0,0.1);" alt="시공 사진" />
-          </p>
+          <div style="margin: 40px 0; border-radius: 24px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.1);">
+            <img src="${url}" width="100%" style="display: block;" alt="시공 사진" />
+          </div>
         ` : `<p>[이미지 처리 중]</p>`;
         finalHtml = finalHtml.replace(`[[image_${i + 1}]]`, replacement);
       });
@@ -289,306 +278,301 @@ const Creator = () => {
   };
 
   return (
-    <div className="h-full flex flex-col space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 font-sans overflow-hidden">
-      
-      {toastMsg && (
-        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-4">
-          <div className="bg-slate-900 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-2 border border-slate-700 font-bold">
-            <CheckCircle2 size={18} className="text-emerald-400" /> {toastMsg}
-          </div>
-        </div>
-      )}
-
-      {/* 헤더 섹션 */}
-      <div className="flex items-center justify-between shrink-0">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-             <div className="bg-indigo-600 text-white p-1 rounded-lg"><Sparkles size={16} /></div>
-             <h1 className="text-3xl font-black text-slate-900 tracking-tight uppercase italic">GLUNEX <span className="text-indigo-600 not-italic">AI STUDIO</span></h1>
-          </div>
-          <p className="text-slate-500 text-sm font-medium italic">Professional Detailing Content Studio</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="px-4 py-2 bg-white border border-slate-200 rounded-2xl flex items-center gap-2 shadow-sm">
-            {weather.status === 'rain' ? <CloudRain size={16} className="text-blue-500" /> : <Sun size={16} className="text-amber-500" />}
-            <span className="text-sm font-bold text-slate-600 uppercase">{weather.desc} {weather.temp}°C</span>
-          </div>
+    <div className="h-full flex flex-col bg-[#F6F8FA] font-sans overflow-hidden">
+      {/* 1. 상단 글로벌 헤더 (더 크고 웅장하게) */}
+      <header className="h-24 px-12 bg-white border-b border-slate-200 flex items-center justify-between shrink-0 z-50">
+        <div className="flex items-center gap-6">
           <button 
-            onClick={() => {
-              if(step === 'keyword') navigate('/dashboard');
-              else if(step === 'title') setStep('keyword');
-              else if(step === 'index') setStep('title');
-              else setStep('index');
-            }}
-            className="p-2.5 bg-white border border-slate-200 rounded-2xl text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all shadow-sm"
+            onClick={() => navigate('/dashboard')}
+            className="w-12 h-12 flex items-center justify-center bg-slate-100 rounded-2xl text-slate-400 hover:bg-slate-900 hover:text-white transition-all"
           >
-            <ArrowLeft size={20} />
+            <ArrowLeft size={24} />
+          </button>
+          <div>
+            <div className="flex items-center gap-3">
+              <div className="bg-indigo-600 text-white p-1.5 rounded-xl"><Sparkles size={20} fill="currentColor" /></div>
+              <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase italic">
+                AI <span className="text-indigo-600 not-italic">CONTENT STUDIO</span>
+              </h1>
+            </div>
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-[0.2em] mt-1 ml-1">Automotive Marketing Intelligence</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 px-6 py-3 bg-slate-50 border border-slate-200 rounded-2xl">
+            <div className={`p-2 rounded-lg ${weather.status === 'rain' ? 'bg-blue-100 text-blue-600' : 'bg-amber-100 text-amber-600'}`}>
+              {weather.status === 'rain' ? <CloudRain size={20} /> : <Sun size={20} />}
+            </div>
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase leading-none mb-1">Weather Sync</p>
+              <p className="text-sm font-black text-slate-700">{weather.desc}, {weather.temp}°C</p>
+            </div>
+          </div>
+          <div className="w-px h-10 bg-slate-200 mx-2" />
+          <button onClick={() => setStep('keyword')} className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 rounded-2xl font-bold text-slate-600 hover:bg-slate-50 transition-all shadow-sm">
+            <RefreshCw size={18} /> 초기화
           </button>
         </div>
-      </div>
+      </header>
 
-      <div className="flex-1 grid grid-cols-5 gap-8 min-h-0 overflow-hidden">
+      {/* 2. 메인 컨텐츠 영역 (시원시원한 카드 시스템) */}
+      <main className="flex-1 overflow-hidden flex relative">
         
-        {/* 좌측 제어 패널 */}
-        <div className="col-span-2 flex flex-col space-y-4 min-h-0 overflow-hidden">
-          <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col flex-1 overflow-hidden">
-            <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between shrink-0">
-              <span className="font-bold text-slate-900 uppercase tracking-tight flex items-center gap-2">
-                <Target size={18} className="text-indigo-600" /> Step Management
-              </span>
-              <div className="flex gap-1">
-                {['keyword', 'title', 'index', 'result'].map((s, idx) => (
-                  <div key={idx} className={`w-6 h-1 rounded-full ${step === s ? 'bg-indigo-600' : 'bg-slate-100'}`} />
+        {/* 토스트 알림 */}
+        {toastMsg && (
+          <div className="fixed top-28 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-4">
+            <div className="bg-slate-900 text-white px-8 py-4 rounded-[2rem] shadow-2xl flex items-center gap-3 border border-slate-700 font-bold">
+              <CheckCircle2 size={24} className="text-emerald-400" /> {toastMsg}
+            </div>
+          </div>
+        )}
+
+        {loading ? (
+          /* 로딩 화면 (전체 화면 전용 대형 애니메이션) */
+          <div className="flex-1 flex flex-col items-center justify-center bg-white/80 backdrop-blur-md z-[60]">
+            <div className="relative mb-12">
+               <div className="w-32 h-32 border-8 border-slate-100 border-t-indigo-600 rounded-full animate-spin"></div>
+               <Sparkles size={48} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-indigo-600 animate-pulse" />
+            </div>
+            <h3 className="text-3xl font-black text-slate-900 tracking-tight mb-4">{loadingMessages[loadingType][loadingMsgIndex]}</h3>
+            <p className="text-slate-400 font-bold uppercase tracking-widest animate-pulse italic">AI Logic Processing...</p>
+          </div>
+        ) : step === 'keyword' ? (
+          /* 1단계: 시공 품목 선택 (카드 그리드 방식) */
+          <div className="flex-1 overflow-y-auto p-16 animate-in fade-in slide-in-from-bottom-8 duration-700">
+            <div className="max-w-6xl mx-auto space-y-12">
+              <div className="flex items-end justify-between border-b-4 border-slate-900 pb-8">
+                <div>
+                  <h2 className="text-5xl font-black text-slate-900 tracking-tighter mb-4 italic uppercase">01. Service Configuration</h2>
+                  <p className="text-xl text-slate-500 font-medium">홍보하고 싶은 시공 품목을 모두 선택하세요. AI가 최적의 키워드 조합을 찾아냅니다.</p>
+                </div>
+                <div className="flex items-center gap-6 bg-indigo-600 p-8 rounded-[3rem] text-white shadow-2xl shadow-indigo-100">
+                  <div>
+                    <h4 className="text-lg font-black leading-tight italic">날씨 연동 모드</h4>
+                    <p className="text-xs text-indigo-200 mt-1">기상 상황에 맞는 심리 자극 멘트 생성</p>
+                  </div>
+                  <button 
+                    onClick={() => setIsWeatherEnabled(!isWeatherEnabled)}
+                    className={`w-16 h-8 rounded-full relative transition-all ${isWeatherEnabled ? 'bg-white/30' : 'bg-slate-400/50'}`}
+                  >
+                    <div className={`absolute top-1 w-6 h-6 rounded-full bg-white shadow-lg transition-all ${isWeatherEnabled ? 'right-1' : 'left-1'}`} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-4 gap-6">
+                {categories.map((cat) => (
+                  <button 
+                    key={cat.id} 
+                    onClick={() => setSelectedTopics(p => p.includes(cat.id) ? p.filter(t => t !== cat.id) : [...p, cat.id])}
+                    className={`h-48 rounded-[3rem] border-4 transition-all flex flex-col items-center justify-center gap-4 relative overflow-hidden group ${
+                      selectedTopics.includes(cat.id)
+                        ? 'bg-slate-900 border-slate-900 text-white shadow-2xl scale-105'
+                        : 'bg-white border-white text-slate-400 hover:border-indigo-200 hover:text-slate-600 shadow-sm'
+                    }`}
+                  >
+                    <Target size={32} className={selectedTopics.includes(cat.id) ? 'text-indigo-400' : 'text-slate-100 group-hover:text-indigo-100'} />
+                    <span className="text-xl font-black">{cat.name}</span>
+                    {selectedTopics.includes(cat.id) && (
+                      <div className="absolute top-6 right-6 bg-indigo-500 text-white p-1 rounded-full shadow-lg">
+                        <Check size={16} strokeWidth={4} />
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              <div className="pt-12 flex justify-center">
+                <button 
+                  onClick={handleGenerateTitles}
+                  disabled={selectedTopics.length === 0}
+                  className="px-20 py-8 bg-indigo-600 text-white rounded-[3rem] font-black text-3xl shadow-2xl shadow-indigo-100 hover:bg-indigo-700 transition-all hover:scale-105 active:scale-95 flex items-center gap-6 disabled:opacity-30"
+                >
+                  <Sparkles size={32} fill="currentColor" className="text-amber-300" />
+                  마케팅 컨셉 도출하기
+                  <ArrowRight size={32} />
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : step === 'title' ? (
+          /* 2단계: 제목 선정 (대형 리스트 카드) */
+          <div className="flex-1 overflow-y-auto p-16 animate-in fade-in slide-in-from-right-8 duration-700">
+            <div className="max-w-5xl mx-auto space-y-12">
+              <div className="border-b-4 border-slate-900 pb-8">
+                <h2 className="text-5xl font-black text-slate-900 tracking-tighter mb-4 italic uppercase">02. Strategic Headline</h2>
+                <p className="text-xl text-slate-500 font-medium">유입률이 가장 높을 것으로 예상되는 제목을 하나 골라주세요.</p>
+              </div>
+
+              <div className="space-y-4">
+                {titles.map((t, i) => (
+                  <button 
+                    key={i} 
+                    onClick={() => handleGenerateIndex(t)}
+                    className="w-full text-left p-10 bg-white border border-slate-200 rounded-[3rem] hover:border-indigo-600 hover:shadow-2xl transition-all group flex items-center justify-between"
+                  >
+                    <p className="text-2xl font-bold text-slate-800 group-hover:text-indigo-600 leading-snug">{t}</p>
+                    <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-all">
+                      <ChevronRight size={28} />
+                    </div>
+                  </button>
                 ))}
               </div>
             </div>
+          </div>
+        ) : step === 'index' ? (
+          /* 3단계: 목차 확인 (인포그래픽 스타일) */
+          <div className="flex-1 overflow-y-auto p-16 animate-in fade-in slide-in-from-right-8 duration-700">
+            <div className="max-w-4xl mx-auto space-y-12">
+              <div className="border-b-4 border-slate-900 pb-8">
+                <h2 className="text-5xl font-black text-slate-900 tracking-tighter mb-4 italic uppercase">03. Content Structure</h2>
+                <p className="text-xl text-slate-500 font-medium">선택한 제목에 맞춰 설계된 원고의 목차입니다.</p>
+              </div>
 
-            <div className="flex-1 overflow-y-auto p-8 scrollbar-hide">
-              {loading ? (
-                <div className="h-full flex flex-col items-center justify-center text-center space-y-8 py-20">
-                  <div className="relative">
-                    <div className="w-24 h-24 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin"></div>
-                    <Sparkles size={36} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-indigo-600 animate-pulse" />
-                  </div>
-                  <div className="space-y-3">
-                    <p className="font-black text-slate-900 text-xl tracking-tight leading-snug whitespace-pre-line">
-                      {loadingMessages[loadingType][loadingMsgIndex]}
-                    </p>
-                  </div>
+              <div className="bg-white p-12 rounded-[4rem] shadow-2xl border border-slate-100 space-y-8 relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-12 opacity-[0.03] pointer-events-none text-indigo-600"><ListOrdered size={300} /></div>
+                <div className="bg-indigo-50 p-8 rounded-3xl border border-indigo-100 mb-12">
+                  <h4 className="text-xs font-black text-indigo-600 uppercase tracking-widest mb-2 italic">Selected Title</h4>
+                  <p className="text-3xl font-black text-indigo-900 leading-tight">"{selectedTitle}"</p>
                 </div>
-              ) : step === 'keyword' ? (
-                <div className="space-y-8">
-                  <div className="p-7 rounded-[2rem] bg-indigo-600 text-white shadow-2xl shadow-indigo-100">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-lg font-black tracking-tight flex items-center gap-2"><Zap size={20} /> 날씨 연동 시스템</h4>
-                      <button 
-                        onClick={() => setIsWeatherEnabled(!isWeatherEnabled)}
-                        className={`w-14 h-7 rounded-full relative transition-all ${isWeatherEnabled ? 'bg-white/30' : 'bg-slate-400/50'}`}
-                      >
-                        <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-all ${isWeatherEnabled ? 'right-1' : 'left-1'}`} />
-                      </button>
-                    </div>
-                    <p className="mt-5 text-sm font-medium text-indigo-100 leading-relaxed italic border-t border-white/10 pt-5">
-                      {isWeatherEnabled ? `현재 서울의 '${weather.desc}' 날씨를 분석하여 예약 전환율을 높이는 시나리오를 설계합니다.` : "기본 마케팅 모드로 작동합니다."}
-                    </p>
-                  </div>
-
-                  <div className="space-y-4">
-                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">시공 품목 선택</h3>
-                    <div className="grid grid-cols-2 gap-3">
-                      {categories.map((cat) => (
-                        <button 
-                          key={cat.id} 
-                          onClick={() => setSelectedTopics(p => p.includes(cat.id) ? p.filter(t => t !== cat.id) : [...p, cat.id])}
-                          className={`py-5 px-4 rounded-2xl border-2 transition-all text-left relative overflow-hidden group ${
-                            selectedTopics.includes(cat.id)
-                              ? 'bg-slate-900 border-slate-900 text-white shadow-xl'
-                              : 'bg-white border-slate-100 text-slate-500 hover:border-indigo-200'
-                          }`}
-                        >
-                          <span className="text-[14px] font-black">{cat.name}</span>
-                          {selectedTopics.includes(cat.id) && <CheckCircle size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-indigo-400" />}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ) : step === 'title' ? (
-                <div className="space-y-4">
-                   <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest italic">Recommended Headlines</h3>
-                   <div className="space-y-3">
-                     {titles.map((t, i) => (
-                       <button 
-                        key={i} 
-                        onClick={() => handleGenerateIndex(t)}
-                        className="w-full text-left p-6 rounded-3xl bg-slate-50 border border-slate-100 hover:border-indigo-600 hover:bg-white hover:shadow-2xl transition-all group"
-                       >
-                         <p className="text-base font-bold text-slate-800 group-hover:text-indigo-600 leading-snug">{t}</p>
-                       </button>
-                     ))}
-                   </div>
-                </div>
-              ) : step === 'index' ? (
                 <div className="space-y-6">
-                  <div className="bg-indigo-50 p-6 rounded-3xl border border-indigo-100">
-                    <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Headline</h4>
-                    <p className="text-base font-black text-indigo-900 leading-tight">{selectedTitle}</p>
-                  </div>
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest">AI 시공 전문 목차</h3>
-                    <div className="bg-white border border-slate-100 rounded-3xl p-6 space-y-5 shadow-inner">
-                      {indexList.map((idx, i) => (
-                        <div key={i} className="flex gap-4 items-start">
-                          <div className="w-6 h-6 rounded-lg bg-slate-100 text-[10px] font-black flex items-center justify-center text-slate-500 shrink-0">{i+1}</div>
-                          <p className="text-sm font-bold text-slate-700 leading-snug">{idx}</p>
-                        </div>
-                      ))}
+                  {indexList.map((idx, i) => (
+                    <div key={i} className="flex gap-8 items-center group">
+                      <div className="w-14 h-14 rounded-2xl bg-slate-900 text-white font-black text-xl flex items-center justify-center shadow-lg">{i+1}</div>
+                      <p className="text-2xl font-bold text-slate-700 leading-snug">{idx}</p>
                     </div>
-                  </div>
+                  ))}
                 </div>
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center space-y-6 py-20 text-center">
-                   <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-100 animate-bounce mx-auto">
-                     <CheckCircle2 size={32} />
-                   </div>
-                   <div>
-                     <h3 className="text-xl font-black text-slate-900">콘텐츠 생성 완료!</h3>
-                     <p className="text-sm text-slate-500 mt-2 font-medium">우측 창에서 최종 결과물을 확인하세요.</p>
-                   </div>
-                </div>
-              )}
-            </div>
+              </div>
 
-            <div className="p-8 border-t border-slate-100 shrink-0">
-              {step === 'keyword' && (
-                <button 
-                  onClick={handleGenerateTitles}
-                  disabled={selectedTopics.length === 0 || loading}
-                  className="w-full py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-lg shadow-xl shadow-indigo-100 hover:bg-indigo-700 active:scale-[0.98] transition-all flex items-center justify-center gap-3 disabled:opacity-50"
-                >
-                  <Sparkles size={22} className="text-amber-300" /> 제목 생성 시작
-                </button>
-              )}
-              {step === 'index' && (
+              <div className="flex justify-center pt-8">
                 <button 
                   onClick={handleGenerateFullContent}
-                  className="w-full py-5 bg-slate-900 text-white rounded-[2rem] font-black text-lg shadow-xl hover:bg-slate-800 active:scale-[0.98] transition-all flex items-center justify-center gap-3"
+                  className="px-24 py-8 bg-slate-900 text-white rounded-[3rem] font-black text-3xl shadow-2xl hover:bg-black transition-all hover:scale-105 active:scale-95 flex items-center gap-6"
                 >
-                  <FileText size={22} className="text-indigo-400" /> 시공 전문 원고 집필
+                  <FileText size={32} className="text-indigo-400" />
+                  전문 원고 생성 시작
                 </button>
-              )}
-              {step === 'result' && (
-                <button 
-                  onClick={() => setStep('keyword')}
-                  className="w-full py-5 bg-white border border-slate-200 text-slate-500 rounded-[2rem] font-black text-lg hover:bg-slate-50 active:scale-[0.98] transition-all shadow-sm"
-                >
-                  새로운 콘텐츠 만들기
-                </button>
-              )}
+              </div>
             </div>
           </div>
-        </div>
-
-        {/* 우측 미리보기 패널 */}
-        <div className="col-span-3 bg-slate-100 rounded-[3.5rem] border border-slate-200 overflow-hidden flex flex-col relative shadow-inner">
-          <div className="absolute top-8 left-8 flex items-center gap-3 bg-white/90 backdrop-blur-xl px-5 py-2.5 rounded-full shadow-lg z-20 border border-white/50">
-            <div className={`w-2 h-2 rounded-full ${step === 'result' ? 'bg-emerald-500' : 'bg-amber-400'} animate-pulse`} />
-            <span className="text-[11px] font-black text-slate-700 uppercase tracking-widest italic">
-              {step === 'result' ? 'Content Finalized' : 'AI System Ready'}
-            </span>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-12 scrollbar-hide flex flex-col items-center">
-            {step === 'result' && generatedData ? (
-               <div className="w-full max-w-2xl animate-in fade-in slide-in-from-right-10 duration-700">
-                  <div className="flex bg-white/60 backdrop-blur p-1.5 rounded-2xl border border-white mb-10 shadow-sm">
-                    {[
-                      { id: 'blog', name: '블로그', icon: <Layout size={16}/> },
-                      { id: 'insta', name: '인스타그램', icon: <Instagram size={16}/> },
-                      { id: 'short', name: '숏폼 가이드', icon: <Film size={16}/> }
-                    ].map(tab => (
-                      <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                        className={`flex-1 py-3.5 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all ${activeTab === tab.id ? 'bg-slate-900 text-white shadow-xl' : 'text-slate-500 hover:text-slate-900'}`}
-                      >
-                        {tab.icon} {tab.name}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="bg-white rounded-[4rem] p-12 shadow-2xl border border-white min-h-[600px] text-left overflow-hidden">
-                    {activeTab === 'blog' ? (
-                      <article className="prose prose-slate max-w-none">
-                        <div className="mb-14 pb-8 border-b border-slate-50">
-                           <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.4em] mb-4 italic">Automotive Detailing Blog Report</p>
-                           <h2 className="text-3xl font-black text-slate-900 tracking-tighter leading-tight !mt-0">{selectedTitle}</h2>
-                        </div>
-                        <div className="space-y-10 blog-content-view" 
-                             style={{ 
-                               fontSize: '1rem', 
-                               lineHeight: '1.9', 
-                               color: '#475569', 
-                               textAlign: 'justify', 
-                               wordBreak: 'keep-all' 
-                             }}
-                             dangerouslySetInnerHTML={{ __html: generatedData.blog_html }} />
-                      </article>
-                    ) : activeTab === 'insta' ? (
-                      <div className="space-y-8 animate-in fade-in slide-in-from-right-4">
-                        <div className="flex items-center gap-4 p-5 bg-slate-50 rounded-[2rem]">
-                          <div className="w-14 h-14 bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 rounded-full flex items-center justify-center text-white shadow-lg"><Instagram size={28}/></div>
-                          <div>
-                            <p className="font-black text-slate-900 text-lg tracking-tight italic">Social Engagement Feed</p>
-                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest italic leading-none">Algorithm Optimized Content</p>
-                          </div>
-                        </div>
-                        <div className="p-10 bg-slate-50 rounded-[3rem] border border-slate-100 font-bold text-slate-700 leading-relaxed whitespace-pre-wrap italic shadow-inner">
-                          {generatedData.insta_text}
-                        </div>
-                        <div className="p-6 bg-indigo-50 rounded-3xl border border-indigo-100 shadow-sm">
-                          <p className="text-[11px] font-black text-indigo-600 uppercase mb-3 flex items-center gap-2 tracking-widest italic"><Hash size={14}/> Recommended Hashtags</p>
-                          <p className="text-xs text-indigo-400 font-bold tracking-tight leading-relaxed">#GLUNEX #디테일링 #시공후기 #차쟁이 #유리막코팅 #카스타그램 #세차스타그램 #명품시공</p>
+        ) : (
+          /* 최종 결과: 스튜디오 편집기 레이아웃 (매우 웅장하게) */
+          <div className="flex-1 flex overflow-hidden animate-in fade-in zoom-in-95 duration-700 bg-white">
+            {/* 좌측: 결과물 컨텐츠 영역 */}
+            <div className="flex-1 overflow-y-auto p-20 scrollbar-hide border-r border-slate-100">
+               <div className="max-w-3xl mx-auto space-y-16">
+                  {activeTab === 'blog' ? (
+                    <article className="prose prose-slate max-w-none">
+                      <div className="mb-20 pb-12 border-b-2 border-slate-100">
+                         <div className="flex items-center gap-3 text-indigo-600 font-black uppercase tracking-[0.4em] mb-6 italic text-sm">
+                            <Monitor size={20} /> Professional Blog Post
+                         </div>
+                         <h2 className="text-6xl font-black text-slate-900 tracking-tighter leading-[1.1] !mt-0">{selectedTitle}</h2>
+                      </div>
+                      <div className="space-y-12 blog-content-view" 
+                           style={{ fontSize: '1.25rem', lineHeight: '2.1', color: '#334155', textAlign: 'justify', wordBreak: 'keep-all' }}
+                           dangerouslySetInnerHTML={{ __html: generatedData.blog_html }} />
+                    </article>
+                  ) : activeTab === 'insta' ? (
+                    <div className="space-y-12 max-w-xl mx-auto">
+                      <div className="p-12 bg-slate-50 rounded-[4rem] shadow-inner border border-slate-100 relative">
+                         <div className="flex items-center gap-4 mb-10">
+                            <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 flex items-center justify-center text-white shadow-xl"><Instagram size={32}/></div>
+                            <div>
+                               <p className="text-2xl font-black text-slate-900 italic leading-tight">Instagram Engagement</p>
+                               <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Optimized for Social Feed</p>
+                            </div>
+                         </div>
+                         <pre className="whitespace-pre-wrap text-2xl font-bold text-slate-700 leading-relaxed italic tracking-tight">
+                            {generatedData.insta_text}
+                         </pre>
+                      </div>
+                      <div className="p-10 bg-indigo-50 rounded-[3rem] border-2 border-indigo-100">
+                        <p className="text-sm font-black text-indigo-600 uppercase mb-4 flex items-center gap-3 tracking-widest italic"><Hash size={20}/> AI Recommended Tags</p>
+                        <p className="text-lg text-indigo-400 font-bold tracking-tight leading-relaxed">#GLUNEX #디테일링 #시공후기 #차쟁이 #유리막코팅 #카스타그램 #세차스타그램 #명품시공 #CARLIFESTYLE</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-12 max-w-2xl mx-auto">
+                      <div className="flex items-center gap-6 p-8 bg-slate-900 rounded-[3rem] text-white shadow-2xl">
+                        <Film size={48} className="text-blue-400 animate-pulse" />
+                        <div>
+                          <p className="text-3xl font-black italic tracking-tight">Vertical Video Script</p>
+                          <p className="text-xs text-slate-500 font-bold uppercase tracking-[0.3em] mt-2">Short-form Production Guide</p>
                         </div>
                       </div>
-                    ) : (
-                      <div className="space-y-8 animate-in fade-in slide-in-from-right-4">
-                        <div className="flex items-center gap-4 p-5 bg-slate-900 rounded-[2rem] text-white shadow-xl">
-                          <Film size={28} className="text-blue-400" />
-                          <div>
-                            <p className="font-black text-lg tracking-tight italic">Short-form Script</p>
-                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Video Production Guide</p>
-                          </div>
-                        </div>
-                        <div className="bg-slate-900 p-10 rounded-[3rem] shadow-2xl text-white/90 border border-slate-800">
-                           <pre className="whitespace-pre-wrap text-base font-bold italic leading-relaxed text-white drop-shadow-md">{generatedData.short_form}</pre>
-                        </div>
+                      <div className="bg-slate-900 p-16 rounded-[4rem] shadow-2xl text-white border border-slate-800 space-y-12">
+                         <div className="space-y-8">
+                            <div className="border-l-[10px] border-blue-500 pl-8 py-2">
+                               <p className="text-sm font-black text-blue-400 uppercase tracking-[0.4em] mb-2 italic">Scene 01. The Hook</p>
+                               <p className="text-xl font-bold text-slate-300 italic">"고객의 시선을 0.5초 만에 사로잡는 강렬한 첫 시공 장면(물방울 발수 등)을 배치하세요."</p>
+                            </div>
+                            <div className="border-l-[10px] border-indigo-500/30 pl-8 py-2">
+                               <p className="text-sm font-black text-slate-500 uppercase tracking-[0.4em] mb-2 italic">Scene 02. Expert Process</p>
+                               <p className="text-xl font-bold text-slate-300 italic">"전문 장비의 기계음(ASMR)과 시공 공정을 클로즈업하여 신뢰도를 극대화합니다."</p>
+                            </div>
+                            <div className="pt-12 border-t border-slate-800">
+                               <p className="text-sm font-black text-amber-500 uppercase tracking-[0.4em] mb-6 italic">Narration / Script</p>
+                               <p className="text-4xl font-black italic leading-[1.3] text-white tracking-tighter shadow-indigo-900 drop-shadow-2xl">{generatedData.short_form}</p>
+                            </div>
+                         </div>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                </div>
-            ) : (
-               <div className="w-full max-w-lg h-[750px] bg-white rounded-[4rem] shadow-2xl border-[12px] border-slate-900 relative flex flex-col items-center justify-center text-center p-12">
-                  <div className="absolute top-10 left-1/2 -translate-x-1/2 w-32 h-7 bg-slate-900 rounded-full" />
-                  <div className="space-y-8 opacity-20">
-                    <MousePointer2 size={64} className="mx-auto text-indigo-600 animate-bounce" />
-                    <div className="space-y-3">
-                       <h5 className="font-black text-slate-900 text-2xl uppercase italic tracking-tighter">Awaiting Logic Input</h5>
-                       <p className="text-sm text-slate-400 font-bold uppercase tracking-widest leading-relaxed">좌측 패널에서 시공 항목을 선택하면<br/>이곳에 AI 실시간 미리보기가 생성됩니다.</p>
+            </div>
+
+            {/* 우측: 사이드 컨트롤 바 (모드 전환 및 액션) */}
+            <div className="w-[450px] bg-slate-50 border-l border-slate-200 p-12 flex flex-col shrink-0">
+               <div className="space-y-12 flex-1">
+                  <div className="space-y-4">
+                     <h5 className="text-xs font-black text-slate-400 uppercase tracking-[0.3em] italic">Select Output Channel</h5>
+                     <div className="grid grid-cols-1 gap-3">
+                        {[
+                          { id: 'blog', name: '네이버 블로그 리포트', icon: <Chrome size={24}/>, desc: 'SEO 최적화 전문 원고' },
+                          { id: 'insta', name: '인스타그램 피드', icon: <Instagram size={24}/>, desc: '도달율 중심 SNS 본문' },
+                          { id: 'short', name: '숏폼 가이드북', icon: <Film size={24}/>, desc: '릴스/쇼츠 제작 스크립트' }
+                        ].map(tab => (
+                          <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                            className={`p-8 rounded-[2.5rem] border-4 text-left transition-all group ${activeTab === tab.id ? 'bg-slate-900 border-slate-900 text-white shadow-2xl scale-105' : 'bg-white border-white text-slate-400 hover:border-indigo-100'}`}
+                          >
+                            <div className="flex items-center gap-4 mb-2">
+                               {tab.icon}
+                               <span className="text-xl font-black tracking-tight">{tab.name}</span>
+                            </div>
+                            <p className={`text-xs font-medium ${activeTab === tab.id ? 'text-slate-400' : 'text-slate-300'}`}>{tab.desc}</p>
+                          </button>
+                        ))}
+                     </div>
+                  </div>
+
+                  <div className="p-8 bg-indigo-600 rounded-[3rem] text-white shadow-2xl shadow-indigo-100 flex items-center gap-6">
+                    <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center"><Download size={32} /></div>
+                    <div>
+                      <p className="text-2xl font-black italic tracking-tighter leading-none">Content Verified</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest mt-2 text-indigo-200">System Ready for Deployment</p>
                     </div>
                   </div>
                </div>
-            )}
-          </div>
 
-          {step === 'result' && (
-            <div className="p-10 bg-white/95 backdrop-blur-2xl border-t border-slate-200 shrink-0 flex items-center justify-between z-30">
-               <div className="flex items-center gap-5">
-                  <div className="bg-indigo-50 p-4 rounded-2xl text-indigo-600 shadow-inner"><Download size={24} /></div>
-                  <div className="text-left">
-                    <p className="text-base font-black text-slate-900 italic uppercase leading-none">Content Verified</p>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-2">Ready for deployment</p>
-                  </div>
-               </div>
-               <div className="flex gap-4">
-                  <button 
-                    onClick={handleCopy}
-                    className={`px-10 py-5 ${isCopied ? 'bg-emerald-600' : 'bg-slate-900'} text-white rounded-[2rem] font-black text-lg flex items-center gap-4 transition-all hover:scale-[1.03] shadow-2xl active:scale-95`}
-                  >
-                    {isCopied ? <CheckCircle2 size={24} /> : <Copy size={24} />}
-                    {isCopied ? '복사 완료' : '전체 내용 복사'}
-                  </button>
-               </div>
+               <button 
+                  onClick={handleCopy}
+                  className={`w-full py-10 ${isCopied ? 'bg-emerald-600 shadow-emerald-200' : 'bg-slate-900 shadow-slate-900/20'} text-white rounded-[3rem] font-black text-3xl flex items-center justify-center gap-6 transition-all hover:scale-[1.03] shadow-2xl active:scale-95`}
+               >
+                  {isCopied ? <CheckCircle2 size={36} /> : <Copy size={36} />}
+                  {isCopied ? 'COPY SUCCESS' : 'COPY ALL CONTENT'}
+               </button>
             </div>
-          )}
-        </div>
-      </div>
+          </div>
+        )}
+      </main>
 
-      {/* 복사 버퍼 (숨김) */}
+      {/* 3. 복사 버퍼 (숨김 처리) */}
       <div 
         ref={copyBufferRef}
-        style={{ 
-          position: 'absolute', top: '-9999px', left: '-9999px',
-          width: '600px', pointerEvents: 'none', userSelect: 'all', display: 'none'
-        }}
+        style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '800px', pointerEvents: 'none', userSelect: 'all', display: 'none' }}
         dangerouslySetInnerHTML={{ __html: generatedData ? `<h2>${selectedTitle}</h2>` + generatedData.blog_html : '' }}
       />
     </div>
