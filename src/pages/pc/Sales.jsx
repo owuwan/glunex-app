@@ -14,16 +14,17 @@ import {
   BarChart3,
   ArrowUpRight,
   PieChart,
-  Activity
+  Activity,
+  ArrowRight
 } from 'lucide-react';
 
-// 파이어베이스 연동 (경로 오류 수정을 위해 src 폴더 기준 상대 경로 재확인)
+// 파이어베이스 연동 (경로 오류 수정을 위해 src/firebase.js 위치를 재확인한 상대 경로)
 import { auth, db } from '../../firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 
 /**
  * Sales: PC 전용 매출 현황 분석 스튜디오
- * 앱 버전의 매출 정산 로직을 이식하여 실시간 매출 지표를 시각화합니다.
+ * 앱 버전의 매출 정산 로직과 그래프 시각화를 PC 대화면에 맞춰 구현했습니다.
  */
 const Sales = () => {
   const navigate = useNavigate();
@@ -32,7 +33,7 @@ const Sales = () => {
   const [filteredData, setFilteredData] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   
-  // 매출 분석 상태
+  // 매출 분석 통계 상태
   const [stats, setStats] = useState({
     totalSales: 0,
     monthSales: 0,
@@ -40,6 +41,9 @@ const Sales = () => {
     averagePrice: 0,
     count: 0
   });
+
+  // 그래프용 7일 데이터 상태
+  const [chartData, setChartData] = useState([]);
 
   useEffect(() => {
     const user = auth.currentUser;
@@ -56,14 +60,14 @@ const Sales = () => {
         ...doc.data()
       }));
 
-      // 본인 데이터만 필터링 및 최신순 정렬
+      // 현재 사용자 데이터만 필터링 및 최신순 정렬
       const myData = allData
         .filter(w => w.userId === user.uid)
         .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 
       setWarranties(myData);
       setFilteredData(myData);
-      calculateRevenue(myData);
+      processSalesData(myData);
       setLoading(false);
     }, (error) => {
       console.error("매출 데이터 로드 실패:", error);
@@ -73,8 +77,8 @@ const Sales = () => {
     return () => unsubscribe();
   }, [navigate]);
 
-  // 실시간 매출 정산 로직
-  const calculateRevenue = (data) => {
+  // 매출 정산 및 주간 그래프 데이터 생성 로직
+  const processSalesData = (data) => {
     const now = new Date();
     const todayStr = now.toLocaleDateString();
     const currentMonth = now.getMonth();
@@ -83,19 +87,40 @@ const Sales = () => {
     let total = 0;
     let monthTotal = 0;
     let todayTotal = 0;
+    
+    // 그래프용 최근 7일 데이터 맵 초기화
+    const dailyMap = {};
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateKey = d.toLocaleDateString();
+      dailyMap[dateKey] = { 
+        label: d.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }), 
+        dayName: d.toLocaleDateString('ko-KR', { weekday: 'short' }),
+        amount: 0 
+      };
+    }
 
     data.forEach(item => {
+      // 금액 데이터 정제 (문자열에서 숫자만 추출)
       const price = Number(String(item.warrantyPrice || 0).replace(/[^0-9]/g, ''));
       total += price;
 
+      // 타임스탬프 변환 (Firestore seconds 기반)
       const date = item.createdAt?.seconds ? new Date(item.createdAt.seconds * 1000) : new Date();
+      const itemDateStr = date.toLocaleDateString();
       
-      // 오늘 매출 체크
-      if (date.toLocaleDateString() === todayStr) {
+      // 1. 최근 7일 그래프 데이터 합산
+      if (dailyMap[itemDateStr]) {
+        dailyMap[itemDateStr].amount += price;
+      }
+
+      // 2. 오늘 매출 합계
+      if (itemDateStr === todayStr) {
         todayTotal += price;
       }
 
-      // 이번 달 매출 체크
+      // 3. 이번 달 매출 합계
       if (date.getMonth() === currentMonth && date.getFullYear() === currentYear) {
         monthTotal += price;
       }
@@ -108,9 +133,11 @@ const Sales = () => {
       averagePrice: data.length > 0 ? Math.round(total / data.length) : 0,
       count: data.length
     });
+
+    setChartData(Object.values(dailyMap));
   };
 
-  // 검색 필터링
+  // 통합 검색 필터링
   useEffect(() => {
     const lowerSearch = searchTerm.toLowerCase();
     const result = warranties.filter(w => 
@@ -128,18 +155,21 @@ const Sales = () => {
     return (
       <div className="flex-1 flex flex-col items-center justify-center h-full min-h-[500px] bg-slate-50/50">
         <div className="relative flex items-center justify-center">
-          <div className="w-12 h-12 border-4 border-slate-200 border-t-emerald-600 rounded-full animate-spin"></div>
-          <DollarSign size={20} className="absolute text-emerald-600 animate-pulse" />
+          <div className="w-12 h-12 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin"></div>
+          <DollarSign size={20} className="absolute text-indigo-600 animate-pulse" />
         </div>
-        <p className="mt-4 text-slate-500 text-[11px] font-black uppercase tracking-widest">매출 데이터 정산 중...</p>
+        <p className="mt-4 text-slate-500 text-[11px] font-black uppercase tracking-widest">실시간 매출 정산 중...</p>
       </div>
     );
   }
 
+  // 차트 최대 높이 계산
+  const maxAmount = Math.max(...chartData.map(d => d.amount), 1);
+
   return (
-    <div className="space-y-5 animate-in fade-in duration-500 w-full pb-6 px-4">
+    <div className="space-y-5 animate-in fade-in duration-500 w-full pb-10">
       
-      {/* 1. 상단 분석 헤더 */}
+      {/* 1. 상단 분석 헤더 (명칭: 매출 현황) */}
       <div className="flex items-center justify-between bg-white px-8 py-5 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex items-center gap-4">
           <div className="p-2.5 bg-emerald-600 text-white rounded-xl shadow-lg shadow-emerald-100">
@@ -147,118 +177,135 @@ const Sales = () => {
           </div>
           <div>
             <h1 className="text-xl font-black text-slate-900 leading-none uppercase italic">매출 현황 분석 스튜디오</h1>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1.5">Real-time Financial Revenue Analytics</p>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1.5">Real-time Financial Performance Dashboard</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <div className="bg-slate-50 border border-slate-100 px-4 py-2 rounded-xl flex flex-col items-end">
-            <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Last Update</span>
-            <span className="text-xs font-black text-slate-700">{new Date().toLocaleTimeString()}</span>
-          </div>
           <button 
             onClick={() => navigate('/create')}
-            className="bg-slate-900 text-white px-5 py-3 rounded-xl font-bold text-xs hover:bg-black transition-all shadow-md uppercase"
+            className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold text-xs hover:bg-black transition-all shadow-md uppercase tracking-tighter"
           >
-            <Plus size={16} className="inline mr-1" /> 보증서 추가 발행
+            <Plus size={14} className="inline mr-1" /> 보증서 추가 발행
           </button>
         </div>
       </div>
 
-      {/* 2. 매출 성과 지표 (하이엔드 카드) */}
+      {/* 2. 매출 요약 지표 카드 */}
       <div className="grid grid-cols-4 gap-5">
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm group">
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-lg">
-              <Calendar size={20} />
-            </div>
-            <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded uppercase italic">Month</span>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">이번 달 확정 매출</p>
+          <h3 className="text-2xl font-black text-slate-900 tracking-tighter italic leading-none">₩{formatPrice(stats.monthSales)}</h3>
+          <div className="mt-4 flex items-center gap-1.5 text-[10px] text-emerald-500 font-black italic">
+            <TrendingUp size={12} /> LIVE SYNCING
           </div>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">이번 달 매출</p>
-          <h3 className="text-2xl font-black text-slate-900 tracking-tighter italic">₩{formatPrice(stats.monthSales)}</h3>
         </div>
-
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm group">
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-lg">
-              <TrendingUp size={20} />
-            </div>
-            <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded uppercase italic">Total</span>
-          </div>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">누적 총 매출</p>
-          <h3 className="text-2xl font-black text-slate-900 tracking-tighter italic">₩{formatPrice(stats.totalSales)}</h3>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">누적 총 매출</p>
+          <h3 className="text-2xl font-black text-slate-900 tracking-tighter italic leading-none">₩{formatPrice(stats.totalSales)}</h3>
+          <div className="mt-4 text-[10px] text-slate-400 font-bold uppercase tracking-widest italic">All-time Database</div>
         </div>
-
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm group">
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-2.5 bg-blue-50 text-blue-600 rounded-lg">
-              <PieChart size={20} />
-            </div>
-            <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded uppercase italic">Average</span>
-          </div>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">평균 객단가</p>
-          <h3 className="text-2xl font-black text-slate-900 tracking-tighter italic">₩{formatPrice(stats.averagePrice)}</h3>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">평균 시공 단가</p>
+          <h3 className="text-2xl font-black text-slate-900 tracking-tighter italic leading-none">₩{formatPrice(stats.averagePrice)}</h3>
+          <div className="mt-4 text-[10px] text-indigo-500 font-bold uppercase tracking-widest italic">Efficiency Index</div>
         </div>
-
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm group">
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-2.5 bg-amber-50 text-amber-600 rounded-lg">
-              <Activity size={20} />
-            </div>
-            <span className="text-[10px] font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded uppercase italic">Today</span>
-          </div>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">오늘 매출</p>
-          <h3 className="text-2xl font-black text-slate-900 tracking-tighter italic">₩{formatPrice(stats.todaySales)}</h3>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">오늘 발생 매출</p>
+          <h3 className="text-2xl font-black text-emerald-600 tracking-tighter italic leading-none">₩{formatPrice(stats.todaySales)}</h3>
+          <div className="mt-4 text-[10px] text-emerald-500 font-bold uppercase tracking-widest italic animate-pulse">Updated Today</div>
         </div>
       </div>
 
-      {/* 3. 상세 내역 리스트 (고밀도 데이터 테이블) */}
+      {/* 3. 매출 추이 그래프 섹션 */}
+      <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex items-center justify-between mb-10">
+          <div>
+            <h2 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-2 italic">
+              <Activity size={16} className="text-emerald-500" /> 주간 매출 추이 분석 (Recent 7 Days)
+            </h2>
+          </div>
+          <div className="flex items-center gap-4">
+             <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full" />
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Daily Revenue</span>
+             </div>
+          </div>
+        </div>
+        
+        {/* 커스텀 바 차트 */}
+        <div className="flex items-end justify-between h-40 gap-4 px-2">
+          {chartData.map((d, i) => (
+            <div key={i} className="flex-1 flex flex-col items-center group relative h-full justify-end">
+              {/* 금액 툴팁 */}
+              <div className="absolute -top-10 opacity-0 group-hover:opacity-100 transition-all bg-slate-900 text-white text-[10px] font-black px-2 py-1 rounded whitespace-nowrap z-20 shadow-xl">
+                ₩{formatPrice(d.amount)}
+              </div>
+              {/* 막대 */}
+              <div 
+                className="w-full bg-slate-50 border border-slate-100 rounded-t-lg group-hover:bg-emerald-500 group-hover:border-emerald-600 transition-all relative overflow-hidden"
+                style={{ height: `${(d.amount / maxAmount) * 100}%`, minHeight: '4px' }}
+              >
+                <div className="absolute inset-0 bg-gradient-to-t from-black/5 to-transparent" />
+              </div>
+              {/* 날짜 라벨 */}
+              <div className="mt-4 text-center">
+                <p className="text-[9px] font-black text-slate-400 uppercase leading-none">{d.label}</p>
+                <p className="text-[10px] font-black text-slate-900 mt-1 uppercase italic">{d.dayName}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 4. 매출 상세 데이터 리스트 (시공 일자 연동) */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col min-h-[500px]">
-        {/* 필터 및 검색 */}
         <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/30">
           <div className="relative w-80">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input 
               type="text" 
               placeholder="고객명, 시공품목, 차량번호 검색..." 
-              className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all"
+              className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
           <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black text-slate-500 hover:bg-slate-900 hover:text-white transition-all uppercase tracking-tighter shadow-sm">
-            <Download size={14} /> 매출장 엑셀 내보내기
+            <Download size={14} /> 매출 보고서 내보내기
           </button>
         </div>
 
-        {/* 메인 리스트 */}
         <div className="flex-1 overflow-y-auto scrollbar-hide">
           <table className="w-full text-left text-[11px]">
             <thead className="bg-slate-50/80 text-slate-500 font-black uppercase tracking-widest border-b border-slate-100 sticky top-0 z-10 backdrop-blur-sm">
               <tr>
-                <th className="px-8 py-4">시공 일자</th>
-                <th className="px-8 py-4">고객 정보</th>
-                <th className="px-8 py-4">시공 품목</th>
-                <th className="px-8 py-4">차량 데이터</th>
-                <th className="px-8 py-4 text-right">매출액</th>
-                <th className="px-8 py-4 text-center">전표</th>
+                <th className="px-8 py-3.5">시공 완료일</th>
+                <th className="px-8 py-3.5">고객 프로필</th>
+                <th className="px-8 py-3.5">시공 항목</th>
+                <th className="px-8 py-3.5">차량 데이터</th>
+                <th className="px-8 py-3.5 text-right">매출액 (₩)</th>
+                <th className="px-8 py-3.5 text-center">전표</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {filteredData.length > 0 ? filteredData.map((data) => {
-                const date = data.createdAt?.seconds 
-                  ? new Date(data.createdAt.seconds * 1000).toLocaleDateString() 
-                  : 'N/A';
+                // [수정] Firestore createdAt 타임스탬프 실시간 동기화
+                const timestamp = data.createdAt;
+                const displayDate = timestamp?.seconds 
+                  ? new Date(timestamp.seconds * 1000).toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }) 
+                  : '날짜 미지정';
+
                 return (
                   <tr 
                     key={data.id} 
-                    className="hover:bg-emerald-50/30 transition-all cursor-pointer group" 
+                    className="hover:bg-indigo-50/30 transition-all cursor-pointer group" 
                     onClick={() => navigate(`/warranty/view/${data.id}`)}
                   >
                     <td className="px-8 py-5 font-black text-slate-400 italic">
-                      {date}
+                      {displayDate}
                     </td>
                     <td className="px-8 py-5 text-slate-900">
-                      <div className="font-black italic uppercase text-base group-hover:text-emerald-600 transition-colors leading-none">{data.customerName}</div>
+                      <div className="font-black italic uppercase text-base group-hover:text-indigo-600 transition-colors leading-none">{data.customerName}</div>
                       <div className="text-[9px] text-slate-400 font-bold mt-1 tracking-tighter leading-none">{data.phone}</div>
                     </td>
                     <td className="px-8 py-5">
@@ -282,11 +329,8 @@ const Sales = () => {
                 );
               }) : (
                 <tr>
-                  <td colSpan="6" className="px-8 py-32 text-center">
-                    <div className="flex flex-col items-center opacity-20">
-                      <Database size={40} className="mb-3" />
-                      <p className="text-xs font-black uppercase tracking-widest italic">데이터가 존재하지 않습니다.</p>
-                    </div>
+                  <td colSpan="6" className="px-8 py-32 text-center text-slate-300 font-black italic uppercase tracking-widest">
+                    No Financial Activity Found
                   </td>
                 </tr>
               )}
@@ -294,11 +338,10 @@ const Sales = () => {
           </table>
         </div>
 
-        {/* 하단 요약 정보 */}
         <div className="p-4 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest italic">
-          <div>Report Sync: Total {filteredData.length} records analyzed</div>
+          <div>Report Sync: {filteredData.length} entries matching current criteria</div>
           <div className="flex gap-2 text-emerald-600">
-             Financial Integrity Verified
+             Verified Cloud Sync Active
           </div>
         </div>
       </div>
