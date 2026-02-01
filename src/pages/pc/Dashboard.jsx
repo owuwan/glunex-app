@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Users, 
   TrendingUp, 
@@ -7,14 +8,20 @@ import {
   ChevronRight, 
   Calendar,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  Sparkles,
+  Zap,
+  ShieldCheck,
+  MessageCircle
 } from 'lucide-react';
 
 /**
- * PC 전용 Dashboard 페이지
- * 모바일보다 확장된 데이터 시각화와 리스트를 제공합니다.
+ * PC 전용 Dashboard 페이지 (업데이트)
+ * 모바일 메인에 있던 'AI 마케팅 에이전트' 퀵 링크를 추가했습니다.
  */
 const Dashboard = () => {
+  const navigate = useNavigate();
+
   // 샘플 데이터
   const stats = [
     { label: '전체 고객 수', value: '1,284', change: '+12.5%', isUp: true, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
@@ -40,8 +47,8 @@ const Dashboard = () => {
         </div>
         <div className="flex items-center gap-3 bg-white p-1.5 rounded-2xl border border-slate-200 shadow-sm">
           <button className="px-4 py-2 text-sm font-bold bg-slate-900 text-white rounded-xl shadow-md">실시간</button>
-          <button className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-900">주간</button>
-          <button className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-900">월간</button>
+          <button className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors">주간</button>
+          <button className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors">월간</button>
         </div>
       </div>
 
@@ -64,8 +71,53 @@ const Dashboard = () => {
         ))}
       </div>
 
-      {/* 3. 메인 컨텐츠 그리드 (최근 이력 + 일정) */}
-      <div className="grid grid-cols-3 gap-8">
+      {/* [추가] 3. 핵심 AI 서비스 & 퀵 액션 섹션 (모바일 메인 느낌 그대로) */}
+      <div className="grid grid-cols-3 gap-6">
+        <button 
+          onClick={() => navigate('/creator')}
+          className="col-span-1 p-6 bg-gradient-to-br from-indigo-600 to-violet-700 rounded-3xl text-left text-white shadow-xl shadow-indigo-100 group transition-all hover:-translate-y-1"
+        >
+          <div className="flex items-center justify-between mb-8">
+            <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center">
+              <Sparkles size={24} className="text-white" />
+            </div>
+            <ChevronRight size={20} className="text-white/50 group-hover:translate-x-1 transition-transform" />
+          </div>
+          <h4 className="text-xl font-black mb-1">AI 마케팅 에이전트</h4>
+          <p className="text-indigo-100 text-xs font-medium">네이버 블로그/인스타 포스팅 10초 완성</p>
+        </button>
+
+        <button 
+          onClick={() => navigate('/create')}
+          className="col-span-1 p-6 bg-white border border-slate-200 rounded-3xl text-left shadow-sm group transition-all hover:border-indigo-600 hover:-translate-y-1 hover:shadow-xl"
+        >
+          <div className="flex items-center justify-between mb-8">
+            <div className="w-12 h-12 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center">
+              <ShieldCheck size={24} />
+            </div>
+            <ChevronRight size={20} className="text-slate-300 group-hover:translate-x-1 transition-transform" />
+          </div>
+          <h4 className="text-xl font-black text-slate-900 mb-1">서비스 보증서 발행</h4>
+          <p className="text-slate-400 text-xs font-medium">보험수리 대응 공식 시공 보증서 발급</p>
+        </button>
+
+        <button 
+          onClick={() => navigate('/marketing')}
+          className="col-span-1 p-6 bg-white border border-slate-200 rounded-3xl text-left shadow-sm group transition-all hover:border-blue-600 hover:-translate-y-1 hover:shadow-xl"
+        >
+          <div className="flex items-center justify-between mb-8">
+            <div className="w-12 h-12 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center">
+              <MessageCircle size={24} />
+            </div>
+            <ChevronRight size={20} className="text-slate-300 group-hover:translate-x-1 transition-transform" />
+          </div>
+          <h4 className="text-xl font-black text-slate-900 mb-1">단골 마케팅 센터</h4>
+          <p className="text-slate-400 text-xs font-medium">재방문 유도 알림톡 및 고객 관리</p>
+        </button>
+      </div>
+
+      {/* 4. 하단 상세 영역 (최근 이력 + 일정) */}
+      <div className="grid grid-cols-3 gap-8 pt-4">
         <div className="col-span-2 bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
           <div className="p-6 border-b border-slate-50 flex items-center justify-between">
             <h2 className="text-lg font-bold">최근 발행 이력</h2>
