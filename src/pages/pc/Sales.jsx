@@ -17,13 +17,13 @@ import {
   Activity
 } from 'lucide-react';
 
-// 파이어베이스 연동 (경로 오류 방지를 위한 상대 경로 설정)
+// 파이어베이스 연동
 import { auth, db } from '../../firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 
 /**
  * Sales: 매출 현황 분석 스튜디오
- * 시공 일자(createdAt) 데이터의 정밀 파싱 및 그래프 연동을 해결한 최종 버전입니다.
+ * 앱 버전과 동일하게 '시공예약일(reservationDate)'을 기준으로 모든 데이터를 집계합니다.
  */
 const Sales = () => {
   const navigate = useNavigate();
@@ -42,15 +42,11 @@ const Sales = () => {
 
   const [chartData, setChartData] = useState([]);
 
-  // [핵심 유틸리티] 다양한 형태의 createdAt 데이터를 Date 객체로 강제 변환
-  const toSafeDate = (ts) => {
-    if (!ts) return null;
-    // 1. Firestore Timestamp 객체 (.toDate() 메서드 존재 시)
-    if (typeof ts.toDate === 'function') return ts.toDate();
-    // 2. seconds/nanoseconds 객체 형태
-    if (ts.seconds) return new Date(ts.seconds * 1000);
-    // 3. 밀리초 숫자 또는 문자열
-    const d = new Date(ts);
+  // [유틸리티] reservationDate(문자열 혹은 객체)를 안전하게 처리
+  const getReservationDate = (item) => {
+    if (!item.reservationDate) return null;
+    // 보통 "2024-05-20" 형태의 문자열로 저장되므로 이를 Date 객체로 변환
+    const d = new Date(item.reservationDate);
     return isNaN(d.getTime()) ? null : d;
   };
 
@@ -61,7 +57,6 @@ const Sales = () => {
       return;
     }
 
-    // 실시간 데이터 구독
     const q = collection(db, "warranties");
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const allData = snapshot.docs.map(doc => ({
@@ -69,18 +64,18 @@ const Sales = () => {
         ...doc.data()
       }));
 
-      // 본인 데이터만 필터링 및 시공일자 최신순 정렬
+      // 본인 데이터 필터링 및 시공예약일 기준 내림차순 정렬
       const myData = allData
         .filter(w => w.userId === user.uid)
         .sort((a, b) => {
-          const dateA = toSafeDate(a.createdAt) || new Date(0);
-          const dateB = toSafeDate(b.createdAt) || new Date(0);
-          return dateB - dateA;
+          const dateA = a.reservationDate || "";
+          const dateB = b.reservationDate || "";
+          return dateB.localeCompare(dateA); // 최신 날짜가 위로
         });
 
       setWarranties(myData);
       setFilteredData(myData);
-      analyzeRevenue(myData);
+      analyzeByReservationDate(myData);
       setLoading(false);
     }, (error) => {
       console.error("데이터 동기화 실패:", error);
@@ -90,10 +85,10 @@ const Sales = () => {
     return () => unsubscribe();
   }, [navigate]);
 
-  // 매출 및 그래프 분석 로직
-  const analyzeRevenue = (data) => {
+  // 매출 및 그래프 분석 (시공예약일 기준)
+  const analyzeByReservationDate = (data) => {
     const now = new Date();
-    const todayKey = now.toLocaleDateString('en-CA'); // YYYY-MM-DD
+    const todayKey = now.toISOString().split('T')[0]; // YYYY-MM-DD
     const curMonth = now.getMonth();
     const curYear = now.getFullYear();
 
@@ -101,12 +96,12 @@ const Sales = () => {
     let month = 0;
     let today = 0;
     
-    // 그래프용 최근 7일 맵 (YYYY-MM-DD 기준)
+    // 그래프용 최근 7일 맵
     const dailyMap = {};
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      const key = d.toLocaleDateString('en-CA');
+      const key = d.toISOString().split('T')[0];
       dailyMap[key] = { 
         label: `${d.getMonth() + 1}/${d.getDate()}`, 
         dayName: d.toLocaleDateString('ko-KR', { weekday: 'short' }),
@@ -118,18 +113,19 @@ const Sales = () => {
       const price = Number(String(item.warrantyPrice || 0).replace(/[^0-9]/g, ''));
       total += price;
 
-      const itemDate = toSafeDate(item.createdAt);
-      if (!itemDate) return;
+      // 시공예약일(reservationDate) 기준 처리
+      const resDateStr = item.reservationDate; // "YYYY-MM-DD"
+      if (!resDateStr) return;
 
-      const itemKey = itemDate.toLocaleDateString('en-CA');
+      const itemDate = new Date(resDateStr);
       
       // 1. 주간 그래프 합산
-      if (dailyMap[itemKey]) {
-        dailyMap[itemKey].amount += price;
+      if (dailyMap[resDateStr]) {
+        dailyMap[resDateStr].amount += price;
       }
 
       // 2. 오늘 매출
-      if (itemKey === todayKey) {
+      if (resDateStr === todayKey) {
         today += price;
       }
 
@@ -167,7 +163,7 @@ const Sales = () => {
     return (
       <div className="flex-1 flex flex-col items-center justify-center h-full min-h-[500px]">
         <Loader2 className="animate-spin text-indigo-600 mb-4" size={32} />
-        <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">분석 데이터 동기화 중...</p>
+        <p className="text-slate-500 text-xs font-bold">시공예약일 데이터 동기화 중...</p>
       </div>
     );
   }
@@ -184,15 +180,15 @@ const Sales = () => {
             <BarChart3 size={20} />
           </div>
           <div>
-            <h1 className="text-xl font-black text-slate-900 leading-none italic">매출 현황 분석 스튜디오</h1>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1.5">실시간 시공 일자 및 재무 지표 연동</p>
+            <h1 className="text-xl font-black text-slate-900 leading-none italic">매출 현황 분석</h1>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1.5">시공예약일 기준 실시간 데이터</p>
           </div>
         </div>
         <button 
           onClick={() => navigate('/create')}
-          className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold text-xs hover:bg-black transition-all shadow-md uppercase"
+          className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold text-xs hover:bg-black transition-all"
         >
-          <Plus size={14} className="inline mr-1" /> 보증서 추가 발행
+          <Plus size={14} className="inline mr-1" /> 보증서 발행
         </button>
       </div>
 
@@ -211,10 +207,10 @@ const Sales = () => {
         ))}
       </div>
 
-      {/* 매출 그래프 */}
+      {/* 매출 그래프 (시공예약일 기준) */}
       <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
         <h2 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-2 italic mb-10">
-          <TrendingUp size={16} className="text-emerald-500" /> 주간 매출 추이 (시공일 기준)
+          <TrendingUp size={16} className="text-emerald-500" /> 주간 매출 추이 (예약일 기준)
         </h2>
         <div className="flex items-end justify-between h-40 gap-4 px-2">
           {chartData.map((d, i) => (
@@ -235,29 +231,26 @@ const Sales = () => {
         </div>
       </div>
 
-      {/* 상세 테이블 */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+      {/* 상세 테이블 (시공예약일 표시) */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/30">
           <div className="relative w-80">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input 
               type="text" 
               placeholder="고객명, 품목 검색..." 
-              className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-emerald-500/20 outline-none"
+              className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/20"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black text-slate-500 hover:bg-slate-900 hover:text-white transition-all">
-            <Download size={14} /> 엑셀 다운로드
-          </button>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-[11px]">
             <thead className="bg-slate-50/80 text-slate-500 font-black uppercase tracking-widest border-b border-slate-100">
               <tr>
-                <th className="px-8 py-4 text-indigo-600">시공 완료일</th>
+                <th className="px-8 py-4 text-indigo-600">시공예약일</th>
                 <th className="px-8 py-4">고객 프로필</th>
                 <th className="px-8 py-4">시공 품목</th>
                 <th className="px-8 py-4">차량 정보</th>
@@ -266,43 +259,38 @@ const Sales = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {filteredData.length > 0 ? filteredData.map((data) => {
-                const itemDate = toSafeDate(data.createdAt);
-                const displayDate = itemDate 
-                  ? itemDate.toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }) 
-                  : '날짜 미지정';
-
-                return (
-                  <tr 
-                    key={data.id} 
-                    className="hover:bg-indigo-50/30 transition-all cursor-pointer group" 
-                    onClick={() => navigate(`/warranty/view/${data.id}`)}
-                  >
-                    <td className="px-8 py-5 font-black text-slate-400 italic">{displayDate}</td>
-                    <td className="px-8 py-5 text-slate-900">
-                      <div className="font-black italic uppercase text-base group-hover:text-indigo-600 transition-colors leading-none">{data.customerName}</div>
-                      <div className="text-[9px] text-slate-400 font-bold mt-1 tracking-tighter leading-none">{data.phone}</div>
-                    </td>
-                    <td className="px-8 py-5">
-                      <span className="px-2.5 py-1 bg-white text-indigo-600 rounded-md font-black border border-indigo-100 uppercase text-[9px] tracking-tighter italic">
-                        {data.productName}
-                      </span>
-                    </td>
-                    <td className="px-8 py-5 text-slate-700 font-bold leading-tight">
-                      <div className="text-[11px] uppercase">{data.carModel}</div>
-                      <div className="inline-block mt-1.5 px-2 py-0.5 bg-slate-900 text-white rounded text-[8px] font-black tracking-widest leading-none uppercase">{data.plateNumber}</div>
-                    </td>
-                    <td className="px-8 py-5 text-right font-black text-slate-900 text-base italic tracking-tighter">
-                      ₩{fmt(data.warrantyPrice)}
-                    </td>
-                    <td className="px-8 py-5 text-center">
-                      <div className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 text-slate-400 group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-sm">
-                        <Eye size={16} />
-                      </div>
-                    </td>
-                  </tr>
-                );
-              }) : (
+              {filteredData.length > 0 ? filteredData.map((data) => (
+                <tr 
+                  key={data.id} 
+                  className="hover:bg-indigo-50/30 transition-all cursor-pointer group" 
+                  onClick={() => navigate(`/warranty/view/${data.id}`)}
+                >
+                  <td className="px-8 py-5 font-black text-slate-400 italic">
+                    {data.reservationDate ? data.reservationDate.replace(/-/g, '. ') : '날짜 미지정'}
+                  </td>
+                  <td className="px-8 py-5 text-slate-900">
+                    <div className="font-black italic uppercase text-base group-hover:text-indigo-600 transition-colors leading-none">{data.customerName}</div>
+                    <div className="text-[9px] text-slate-400 font-bold mt-1 tracking-tighter leading-none">{data.phone}</div>
+                  </td>
+                  <td className="px-8 py-5">
+                    <span className="px-2.5 py-1 bg-white text-indigo-600 rounded-md font-black border border-indigo-100 uppercase text-[9px] tracking-tighter italic">
+                      {data.productName}
+                    </span>
+                  </td>
+                  <td className="px-8 py-5 text-slate-700 font-bold leading-tight">
+                    <div className="text-[11px] uppercase">{data.carModel}</div>
+                    <div className="inline-block mt-1.5 px-2 py-0.5 bg-slate-900 text-white rounded text-[8px] font-black tracking-widest leading-none uppercase">{data.plateNumber}</div>
+                  </td>
+                  <td className="px-8 py-5 text-right font-black text-slate-900 text-base italic tracking-tighter">
+                    ₩{fmt(data.warrantyPrice)}
+                  </td>
+                  <td className="px-8 py-5 text-center">
+                    <div className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 text-slate-400 group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-sm">
+                      <Eye size={16} />
+                    </div>
+                  </td>
+                </tr>
+              )) : (
                 <tr>
                   <td colSpan="6" className="px-8 py-32 text-center text-slate-300 font-black italic uppercase tracking-widest">
                     분석 가능한 데이터가 존재하지 않습니다.
