@@ -5,8 +5,9 @@ import PcDashboard from '../pages/pc/Dashboard';
 import WarrantyIssue from '../pages/WarrantyIssue';
 import WarrantyResult from '../pages/WarrantyResult';
 import Marketing from '../pages/Marketing';
+import PcMarketing from '../pages/pc/Marketing'; // [추가] PC 전용 마케팅 임포트
 import Sales from '../pages/Sales';
-import PcSales from '../pages/pc/Sales'; // [추가] PC 전용 영업 관리 임포트
+import PcSales from '../pages/pc/Sales';
 import Creator from '../pages/Creator'; 
 import Register from '../pages/Register';
 import Login from '../pages/Login';
@@ -22,7 +23,6 @@ const AppRouter = () => {
   const navigate = useNavigate();
   const location = useLocation(); 
   
-  // PC 모드 감지를 위한 상태
   const [isPc, setIsPc] = useState(window.innerWidth >= 768);
 
   const [formData, setFormData] = useState({
@@ -31,7 +31,6 @@ const AppRouter = () => {
   const [userStatus, setUserStatus] = useState('free');
 
   useEffect(() => {
-    // 리사이즈 감지 로직 (PC/모바일 실시간 전환 대응)
     const handleResize = () => setIsPc(window.innerWidth >= 768);
     window.addEventListener('resize', handleResize);
 
@@ -83,9 +82,9 @@ const AppRouter = () => {
       <Route path="/create" element={<WarrantyIssue formData={formData} setFormData={setFormData} userStatus={userStatus} />} />
       <Route path="/warranty/result" element={<WarrantyResult formData={formData} userStatus={userStatus} />} />
       
-      <Route path="/marketing" element={<Marketing userStatus={userStatus} />} />
+      {/* [수정] 마케팅 관리 경로: PC일 때는 PcMarketing을, 모바일일 때는 기존 Marketing을 렌더링 */}
+      <Route path="/marketing" element={isPc ? <PcMarketing /> : <Marketing userStatus={userStatus} />} />
       
-      {/* [수정] 영업 관리 경로: PC일 때는 PcSales를, 모바일일 때는 기존 Sales를 렌더링 */}
       <Route path="/sales" element={isPc ? <PcSales /> : <Sales />} />
       
       <Route path="/creator" element={<Creator userStatus={userStatus} />} />
