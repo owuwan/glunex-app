@@ -80,7 +80,6 @@ const Creator = () => {
 
   const copyBufferRef = useRef(null);
 
-  // [수정] 모바일 앱 버전 로딩 문구와 100% 동일하게 복구
   const loadingMessages = {
     title: [
       "고객의 시선을 사로잡는\n최적의 자동차 시공 제목을 설계 중입니다",
@@ -312,7 +311,7 @@ const Creator = () => {
           </div>
         )}
 
-        {/* [수정] 로딩 화면: 수직/수평 정중앙 배치 및 모바일 앱 문구 적용 */}
+        {/* 로딩 화면 */}
         {loading ? (
           <div className="flex-1 flex flex-col items-center justify-center bg-white/60 backdrop-blur-sm z-[60] animate-in fade-in duration-300">
             <div className="relative mb-10">
@@ -325,7 +324,7 @@ const Creator = () => {
             <p className="text-[11px] text-slate-400 font-bold tracking-[0.2em] uppercase italic">AI Analysis Center</p>
           </div>
         ) : step === 'keyword' ? (
-          /* 1단계: 시공 품목 구성 (한글화) */
+          /* 1단계: 시공 품목 구성 */
           <div className="flex-1 overflow-y-auto p-10 animate-in fade-in duration-500">
             <div className="max-w-5xl mx-auto space-y-10">
               <div className="flex items-end justify-between border-b border-slate-200 pb-6">
@@ -383,7 +382,7 @@ const Creator = () => {
             </div>
           </div>
         ) : step === 'title' ? (
-          /* 2단계: 헤드라인 선정 (한글화) */
+          /* 2단계: 제목 선정 */
           <div className="flex-1 overflow-y-auto p-10 animate-in fade-in duration-500">
             <div className="max-w-3xl mx-auto space-y-8">
               <div className="border-b border-slate-200 pb-6 space-y-1">
@@ -409,7 +408,7 @@ const Creator = () => {
             </div>
           </div>
         ) : step === 'index' ? (
-          /* 3단계: 구조 확인 (한글화) */
+          /* 3단계: 구조 확인 */
           <div className="flex-1 overflow-y-auto p-10 animate-in fade-in duration-500">
             <div className="max-w-3xl mx-auto space-y-10">
               <div className="border-b border-slate-200 pb-6 space-y-1">
@@ -444,7 +443,7 @@ const Creator = () => {
             </div>
           </div>
         ) : (
-          /* 최종 결과: 하이엔드 스튜디오 에디터 (완전 한글화) */
+          /* 최종 결과: 하이엔드 스튜디오 에디터 */
           <div className="flex-1 flex overflow-hidden animate-in fade-in duration-1000 bg-white">
             <div className="flex-1 overflow-y-auto p-12 lg:p-16 scrollbar-hide border-r border-slate-100">
                <div className="max-w-2xl mx-auto">
@@ -499,9 +498,9 @@ const Creator = () => {
                </div>
             </div>
 
-            {/* 우측 사이드 패널 (완전 한글화) */}
+            {/* 우측 사이드 패널 (버튼 위치 고정) */}
             <div className="w-80 bg-slate-50 border-l border-slate-200 p-8 flex flex-col shrink-0">
-               <div className="space-y-8 flex-1">
+               <div className="space-y-8">
                   <div className="space-y-4">
                      <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] italic border-l-2 border-indigo-600 pl-3">채널별 콘텐츠 스위치</h5>
                      <div className="space-y-2">
@@ -530,15 +529,16 @@ const Creator = () => {
                       <p className="text-[9px] font-bold uppercase tracking-widest mt-1.5 text-indigo-200 leading-none">내보내기 준비 완료</p>
                     </div>
                   </div>
-               </div>
 
-               <button 
-                  onClick={handleCopy}
-                  className={`w-full py-4 ${isCopied ? 'bg-emerald-600' : 'bg-slate-900'} text-white rounded-xl font-black text-sm flex items-center justify-center gap-3 transition-all hover:scale-[1.02] shadow-xl active:scale-95 uppercase italic`}
-               >
-                  {isCopied ? <CheckCircle2 size={18} /> : <Copy size={18} />}
-                  {isCopied ? '복사 완료' : '전체 내용 복사하기'}
-               </button>
+                  {/* [수정] 복사 버튼 위치를 검증 완료 섹션 바로 아래로 고정 */}
+                  <button 
+                    onClick={handleCopy}
+                    className={`w-full py-4 ${isCopied ? 'bg-emerald-600' : 'bg-slate-900'} text-white rounded-xl font-black text-sm flex items-center justify-center gap-3 transition-all hover:scale-[1.02] shadow-xl active:scale-95 uppercase italic`}
+                  >
+                    {isCopied ? <CheckCircle2 size={18} /> : <Copy size={18} />}
+                    {isCopied ? '복사 완료' : '전체 내용 복사하기'}
+                  </button>
+               </div>
             </div>
           </div>
         )}
