@@ -1,134 +1,246 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
-  Megaphone, 
-  MessageSquare, 
-  Sparkles, 
-  BarChart, 
-  Plus, 
-  ChevronRight, 
-  Instagram, 
-  Send,
-  Target,
-  Zap
+  ArrowLeft, Users, MessageSquare, Sun, CloudRain, 
+  Wind, Sparkles, ChevronRight, Search, Filter, 
+  Send, Calendar, Clock, CheckCircle2, AlertCircle,
+  Loader2, Smartphone, Target, Zap, MousePointer2
 } from 'lucide-react';
 
-/**
- * PC 전용 Marketing 페이지
- * AI 마케팅 에이전트 관리 및 캠페인 통계를 제공합니다.
- */
-const Marketing = () => {
-  const marketingStats = [
-    { label: '이번 달 발송 메시지', value: '1,250 / 5,000', icon: MessageSquare, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { label: 'AI 포스팅 생성', value: '42건', icon: Sparkles, color: 'text-purple-600', bg: 'bg-purple-50' },
-    { label: '평균 클릭률(CTR)', value: '4.8%', icon: Target, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { label: '마케팅 전환 매출', value: '₩3,420,000', icon: Zap, color: 'text-amber-600', bg: 'bg-amber-50' },
-  ];
+// [오류 방지] 상대 경로를 사용하여 Firebase 설정 로드
+import { auth, db } from '../../firebase';
+import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 
-  const aiAgents = [
-    { name: '네이버 블로그 에이전트', status: '활성', lastWork: '2시간 전', count: '12회' },
-    { name: '인스타그램 피드 에이전트', status: '대기', lastWork: '어제', count: '28회' },
-    { name: '카카오 알림톡 에이전트', status: '활성', lastWork: '15분 전', count: '154회' },
-  ];
+/**
+ * PcMarketing: 앱의 날씨 기반 마케팅 로직을 계승한 PC 전용 마케팅 관리 페이지
+ */
+const PcMarketing = ({ userStatus }) => {
+  const navigate = useNavigate();
+  const appId = typeof __app_id !== 'undefined' ? __app_id : 'glunex-app';
+
+  // --- [상태 관리] ---
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [weather, setWeather] = useState({ temp: 0, status: 'Clear', desc: '맑음' });
+  const [customers, setCustomers] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+
+  // --- [1. 인증 로직] ---
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (u) => {
+      if (u) {
+        setUser(u);
+      } else {
+        try { await signInAnonymously(auth); } catch (e) { navigate('/login'); }
+      }
+    });
+    return () => unsubscribe();
+  }, [navigate]);
+
+  // --- [2. 날씨 및 데이터 로드 로직: 앱 버전 로직 이식] ---
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!user) return;
+
+      try {
+        // 날씨 데이터 가져오기 (OpenWeather)
+        const API_KEY = "651347101e403d6d0669288124237d45";
+        const wRes = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=Seoul&appid=${API_KEY}&units=metric&lang=kr`);
+        const wData = await wRes.json();
+        if (wData.cod === 200) {
+          setWeather({ 
+            temp: Math.round(wData.main.temp), 
+            status: wData.weather[0].main, 
+            desc: wData.weather[0].description 
+          });
+        }
+
+        // 고객 데이터 가져오기 (Warranties 기반)
+        const q = query(collection(db, "warranties"), where("userId", "==", user.uid));
+        const snapshot = await getDocs(q);
+        const customerList = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        // 중복 제거 및 최신순 정렬
+        const uniqueCustomers = Array.from(new Map(customerList.map(item => [item.phone, item])).values());
+        setCustomers(uniqueCustomers);
+      } catch (err) {
+        console.error("Data Load Error:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [user]);
+
+  // 날씨별 추천 템플릿 생성 로직
+  const getTemplates = () => {
+    const isRainy = weather.status.toLowerCase().includes('rain');
+    const isCold = weather.temp < 5;
+
+    if (isRainy) {
+      return [
+        { id: 1, title: '비 오는 날 유막제거', content: `[비 소식 알림] 안녕하세요 고객님! 오늘 비가 많이 오네요. 시야 확보를 위한 유막제거 및 발수코팅 케어는 어떠신가요?`, icon: <CloudRain size={20}/> },
+        { id: 2, title: '시공 후 관리 안내', content: `안녕하세요! 최근 시공 받으신 차량, 비 오는 날 야외 주차보다는 실내 주차를 권장드립니다.`, icon: <AlertCircle size={20}/> }
+      ];
+    }
+    return [
+      { id: 1, title: '정기 점검 알림', content: `안녕하세요 고객님! 시공 받으신 지 어느덧 3개월이 지났습니다. 메인터넌스 관리를 위해 방문해주세요.`, icon: <Calendar size={20}/> },
+      { id: 2, title: '신차 패키지 혜택', content: `[특별 이벤트] 주변에 신차 구매하신 분이 있다면 소개해주세요! 소개 시 두 분 모두에게 프리미엄 세차권을 드립니다.`, icon: <Sparkles size={20}/> }
+    ];
+  };
+
+  const templates = getTemplates();
+
+  const handleSendSMS = (customer) => {
+    if (!selectedTemplate) return alert("먼저 메시지 템플릿을 선택해주세요.");
+    const msg = selectedTemplate.content.replace('고객님', `${customer.customerName}님`);
+    window.location.href = `sms:${customer.phone}?body=${encodeURIComponent(msg)}`;
+  };
+
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center h-[60vh]">
+      <Loader2 className="animate-spin text-slate-300 mb-4" size={32} />
+      <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">Weather Syncing...</p>
+    </div>
+  );
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* 1. 페이지 헤더 */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">마케팅 센터</h1>
-          <p className="text-slate-500 mt-1">AI 에이전트를 활용하여 고객 재방문을 유도하고 브랜딩을 강화하세요.</p>
+    <div className="max-w-[1400px] mx-auto space-y-6 animate-in fade-in duration-500 text-left pb-10">
+      
+      {/* 1. 상단 날씨 기반 마케팅 추천 보드 */}
+      <div className="bg-slate-900 rounded-3xl p-8 text-white relative overflow-hidden shadow-xl">
+        <div className="absolute right-0 top-0 h-full w-1/3 bg-gradient-to-l from-indigo-500/20 to-transparent flex items-center justify-center">
+           {weather.status.toLowerCase().includes('rain') ? <CloudRain size={120} className="opacity-20 rotate-12" /> : <Sun size={120} className="opacity-20 rotate-12" />}
         </div>
-        <button className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100">
-          <Plus size={20} /> 새 캠페인 만들기
-        </button>
-      </div>
-
-      {/* 2. 마케팅 지표 섹션 */}
-      <div className="grid grid-cols-4 gap-6">
-        {marketingStats.map((stat, i) => (
-          <div key={i} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-            <div className="flex items-center gap-4 mb-3">
-              <div className={`w-10 h-10 ${stat.bg} ${stat.color} rounded-xl flex items-center justify-center`}>
-                <stat.icon size={20} />
-              </div>
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{stat.label}</span>
+        
+        <div className="relative z-10 flex items-center justify-between">
+          <div className="space-y-4 max-w-2xl">
+            <div className="flex items-center gap-3">
+              <div className="px-3 py-1 bg-white/10 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10">Weather Insight</div>
+              <span className="text-indigo-400 font-bold text-sm">{weather.temp}°C {weather.desc}</span>
             </div>
-            <h3 className="text-2xl font-black text-slate-900">{stat.value}</h3>
+            <h2 className="text-3xl font-black tracking-tight leading-tight">
+              {weather.status.toLowerCase().includes('rain') 
+                ? "오늘은 비 소식이 있습니다. \n유막제거와 발수코팅 마케팅이 효과적입니다." 
+                : "오늘 날씨가 매우 맑습니다. \n프리미엄 세차 및 코팅 점검 문구를 발송해보세요."}
+            </h2>
+            <p className="text-slate-400 font-medium">실시간 기상 데이터를 분석하여 현재 가장 고객 전환율이 높은 전략을 제안합니다.</p>
           </div>
-        ))}
+          <div className="hidden lg:flex flex-col items-end gap-2">
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Connected Device</p>
+            <div className="flex items-center gap-2 text-indigo-400 font-bold">
+              <Smartphone size={20} />
+              <span>Mobile SMS Link Active</span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* 3. 하단 컨텐츠 그리드 */}
-      <div className="grid grid-cols-5 gap-8">
-        {/* AI 에이전트 상태 */}
-        <div className="col-span-2 space-y-6">
-          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-            <h2 className="text-lg font-bold mb-6 flex items-center gap-2">
-              <Sparkles size={20} className="text-purple-600" /> 운영 중인 AI 에이전트
-            </h2>
-            <div className="space-y-4">
-              {aiAgents.map((agent, i) => (
-                <div key={i} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-100 font-bold text-indigo-600 text-sm">
-                      {i + 1}
+      <div className="grid grid-cols-12 gap-6 items-start">
+        
+        {/* 2. 좌측: 고객 타겟 리스트 (Span 7) */}
+        <div className="col-span-7 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col h-[650px]">
+           <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                 <Users size={20} className="text-indigo-600" />
+                 <h3 className="font-black text-slate-900 uppercase">타겟 고객 리스트</h3>
+              </div>
+              <div className="relative">
+                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                 <input type="text" placeholder="고객명, 차량번호 검색" className="pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-500 transition-all w-64 font-medium" />
+              </div>
+           </div>
+
+           <div className="flex-1 overflow-y-auto p-4 space-y-2 scrollbar-hide">
+              {customers.length > 0 ? customers.map((c, i) => (
+                <div key={i} className="p-4 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between group hover:bg-white hover:border-indigo-300 transition-all">
+                  <div className="flex items-center gap-5">
+                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-400 border border-slate-100 shadow-sm group-hover:text-indigo-600">
+                      <User size={20} />
                     </div>
                     <div>
-                      <p className="font-bold text-slate-900 text-sm">{agent.name}</p>
-                      <p className="text-[10px] text-slate-400 font-bold">최근 작업: {agent.lastWork}</p>
+                       <p className="text-sm font-black text-slate-900 flex items-center gap-2">
+                         {c.customerName} 
+                         <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter bg-white px-1.5 py-0.5 rounded border border-slate-100">{c.plateNumber}</span>
+                       </p>
+                       <p className="text-[11px] text-slate-400 font-bold mt-0.5">{c.carModel} • 마지막 시공 {c.issuedAt?.split('T')[0]}</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${agent.status === '활성' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-200 text-slate-500'}`}>
-                      {agent.status}
-                    </span>
-                    <p className="text-[10px] text-slate-400 font-bold mt-1">누적 {agent.count}</p>
+                  <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                     <button onClick={() => handleSendSMS(c)} className="flex items-center gap-2 px-3 py-2 bg-slate-900 text-white rounded-lg text-[11px] font-black uppercase tracking-widest hover:bg-black active:scale-95 transition-all">
+                       <Send size={14} /> 메시지 전송
+                     </button>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
+              )) : (
+                <div className="h-full flex flex-col items-center justify-center opacity-20 py-20">
+                   <Target size={40} className="mb-4" />
+                   <p className="text-xs font-black uppercase tracking-widest">발송 가능한 고객이 없습니다.</p>
+                </div>
+              )}
+           </div>
         </div>
 
-        {/* 최근 캠페인 리스트 */}
-        <div className="col-span-3 bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
-          <div className="p-6 border-b border-slate-50 flex items-center justify-between">
-            <h2 className="text-lg font-bold">최근 캠페인 이력</h2>
-            <button className="text-indigo-600 text-sm font-bold flex items-center gap-1 hover:underline">
-              자세히 보기 <ChevronRight size={16} />
-            </button>
-          </div>
-          <div className="flex-1 overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-slate-50/50 text-slate-400 text-[10px] font-bold uppercase tracking-widest border-b border-slate-100">
-                <tr>
-                  <th className="px-6 py-4">캠페인명</th>
-                  <th className="px-6 py-4">대상</th>
-                  <th className="px-6 py-4">성과</th>
-                  <th className="px-6 py-4">일자</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {[
-                  { name: '설 연휴 감사 문자', target: '전체 고객', perf: '85% 발송', date: '2026.01.28' },
-                  { name: '신차 패키지 프로모션', target: '미방문 3개월', perf: '12% 클릭', date: '2026.01.20' },
-                  { name: '겨울철 관리 팁 가이드', target: '코팅 고객', perf: '95% 발송', date: '2026.01.15' },
-                  { name: '리뷰 작성 리워드 알림', target: '최근 시공', perf: '22건 작성', date: '2026.01.10' },
-                ].map((camp, i) => (
-                  <tr key={i} className="hover:bg-slate-50/50 transition-colors cursor-pointer">
-                    <td className="px-6 py-4 font-bold text-slate-900 text-sm">{camp.name}</td>
-                    <td className="px-6 py-4 text-xs text-slate-500 font-medium">{camp.target}</td>
-                    <td className="px-6 py-4 text-xs font-black text-indigo-600">{camp.perf}</td>
-                    <td className="px-6 py-4 text-xs text-slate-400 font-medium">{camp.date}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        {/* 3. 우측: 메시지 템플릿 & 프리뷰 (Span 5) */}
+        <div className="col-span-5 space-y-6 h-full">
+           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col h-full min-h-[650px]">
+              <div className="mb-8">
+                 <div className="flex items-center gap-2 mb-6">
+                    <Zap size={18} className="text-amber-500 fill-amber-500" />
+                    <h3 className="font-black text-slate-900 uppercase">상황별 추천 템플릿</h3>
+                 </div>
+                 <div className="space-y-3">
+                    {templates.map(t => (
+                      <button 
+                        key={t.id} 
+                        onClick={() => setSelectedTemplate(t)}
+                        className={`w-full p-5 rounded-2xl border text-left transition-all ${selectedTemplate?.id === t.id ? 'border-indigo-600 bg-indigo-50 shadow-md shadow-indigo-100' : 'border-slate-100 bg-slate-50 hover:border-slate-300'}`}
+                      >
+                         <div className="flex items-center gap-3 mb-2">
+                            <div className={`p-2 rounded-lg ${selectedTemplate?.id === t.id ? 'bg-indigo-600 text-white' : 'bg-white text-slate-400'}`}>{t.icon}</div>
+                            <span className="text-sm font-black text-slate-800">{t.title}</span>
+                         </div>
+                         <p className="text-xs text-slate-500 leading-relaxed font-medium line-clamp-2">{t.content}</p>
+                      </button>
+                    ))}
+                 </div>
+              </div>
+
+              <div className="mt-auto border-t border-slate-100 pt-8">
+                 <div className="flex items-center gap-2 mb-4">
+                    <MessageSquare size={16} className="text-slate-400" />
+                    <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Message Preview</h4>
+                 </div>
+                 <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 relative min-h-[150px]">
+                    <p className="text-sm text-slate-600 leading-relaxed font-medium whitespace-pre-wrap">
+                      {selectedTemplate ? selectedTemplate.content : "템플릿을 선택하면 미리보기가 표시됩니다."}
+                    </p>
+                    <div className="absolute bottom-4 right-4 text-[9px] font-black text-slate-300 uppercase">Glunex Smart CRM</div>
+                 </div>
+                 
+                 <div className="mt-6 p-4 bg-indigo-50 rounded-xl flex items-start gap-3 border border-indigo-100/50">
+                    <MousePointer2 size={16} className="text-indigo-600 mt-1 shrink-0" />
+                    <p className="text-[10px] text-indigo-700 leading-relaxed font-medium">
+                       고객 리스트에서 <span className="font-bold underline">메시지 전송</span> 버튼을 누르면 <br/>연결된 모바일 기기를 통해 문자가 발송됩니다.
+                    </p>
+                 </div>
+              </div>
+           </div>
         </div>
+
       </div>
+
+      <style>{`
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+      `}</style>
     </div>
   );
 };
 
-export default Marketing;
+export default PcMarketing;
