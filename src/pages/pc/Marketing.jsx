@@ -7,9 +7,10 @@ import {
   signInAnonymously 
 } from 'firebase/auth';
 import { 
-  getFirestore, 
+  initializeFirestore, 
   collection, 
-  onSnapshot 
+  onSnapshot,
+  terminate
 } from 'firebase/firestore';
 import { 
   Megaphone, 
@@ -32,10 +33,9 @@ import {
  * 파일 경로: src/pages/pc/Marketing.jsx
  */
 
-// --- Firebase 초기화 로직 (환경 변수 에러 방지형) ---
+// --- Firebase 초기화 및 통신 설정 최적화 ---
 const getFirebaseInstance = () => {
   try {
-    // window 객체를 통해 안전하게 접근
     const configStr = window.__firebase_config || (typeof __firebase_config !== 'undefined' ? __firebase_config : null);
     
     if (!configStr) return { auth: null, db: null, error: "Firebase Configuration missing" };
@@ -43,9 +43,15 @@ const getFirebaseInstance = () => {
     const firebaseConfig = typeof configStr === 'string' ? JSON.parse(configStr) : configStr;
     const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
     
+    // [중요] Fetch API/CORS 오류 해결을 위해 experimentalForceLongPolling 설정 추가
+    const db = initializeFirestore(app, {
+      experimentalForceLongPolling: true,
+      useFetchStreams: false
+    });
+
     return {
       auth: getAuth(app),
-      db: getFirestore(app),
+      db: db,
       error: null
     };
   } catch (e) {
@@ -62,7 +68,7 @@ const Marketing = () => {
   const [loading, setLoading] = useState(true);
   const [firebaseError, setFirebaseError] = useState(initError);
 
-  // --- 기존 데이터셋 (삭제/축소 없음) ---
+  // --- 기존 데이터셋 (디자인 유지) ---
   const marketingStats = [
     { label: '이번 달 발송 메시지', value: '1,250 / 5,000', icon: MessageSquare, color: 'text-blue-600', bg: 'bg-blue-50' },
     { label: 'AI 포스팅 생성', value: '42건', icon: Sparkles, color: 'text-purple-600', bg: 'bg-purple-50' },
@@ -83,7 +89,6 @@ const Marketing = () => {
     { name: '리뷰 작성 리워드 알림', target: '최근 시공', perf: '22건 작성', date: '2026.01.10' },
   ];
 
-  // 인증 로직
   useEffect(() => {
     if (!auth) {
       setLoading(false);
@@ -99,7 +104,7 @@ const Marketing = () => {
           await signInAnonymously(auth);
         }
       } catch (err) {
-        console.warn("인증 실패 (비로그인 모드로 유지):", err);
+        console.warn("Auth check failed, proceeding as guest.");
       }
     };
 
@@ -114,15 +119,19 @@ const Marketing = () => {
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* 시스템 알림 (설정 오류 시에만 작게 노출) */}
-      {firebaseError && (
+      {/* 상단 안내바 (데이터 연결 상태 표시) */}
+      {firebaseError ? (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3 text-amber-800 text-sm">
           <AlertCircle size={18} className="text-amber-600 flex-shrink-0" />
-          <p>
-            현재 실시간 데이터 연결이 제한되었습니다. 
-            <span className="font-bold ml-1">오류: {firebaseError}</span>
-          </p>
+          <p>현재 실시간 연결이 제한되어 오프라인 모드로 표시됩니다. (설정 확인 필요)</p>
         </div>
+      ) : (
+        !user && !loading && (
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex items-center gap-3 text-blue-800 text-sm">
+            <Loader2 size={18} className="text-blue-600 animate-spin" />
+            <p>데이터 보안 연결을 구성 중입니다...</p>
+          </div>
+        )
       )}
 
       {/* 1. 페이지 헤더 */}
@@ -153,7 +162,6 @@ const Marketing = () => {
 
       {/* 3. 하단 컨텐츠 그리드 */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-        {/* AI 에이전트 상태 */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm h-full">
             <h2 className="text-lg font-bold mb-6 flex items-center gap-2">
@@ -183,7 +191,6 @@ const Marketing = () => {
           </div>
         </div>
 
-        {/* 최근 캠페인 리스트 */}
         <div className="lg:col-span-3 bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
           <div className="p-6 border-b border-slate-50 flex items-center justify-between">
             <h2 className="text-lg font-bold">최근 캠페인 이력</h2>
@@ -216,10 +223,9 @@ const Marketing = () => {
         </div>
       </div>
       
-      {/* 하단 세션 정보 */}
       <div className="text-right pt-4">
         <span className="text-[10px] text-slate-300 font-mono">
-          UID: {user?.uid || 'Guest Mode'} | App: {appId}
+          UID: {user?.uid || 'Guest Mode'} | API: {appId}
         </span>
       </div>
     </div>
