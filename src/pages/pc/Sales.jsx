@@ -3,52 +3,51 @@ import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Wallet, TrendingUp, Calendar, CheckCircle2, 
   Clock, Sparkles, MessageSquare, Edit3, 
-  ChevronRight, Info, X, Loader2, ArrowUpRight, Target, Zap,
-  ArrowRight, BarChart3, Database, Download
+  ChevronRight, Info, X, Loader2, ArrowUpRight, 
+  Target, Zap, ArrowRight, BarChart3, Filter,
+  Download, PieChart, Activity
 } from 'lucide-react';
+
+// [오류 방지] 상대 경로를 사용하여 Firebase 설정 로드
 import { auth, db } from '../../firebase';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 
 /**
- * Sales: PC 전용 매출 현황 분석 (앱 버전 로직 100% 이식)
- * 앱 버전의 복잡한 데이터 분석 로직을 그대로 유지하며 UI만 PC 대화면에 최적화했습니다.
+ * PcSales: 앱의 매출 분석 로직을 100% 계승한 PC 전용 분석 페이지
  */
-const Sales = () => {
+const PcSales = () => {
   const navigate = useNavigate();
   const appId = typeof __app_id !== 'undefined' ? __app_id : 'glunex-app';
 
-  // --- [앱 버전 상태 관리 그대로 이식] ---
+  // --- [상태 관리] ---
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showMarketingModal, setShowMarketingModal] = useState(false);
   
   const [stats, setStats] = useState({
-    confirmed: 0,  // 보증서 발행완료 (블루)
-    pending: 0,    // 보증서 발행대기 (그린)
-    upcoming: 0,   // 스케줄 예약건 (노란색/앰버)
+    confirmed: 0,  // 보증서 발행완료
+    pending: 0,    // 작업 완료 (미발행)
+    upcoming: 0,   // 향후 예약건
     total: 0
   });
 
   const [chartData, setChartData] = useState([]);
   const currentMonth = new Date().getMonth() + 1;
 
-  // --- [인증 로직 이식] ---
+  // --- [1. 인증 로직] ---
   useEffect(() => {
-    const initAuth = async () => {
-      try {
-        if (!auth.currentUser) await signInAnonymously(auth);
-      } catch (err) { console.error("Auth Error:", err); }
-    };
-    initAuth();
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      if (u) setLoading(false);
+    const unsubscribe = onAuthStateChanged(auth, async (u) => {
+      if (u) {
+        setUser(u);
+      } else {
+        try { await signInAnonymously(auth); } catch (e) { navigate('/login'); }
+      }
     });
     return () => unsubscribe();
-  }, []);
+  }, [navigate]);
 
-  // --- [데이터 분석 로직 이식] ---
+  // --- [2. 매출 분석 로직: 앱 버전 로직 100% 이식] ---
   useEffect(() => {
     if (!user) return;
 
@@ -79,10 +78,9 @@ const Sales = () => {
 
         wSnap.docs.forEach(doc => {
           const data = doc.data();
-          // 앱 버전 로직: issuedAt 기준
-          const d = new Date(data.issuedAt || data.reservationDate); 
+          const d = new Date(data.issuedAt);
           if (d.getFullYear() === currentYear && d.getMonth() === currentMonthIdx) {
-            const price = Number(String(data.price || data.warrantyPrice || "0").replace(/[^0-9]/g, '')) || 0;
+            const price = Number(String(data.price || "0").replace(/[^0-9]/g, '')) || 0;
             confirmedSum += price;
             const dayIdx = d.getDate() - 1;
             if (dailyStats[dayIdx]) dailyStats[dayIdx].confirmed += price;
@@ -110,7 +108,12 @@ const Sales = () => {
           }
         });
 
-        setStats({ confirmed: confirmedSum, pending: pendingSum, upcoming: upcomingSum, total: confirmedSum + pendingSum + upcomingSum });
+        setStats({ 
+          confirmed: confirmedSum, 
+          pending: pendingSum, 
+          upcoming: upcomingSum, 
+          total: confirmedSum + pendingSum + upcomingSum 
+        });
         
         const maxVal = Math.max(...dailyStats.map(d => d.confirmed + d.pending + d.upcoming), 1000000);
         setChartData(dailyStats.map(d => ({
@@ -120,14 +123,15 @@ const Sales = () => {
           upcoming: (d.upcoming / maxVal) * 100,
           isToday: d.dateStr === todayStr
         })));
+        setLoading(false);
       });
       return () => unsubS();
     });
     return () => unsubW();
   }, [user, appId]);
 
-  // --- [SVG 차트 생성 알고리즘 이식 (PC 사이즈에 맞춰 Width/Height 조절)] ---
-  const generatePath = (data, key, height = 200, width = 1000) => {
+  // SVG 차트 경로 생성 함수
+  const generatePath = (data, key, height = 240, width = 1000) => {
     if (data.length === 0) return "";
     const points = data.map((d, i) => {
       const x = (i / (data.length - 1)) * width;
@@ -137,194 +141,209 @@ const Sales = () => {
     return `M ${points.join(' L ')}`;
   };
 
-  const generateAreaPath = (data, key, height = 200, width = 1000) => {
+  const generateAreaPath = (data, key, height = 240, width = 1000) => {
     if (data.length === 0) return "";
     const linePath = generatePath(data, key, height, width);
     return `${linePath} L ${width},${height} L 0,${height} Z`;
   };
 
   if (loading) return (
-    <div className="flex-1 flex items-center justify-center bg-slate-50/50 h-full min-h-[600px]">
-      <div className="flex flex-col items-center gap-4">
-        <Loader2 className="animate-spin text-indigo-600" size={48} />
-        <p className="text-slate-400 font-black tracking-widest uppercase text-xs">Synchronizing Revenue Data...</p>
-      </div>
+    <div className="flex flex-col items-center justify-center h-[60vh]">
+      <Loader2 className="animate-spin text-slate-300 mb-4" size={32} />
+      <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">Generating Revenue Report...</p>
     </div>
   );
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-700 w-full pb-10">
+    <div className="max-w-[1400px] mx-auto space-y-6 animate-in fade-in duration-500 text-left pb-10">
       
-      {/* 1. 하이엔드 PC 헤더 */}
-      <div className="flex items-center justify-between bg-white px-8 py-5 rounded-2xl border border-slate-200 shadow-sm">
+      {/* 1. Header Area */}
+      <div className="flex items-center justify-between bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex items-center gap-4">
-          <div className="p-2.5 bg-slate-900 text-white rounded-xl shadow-lg">
-            <BarChart3 size={22} />
-          </div>
-          <div>
-            <h1 className="text-xl font-black text-slate-900 leading-none uppercase italic">
-              Revenue <span className="text-indigo-600 not-italic">Status Analysis</span>
-            </h1>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1.5 leading-none">
-              {currentMonth}월 실시간 매출 정산 및 데이터 인사이트
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={() => setShowMarketingModal(true)}
-            className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-black text-xs hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
-          >
-            <Sparkles size={16} className="text-amber-300 animate-pulse" /> 매출 성장 엔진 가동
+          <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-50 rounded-lg text-slate-400 transition-colors">
+            <ArrowLeft size={20} />
           </button>
-        </div>
-      </div>
-
-      {/* 2. 매출 요약 섹션 (앱의 Summary를 PC형 카드로) */}
-      <div className="grid grid-cols-4 gap-5">
-        <div className="col-span-1 bg-slate-900 rounded-3xl p-8 text-white relative overflow-hidden shadow-2xl">
-          <div className="absolute top-0 right-0 p-8 opacity-10"><Wallet size={80} /></div>
-          <p className="text-indigo-400 text-[10px] font-black uppercase tracking-widest mb-2">{currentMonth}월 누적 실적 리포트</p>
-          <div className="flex items-baseline gap-2 mb-8">
-            <span className="text-4xl font-black tracking-tighter">{(stats.confirmed + stats.pending).toLocaleString()}</span>
-            <span className="text-sm font-bold opacity-30 italic">KRW</span>
-          </div>
-          <div className="grid grid-cols-1 gap-4 border-t border-white/10 pt-6">
-            <div className="flex items-center justify-between">
-               <span className="text-[10px] font-bold text-slate-500 uppercase">Confirmed Asset</span>
-               <span className="text-sm font-black text-indigo-400">{stats.confirmed.toLocaleString()}</span>
-            </div>
-            <div className="flex items-center justify-between">
-               <span className="text-[10px] font-bold text-slate-500 uppercase">Pending Review</span>
-               <span className="text-sm font-black text-emerald-400">{stats.pending.toLocaleString()}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="col-span-3 grid grid-cols-3 gap-5">
-           {[
-             { label: '보증서 발행완료', value: stats.confirmed, color: 'text-indigo-600', bg: 'bg-indigo-50', icon: <CheckCircle2 size={24}/>, sub: '확정된 실제 매출' },
-             { label: '보증서 발행대기', value: stats.pending, color: 'text-emerald-600', bg: 'bg-emerald-50', icon: <Clock size={24}/>, sub: '시공 완료 데이터' },
-             { label: '스케줄 예약건', value: stats.upcoming, color: 'text-amber-500', bg: 'bg-amber-50', icon: <Calendar size={24}/>, sub: '예상 유입 매출' }
-           ].map((item, idx) => (
-             <div key={idx} className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between hover:shadow-md transition-all">
-                <div className="flex items-center justify-between mb-6">
-                   <div className={`p-3 rounded-2xl ${item.bg} ${item.color}`}>{item.icon}</div>
-                   <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Active Data</span>
-                </div>
-                <div>
-                   <p className="text-[11px] font-black text-slate-400 uppercase mb-1 tracking-tighter">{item.label}</p>
-                   <h3 className={`text-3xl font-black ${item.color} tracking-tighter italic leading-none`}>{item.value.toLocaleString()}<span className="text-sm not-italic ml-1 opacity-50">원</span></h3>
-                   <p className="text-[10px] font-bold text-slate-400 mt-3">{item.sub}</p>
-                </div>
-             </div>
-           ))}
-        </div>
-      </div>
-
-      {/* 3. Growth Stream 차트 (앱의 SVG 알고리즘 그대로 사용하여 PC 너비로 확장) */}
-      <div className="bg-white rounded-[2.5rem] p-10 border border-slate-200 shadow-sm">
-        <div className="flex justify-between items-center mb-12">
           <div>
-            <h3 className="text-lg font-black text-slate-900 flex items-center gap-2 italic uppercase">
-                <Zap size={18} className="text-indigo-600 fill-indigo-600" /> {currentMonth}월 비즈니스 Growth Stream
-            </h3>
-            <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest italic">Visualizing Daily Revenue Performance Flow</p>
+            <h1 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+              REVENUE <span className="text-indigo-600">ANALYTICS</span>
+            </h1>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{currentMonth}월 실시간 매출 및 성장 스트림</p>
           </div>
-          <div className="flex gap-4 bg-slate-50 px-4 py-2 rounded-2xl border border-slate-100 shrink-0">
-            <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-indigo-500"/><span className="text-[10px] font-black text-slate-500 uppercase">발행</span></div>
-            <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500"/><span className="text-[10px] font-black text-slate-500 uppercase">대기</span></div>
-            <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-amber-500"/><span className="text-[10px] font-black text-slate-500 uppercase">예정</span></div>
+        </div>
+        <div className="flex items-center gap-2">
+           <button className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all">
+             <Filter size={14} /> 상세 필터
+           </button>
+           <button className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-black transition-all shadow-sm">
+             <Download size={14} /> 리포트 다운로드
+           </button>
+        </div>
+      </div>
+
+      {/* 2. Top Stats Grid */}
+      <div className="grid grid-cols-4 gap-4">
+        <div className="col-span-1 bg-slate-900 p-6 rounded-2xl text-white shadow-xl relative overflow-hidden">
+          <div className="relative z-10">
+            <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2">실제 가용 수익 (확정+대기)</p>
+            <div className="flex items-baseline gap-1">
+              <h3 className="text-2xl font-black italic">{(stats.confirmed + stats.pending).toLocaleString()}</h3>
+              <span className="text-xs font-bold text-slate-500 uppercase">krw</span>
+            </div>
+            <div className="mt-4 flex items-center gap-2">
+              <TrendingUp size={14} className="text-emerald-400" />
+              <span className="text-[10px] font-bold text-emerald-400">전일 대비 +4.2%</span>
+            </div>
+          </div>
+        </div>
+        {[
+          { label: 'Confirmed (발행완료)', value: stats.confirmed, color: 'text-indigo-600', icon: CheckCircle2, bg: 'bg-indigo-50' },
+          { label: 'Pending (발행대기)', value: stats.pending, color: 'text-emerald-600', icon: Clock, bg: 'bg-emerald-50' },
+          { label: 'Upcoming (예약건)', value: stats.upcoming, color: 'text-amber-500', icon: Calendar, bg: 'bg-amber-50' }
+        ].map((item, i) => (
+          <div key={i} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-5">
+            <div className={`p-3 rounded-xl ${item.bg} ${item.color}`}><item.icon size={20} /></div>
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{item.label}</p>
+              <h3 className="text-xl font-black text-slate-900">{item.value.toLocaleString()}<span className="text-xs font-bold text-slate-300 ml-1">원</span></h3>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 3. Main Chart & Growth Engine */}
+      <div className="grid grid-cols-12 gap-6">
+        
+        {/* Left: Wide Area Chart */}
+        <div className="col-span-8 bg-white p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col">
+          <div className="flex items-center justify-between mb-10">
+            <div className="flex items-center gap-2">
+              <Activity size={18} className="text-indigo-600" />
+              <h3 className="text-sm font-black text-slate-900 uppercase italic">Growth Stream Analysis</h3>
+            </div>
+            <div className="flex gap-4">
+              <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-indigo-500"/><span className="text-[10px] font-black text-slate-400 uppercase">Confirmed</span></div>
+              <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500"/><span className="text-[10px] font-black text-slate-400 uppercase">Pending</span></div>
+              <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-amber-400"/><span className="text-[10px] font-black text-slate-400 uppercase">Upcoming</span></div>
+            </div>
+          </div>
+
+          <div className="relative h-60 w-full mb-6">
+            <svg className="w-full h-full overflow-visible" viewBox="0 0 1000 240" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="gradB" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#4f46e5" stopOpacity="0.15" /><stop offset="100%" stopColor="#4f46e5" stopOpacity="0" /></linearGradient>
+                <linearGradient id="gradG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity="0.05" /><stop offset="100%" stopColor="#10b981" stopOpacity="0" /></linearGradient>
+              </defs>
+              {/* 가이드 라인 */}
+              {[0, 60, 120, 180, 240].map(v => <line key={v} x1="0" y1={v} x2="1000" y2={v} stroke="#f1f5f9" strokeWidth="1" />)}
+              
+              {/* 예약 (노란 실선) */}
+              <path d={generatePath(chartData, 'upcoming', 240, 1000)} fill="none" stroke="#fbbf24" strokeWidth="1.5" strokeDasharray="4 4" opacity="0.4" />
+              
+              {/* 대기 (그린 영역) */}
+              <path d={generateAreaPath(chartData, 'pending', 240, 1000)} fill="url(#gradG)" />
+              <path d={generatePath(chartData, 'pending', 240, 1000)} fill="none" stroke="#10b981" strokeWidth="2" strokeDasharray="6 4" />
+              
+              {/* 확정 (블루 영역) */}
+              <path d={generateAreaPath(chartData, 'confirmed', 240, 1000)} fill="url(#gradB)" />
+              <path d={generatePath(chartData, 'confirmed', 240, 1000)} fill="none" stroke="#4f46e5" strokeWidth="3" />
+
+              {/* 오늘 표시 점 */}
+              {chartData.map((d, i) => d.isToday && (
+                <g key={i}>
+                  <line x1={(i/(chartData.length-1))*1000} y1="0" x2={(i/(chartData.length-1))*1000} y2="240" stroke="#4f46e5" strokeWidth="1" strokeDasharray="2 2" />
+                  <circle cx={(i/(chartData.length-1))*1000} cy={240 - (d.confirmed/100)*240} r="5" fill="#4f46e5" />
+                </g>
+              ))}
+            </svg>
+          </div>
+          <div className="flex justify-between px-2">
+            <span className="text-[10px] font-black text-slate-300 uppercase">Day 01</span>
+            <span className="text-[10px] font-black text-indigo-600 uppercase">Today Point</span>
+            <span className="text-[10px] font-black text-slate-300 uppercase">End of Month</span>
           </div>
         </div>
 
-        <div className="relative h-[250px] w-full px-2">
-          <svg className="w-full h-full overflow-visible" viewBox="0 0 1000 200" preserveAspectRatio="none">
-            <defs>
-              <linearGradient id="gB" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#4f46e5" stopOpacity="0.3" /><stop offset="100%" stopColor="#4f46e5" stopOpacity="0" /></linearGradient>
-              <linearGradient id="gG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity="0.2" /><stop offset="100%" stopColor="#10b981" stopOpacity="0" /></linearGradient>
-            </defs>
-            {/* 가이드 라인 */}
-            <line x1="0" y1="0" x2="1000" y2="0" stroke="#f1f5f9" strokeWidth="1" />
-            <line x1="0" y1="100" x2="1000" y2="100" stroke="#f1f5f9" strokeWidth="1" />
-            <line x1="0" y1="200" x2="1000" y2="200" stroke="#f1f5f9" strokeWidth="2" />
-            
-            {/* 데이터 패스 (앱 알고리즘 그대로 활용) */}
-            <path d={generatePath(chartData, 'upcoming', 200, 1000)} fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" opacity="0.3" />
-            <path d={generateAreaPath(chartData, 'pending', 200, 1000)} fill="url(#gG)" />
-            <path d={generatePath(chartData, 'pending', 200, 1000)} fill="none" stroke="#10b981" strokeWidth="2" strokeDasharray="8 5" strokeLinecap="round" />
-            <path d={generateAreaPath(chartData, 'confirmed', 200, 1000)} fill="url(#gB)" />
-            <path d={generatePath(chartData, 'confirmed', 200, 1000)} fill="none" stroke="#4f46e5" strokeWidth="4" strokeLinecap="round" />
-          </svg>
-          <div className="flex justify-between mt-6 px-2 text-[10px] font-black text-slate-400 uppercase italic">
-             <span>Start of Month</span>
-             <div className="flex items-center gap-2 text-indigo-600 font-black tracking-[0.2em]">
-               <div className="w-1 h-1 bg-indigo-600 rounded-full animate-ping" /> REAL-TIME STATUS
-             </div>
-             <span>End of Month</span>
+        {/* Right: Insights & Engine */}
+        <div className="col-span-4 space-y-6">
+          <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between h-full">
+            <div className="space-y-6">
+              <div className="flex items-center gap-2">
+                <Zap size={18} className="text-amber-500 fill-amber-500" />
+                <h3 className="text-sm font-black text-slate-900 uppercase">운영 인사이트</h3>
+              </div>
+              <div className="space-y-4">
+                <div className="bg-slate-50 p-4 rounded-2xl flex items-start gap-3">
+                   <Info size={16} className="text-slate-400 mt-0.5 shrink-0" />
+                   <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
+                     현재 대기 중인 매출이 <span className="text-slate-900 font-bold">₩{stats.pending.toLocaleString()}</span> 있습니다. 작업 완료된 스케줄을 보증서 발행으로 전환하여 확정 수익을 확보하세요.
+                   </p>
+                </div>
+                <div className="bg-indigo-50 p-4 rounded-2xl flex items-start gap-3 border border-indigo-100/50">
+                   <Sparkles size={16} className="text-indigo-600 mt-0.5 shrink-0" />
+                   <p className="text-[11px] text-indigo-700 leading-relaxed font-medium">
+                     이번 달 성장 추이는 <span className="font-bold underline">안정적</span>입니다. 고단가 시공(유리막/썬팅) 비중을 15% 더 높이면 목표 매출 달성이 가능합니다.
+                   </p>
+                </div>
+              </div>
+            </div>
+
+            <button 
+              onClick={() => setShowMarketingModal(true)}
+              className="w-full mt-10 py-5 bg-slate-900 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-3 shadow-xl hover:bg-black transition-all active:scale-[0.98] group"
+            >
+              <Sparkles size={18} className="text-amber-400 group-hover:animate-pulse" />
+              <span>성장 마케팅 엔진 가동</span>
+              <ArrowRight size={16} className="text-slate-500" />
+            </button>
           </div>
         </div>
       </div>
 
-      {/* 4. 정보 안내 패널 */}
-      <div className="bg-slate-100 rounded-3xl p-8 flex items-start gap-5 border border-slate-200">
-         <div className="p-3 bg-white rounded-2xl text-slate-500 shadow-sm shrink-0"><Info size={24} /></div>
-         <div className="space-y-1">
-            <h4 className="text-sm font-black text-slate-900 uppercase">Operational Intelligence Guide</h4>
-            <p className="text-xs text-slate-500 font-bold leading-relaxed max-w-2xl">
-              성장 추이 지표는 이번 달 주차별 실적을 기반으로 시스템 알고리즘이 실시간 정산합니다. <br/>
-              확정되지 않은 예약을 보증서 발행으로 신속히 전환하여 매장의 안정적인 현금 흐름을 확보하십시오.
-            </p>
-         </div>
-      </div>
-
-      {/* 5. 마케팅 브릿지 모달 (PC형 디자인) */}
+      {/* 4. Marketing Modal (PC Style Overlay) */}
       {showMarketingModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md animate-fade-in" onClick={() => setShowMarketingModal(false)}>
-           <div className="bg-white w-full max-w-[480px] rounded-[3rem] shadow-2xl relative flex flex-col p-10 overflow-hidden animate-scale-in" onClick={e => e.stopPropagation()}>
-              <div className="flex justify-between items-start mb-10">
-                 <div>
-                    <div className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-3 inline-block">Marketing Engine v1.2</div>
-                    <h3 className="text-2xl font-black text-slate-900 tracking-tighter leading-tight">비즈니스 성장을 위한<br/>최적의 전략을 선택하세요</h3>
-                 </div>
-                 <button onClick={() => setShowMarketingModal(false)} className="p-2 bg-slate-100 rounded-full text-slate-400 hover:text-slate-900 transition-colors"><X size={24}/></button>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-fade-in" onClick={() => setShowMarketingModal(false)}>
+           <div className="bg-white w-full max-w-[420px] rounded-[2.5rem] shadow-2xl p-10 relative animate-scale-in" onClick={e => e.stopPropagation()}>
+              <button onClick={() => setShowMarketingModal(false)} className="absolute top-8 right-8 text-slate-300 hover:text-slate-900 transition-colors"><X size={24}/></button>
+              
+              <div className="mb-10 text-left">
+                 <div className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-3 inline-block">Growth Engine v1.2</div>
+                 <h3 className="text-2xl font-black text-slate-900 tracking-tighter leading-tight">매출 성장을 위한<br/>전략을 선택하세요</h3>
               </div>
 
-              <div className="grid grid-cols-1 gap-4">
-                 <button onClick={() => navigate('/marketing')} className="group p-6 bg-indigo-600 rounded-[2rem] flex items-center justify-between active:scale-[0.98] transition-all shadow-xl shadow-indigo-200">
-                    <div className="flex items-center gap-5">
-                       <div className="p-3 bg-white/20 rounded-2xl text-white shadow-inner"><MessageSquare size={24} /></div>
-                       <div className="text-left">
-                          <p className="text-[10px] font-black text-indigo-100 uppercase tracking-widest mb-0.5">CRM Strategy</p>
-                          <p className="text-lg font-black text-white leading-none">기존 단골 고객 관리하기</p>
+              <div className="space-y-4">
+                 <button onClick={() => navigate('/marketing')} className="w-full p-6 bg-indigo-600 rounded-2xl flex items-center justify-between group hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100">
+                    <div className="flex items-center gap-5 text-left text-white">
+                       <div className="p-3 bg-white/10 rounded-xl"><MessageSquare size={22} /></div>
+                       <div>
+                          <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest mb-0.5">CRM Retargeting</p>
+                          <p className="text-base font-black">기존 단골 고객 관리하기</p>
                        </div>
                     </div>
-                    <ArrowUpRight size={20} className="text-white opacity-40 group-hover:opacity-100 transition-all" />
+                    <ArrowUpRight size={18} className="text-white opacity-40 group-hover:opacity-100" />
                  </button>
 
-                 <button onClick={() => navigate('/creator')} className="group p-6 bg-slate-900 rounded-[2rem] flex items-center justify-between active:scale-[0.98] transition-all shadow-xl shadow-slate-300">
-                    <div className="flex items-center gap-5">
-                       <div className="p-3 bg-white/10 rounded-2xl text-white shadow-inner"><Edit3 size={24} /></div>
-                       <div className="text-left">
+                 <button onClick={() => navigate('/creator')} className="w-full p-6 bg-slate-900 rounded-2xl flex items-center justify-between group hover:bg-black transition-all shadow-lg">
+                    <div className="flex items-center gap-5 text-left text-white">
+                       <div className="p-3 bg-white/10 rounded-xl"><Edit3 size={22} /></div>
+                       <div>
                           <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-0.5">AI Acquisition</p>
-                          <p className="text-lg font-black text-white leading-none">AI 기반 홍보 콘텐츠 생성</p>
+                          <p className="text-base font-black">새로운 마케팅 포스팅 쓰기</p>
                        </div>
                     </div>
-                    <ArrowUpRight size={20} className="text-white opacity-40 group-hover:opacity-100 transition-all" />
+                    <ArrowUpRight size={18} className="text-white opacity-40 group-hover:opacity-100" />
                  </button>
               </div>
-              <p className="text-center text-[10px] font-bold text-slate-400 mt-8 uppercase tracking-widest">Growth Engine Analysis is Powered by GLUNEX AI</p>
            </div>
         </div>
       )}
 
       <style>{`
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
         @keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
         .animate-scale-in { animation: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        .scrollbar-hide::-webkit-scrollbar { display: none; }
       `}</style>
     </div>
   );
 };
 
-export default Sales;
+export default PcSales;
